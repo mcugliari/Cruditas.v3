@@ -1,0 +1,261 @@
+/* ==========================================================================
+   1. AJUSTES GENERALES Y MEJORAS DE UX / UI
+   ========================================================================== */
+
+body {
+  touch-action: manipulation; /* Mejora la respuesta al hacer tap en celulares */
+}
+
+/* Efecto hover elegante en tablas */
+.table-hover tbody tr:hover {
+  background-color: rgba(0, 123, 255, 0.04) !important;
+}
+
+/* Botones con mejor área táctil */
+.btn {
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+}
+
+/* Sombras suaves en tarjetas AdminLTE */
+.card {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+/* Personalización de badges de ID */
+.badge-secondary {
+  font-size: 0.85rem;
+  padding: 0.4em 0.6em;
+}
+
+/* Identidad de marca en Sidebar Lateral */
+.brand-link {
+  background-color: #1e2229 !important;
+}
+
+.brand-image {
+  object-fit: contain;
+}
+
+
+/* ==========================================================================
+   2. MENÚ Y TARJETAS DE PRODUCTO (POS)
+   ========================================================================== */
+
+/* Cabecera de Categorías */
+.pos-cat-header {
+  background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+  color: #ffffff;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Tarjeta de Producto */
+.pos-card-producto {
+  background-color: #ffffff;
+  border: 1px solid #eef2f5 !important;
+  border-radius: 12px;
+  padding: 14px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: center;
+}
+
+.pos-card-producto:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.07);
+  border-color: #cbd5e1 !important;
+}
+
+/* Tarjeta Activa (Producto Seleccionado) */
+.pos-card-producto.pos-card-activa {
+  border: 2px solid #28a745 !important;
+  background-color: #e8f5e9 !important;
+  box-shadow: 0 4px 10px rgba(40, 167, 69, 0.25) !important;
+}
+
+/* Título y Precio */
+.pos-prod-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.pos-prod-price {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+/* Pastilla Central de Contador (- 0 +) */
+.pos-qty-pill {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 2px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-pos-sq {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #334155;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-pos-sq:hover {
+  background-color: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+.btn-pos-sq:active {
+  transform: scale(0.92);
+}
+
+.pos-cant-num {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #0f172a;
+  min-width: 20px;
+}
+
+/* Botones de Docena (-12 u. / +12 u.) */
+.btn-docena-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #475569;
+  padding: 3px 8px;
+  transition: all 0.15s ease;
+}
+
+.btn-docena-pill:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+.btn-docena-pill:active {
+  background-color: #e2e8f0;
+}
+
+
+/* ==========================================================================
+   3. PANEL DE ACCIONES Y BOTONES DEL CARRITO (POS)
+   ========================================================================== */
+
+.pos-actions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.pos-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+/* Estilos base para los 3 botones secundarios */
+.btn-pos-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  font-size: 0.78rem;
+  font-weight: bold;
+  border-radius: 8px;
+  border: 1px solid #ced4da;
+  background-color: #f8f9fa;
+  color: #212529;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-pos-action:hover {
+  transform: translateY(-1px);
+}
+
+/* Variación: Solo Preparar */
+.btn-pos-preparar {
+  background-color: #fff3cd;
+  border-color: #ffeeba;
+  color: #856404;
+}
+
+.btn-pos-preparar:hover {
+  background-color: #ffe8a1;
+  color: #856404;
+}
+
+/* Variación: Entregar Impago */
+.btn-pos-impago {
+  background-color: #d1ecf1;
+  border-color: #bee5eb;
+  color: #0c5460;
+}
+
+.btn-pos-impago:hover {
+  background-color: #abdde5;
+  color: #0c5460;
+}
+
+/* Variación: Limpiar Carrito */
+.btn-pos-limpiar {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.btn-pos-limpiar:hover {
+  background-color: #f1b0b7;
+  color: #721c24;
+}
+
+/* Botón Principal: Cobrar y Entregar */
+.btn-pos-cobrar {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: #28a745;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(40, 167, 69, 0.3);
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-pos-cobrar:hover {
+  background-color: #218838;
+  color: #ffffff;
+  box-shadow: 0 6px 12px rgba(40, 167, 69, 0.4);
+  transform: translateY(-1px);
+}

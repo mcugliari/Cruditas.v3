@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cruditas</title>
+
+  <!-- Bootstrap 4 y AdminLTE 3 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- ESTILOS PERSONALIZADOS -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- LIBRERÍA DE SUPABASE -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="hold-transition sidebar-collapse">
+<div class="wrapper">
+
+  <!-- NAVBAR SUPERIOR -->
+  <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+    <ul class="navbar-nav align-items-center">
+      <li class="nav-item">
+        <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+      </li>
+      <li class="nav-item d-none d-sm-inline-block ml-2">
+        <span class="nav-link font-weight-bold text-dark">
+          🍕🥟 <strong>CRUDITAS</strong> <small class="text-muted ml-1">| Fábrica de Pizzas y Empanadas</small> 
+        </span>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- SIDEBAR (MENÚ LATERAL) -->
+  <aside class="main-sidebar sidebar-dark-primary elevation-4">
+    <a href="#" class="brand-link d-flex align-items-center">
+      <img src="img/logo.png" alt="Cruditas Logo" class="brand-image img-circle elevation-2" style="opacity: .9; max-height: 38px; border: 1px solid #ffc107;">
+      <span class="brand-text font-weight-bold ml-2 text-warning">CRUDITAS</span>
+    </a>
+
+    <div class="sidebar">
+      <nav class="mt-2">
+        <ul class="nav nav-pills nav-sidebar flex-column" id="menu-navegacion" role="menu">
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="pedidos">
+              <i class="nav-icon fas fa-cash-register"></i>
+              <p>Pedidos</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="clientes">
+              <i class="nav-icon fas fa-users"></i>
+              <p>Clientes</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="productos">
+              <i class="nav-icon fas fa-box"></i>
+              <p>Productos</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="listas">
+              <i class="nav-icon fas fa-tags"></i>
+              <p>Listas de Precios</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="pedidos-dia">
+              <i class="fas fa-receipt mr-2"></i>
+              <span>Listado de Pedidos</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="content-wrapper p-3">
+
+    <!-- SECCIÓN 1: TOMA DE PEDIDOS -->
+    <section id="sec-pedidos" class="modulo-app" style="display: none;">
+      <div class="row p-2">
+        <div class="col-md-7 col-lg-8">
+          <div class="card card-outline card-warning shadow-sm">
+            <div class="card-header bg-white">
+              <h3 class="card-title font-weight-bold text-dark"><i class="fas fa-utensils mr-2"></i>Menú de Productos</h3>
+            </div>
+            <div class="card-body p-2" id="contenedor-menu-productos" style="max-height: 80vh; overflow-y: auto;"></div>
+          </div>
+        </div>
+
+        <div class="col-md-5 col-lg-4">
+          <div class="card card-outline card-primary shadow-sm" style="position: sticky; top: 10px;">
+            <div class="card-header bg-white border-bottom-0">
+              <h3 class="card-title font-weight-bold text-dark"><i class="fas fa-shopping-cart mr-2"></i>Pedido Actual</h3>
+            </div>
+            <div class="card-body pt-0">
+              <div class="form-group mb-2">
+                <label class="small font-weight-bold mb-1">Cliente:</label>
+                <select class="form-control form-control-sm" id="select-cliente-pedido"></select>
+              </div>
+
+              <div class="form-group mb-2">
+                <label class="small font-weight-bold mb-1">Lista de Precios Aplicada:</label>
+                <select class="form-control form-control-sm" id="select-lista-pedido"></select>
+              </div>
+
+              <div class="form-group mb-3">
+                <label class="small font-weight-bold mb-1">Método de Pago:</label>
+                <select class="form-control form-control-sm" id="select-medio-pago"></select>
+              </div>
+
+              <div id="resumen-carrito-items" class="border rounded p-2 mb-3 bg-light" style="max-height: 180px; overflow-y: auto;">
+                <p class="text-center text-muted small my-3">El carrito está vacío</p>
+              </div>
+
+              <div class="border-top pt-2">
+                <div class="d-flex justify-content-between text-muted small">
+                  <span>Docenas:</span>
+                  <strong id="cant-docenas" class="text-success">0 u.</strong>
+                </div>
+                <div class="d-flex justify-content-between text-muted small mb-2">
+                  <span>Total Ítems:</span>
+                  <strong id="cant-total-items">0</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h4 class="font-weight-bold m-0">TOTAL:</h4>
+                  <h3 class="font-weight-bold text-success m-0" id="monto-total-pedido">$0</h3>
+                </div>
+              </div>
+
+              <div class="pos-actions-container">
+                <div class="pos-btn-grid">
+                  <button type="button" class="btn btn-pos-action btn-pos-preparar" data-action="guardar-pedido" data-estado="PREPARACION">
+                    ⏳ <span>Solo Preparar</span>
+                  </button>
+                  <button type="button" class="btn btn-pos-action btn-pos-impago" data-action="guardar-pedido" data-estado="ENTREGADO_IMPAGO">
+                    📦 <span>Entregar Impago</span>
+                  </button>
+                  <button type="button" class="btn btn-pos-action btn-pos-limpiar" data-action="vaciar-carrito">
+                    🗑️ <span>Limpiar</span>
+                  </button>
+                </div>
+                <button type="button" class="btn btn-pos-cobrar" data-action="guardar-pedido" data-estado="COMPLETADO">
+                  ✅ COBRAR Y ENTREGAR
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: GESTIÓN DE PEDIDOS -->
+    <section id="sec-pedidos-dia" class="modulo-app" style="display: none;">
+      <div class="content-header">
+        <div class="container-fluid">
+          <h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-list-alt mr-2 text-info"></i>Gestión de Pedidos</h1>
+        </div>
+      </div>
+
+      <div class="card card-outline card-info shadow-sm mb-3">
+        <div class="card-body p-3">
+          <div class="row">
+            <div class="col-md-3">
+              <label class="small font-weight-bold">Fecha Desde / Hasta:</label>
+              <div class="input-group input-group-sm">
+                <input type="date" class="form-control" id="filtro-fecha-desde">
+                <input type="date" class="form-control" id="filtro-fecha-hasta">
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="small font-weight-bold">Estado del Pedido:</label>
+              <select class="form-control form-control-sm" id="filtro-estado-pedido">
+                <option value="TODOS">-- Todos los Estados --</option>
+                <option value="PREPARACION">⏳ En Preparación</option>
+                <option value="PREPARADO">🔔 Preparado (Listo)</option>
+                <option value="ENTREGADO_IMPAGO">📦 Entregado (Impago)</option>
+                <option value="COMPLETADO">✅ Completado (Cobrado)</option>
+                <option value="ANULADO">🚫 Anulado</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="small font-weight-bold">Buscar Cliente / ID:</label>
+              <input type="text" class="form-control form-control-sm" id="filtro-buscar-pedido" placeholder="Nombre cliente...">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button class="btn btn-sm btn-info btn-block font-weight-bold" id="btn-actualizar-pedidos">
+                <i class="fas fa-sync-alt mr-1"></i> Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPIS -->
+      <div class="row mb-3">
+        <div class="col-md col-6 mb-2">
+          <div class="small-box bg-success h-100 mb-0 shadow-sm">
+            <div class="inner p-2">
+              <h4 id="kpi-total-cobrado" class="font-weight-bold m-0">$0</h4>
+              <p class="mb-0 small">Total Cobrado (Caja)</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md col-6 mb-2">
+          <div class="small-box bg-warning h-100 mb-0 shadow-sm">
+            <div class="inner p-2">
+              <h4 id="kpi-total-pendiente-cobro" class="font-weight-bold m-0">$0</h4>
+              <p class="mb-0 small">Pendiente Cobro</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md col-6 mb-2">
+          <div class="small-box bg-info h-100 mb-0 shadow-sm">
+            <div class="inner p-2">
+              <h4 id="kpi-cant-preparacion" class="font-weight-bold m-0">0</h4>
+              <p class="mb-0 small">En Preparación</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md col-6 mb-2">
+          <div class="small-box bg-primary h-100 mb-0 shadow-sm">
+            <div class="inner p-2">
+              <h4 id="kpi-cant-preparados" class="font-weight-bold m-0">0</h4>
+              <p class="mb-0 small">Listos p/ Entregar</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md col-6 mb-2">
+          <div class="small-box bg-secondary h-100 mb-0 shadow-sm">
+            <div class="inner p-2">
+              <h4 id="kpi-cant-anulados" class="font-weight-bold m-0">0</h4>
+              <p class="mb-0 small">Anulados</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABLA DE PEDIDOS -->
+      <div class="card card-outline card-secondary shadow-sm">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th># ID</th>
+                  <th>Fecha / Hora</th>
+                  <th>Cliente</th>
+                  <th>Medio Pago</th>
+                  <th class="text-right">Total</th>
+                  <th class="text-center">Estado</th>
+                  <th class="text-center" style="width: 160px;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-pedidos-body">
+                <tr><td colspan="7" class="text-center py-3">Cargando pedidos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 3: CLIENTES -->
+    <section id="sec-clientes" class="modulo-app" style="display: none;">
+      <div class="content-header"><h1 class="m-0 mb-3">👥 Gestión de Clientes</h1></div>
+      <div class="row">
+        <div class="col-md-5">
+          <div class="card card-primary">
+            <div class="card-header"><h3 class="card-title">Nuevo Cliente</h3></div>
+            <form id="form-cliente">
+              <div class="card-body">
+                <div class="form-group">
+                  <label for="cli-nombre">Nombre y Apellido *</label>
+                  <input type="text" class="form-control" id="cli-nombre" placeholder="ej. Juan Pérez" required>
+                </div>
+                <div class="form-group">
+                  <label for="cli-telefono">Teléfono / WhatsApp</label>
+                  <input type="text" class="form-control" id="cli-telefono" placeholder="ej. 1122334455">
+                </div>
+                <div class="form-group">
+                  <label for="cli-direccion">Dirección</label>
+                  <input type="text" class="form-control" id="cli-direccion" placeholder="ej. Av. San Martín 123">
+                </div>
+              </div>
+              <div class="card-footer">
+                <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-save mr-1"></i> Guardar Cliente</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-md-7">
+          <div class="card card-outline card-secondary">
+            <div class="card-header"><h3 class="card-title">Listado de Clientes Registrados</h3></div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                  <thead>
+                    <tr><th># ID</th><th>Nombre</th><th>Teléfono</th><th>Dirección</th><th class="text-center">Acciones</th></tr>
+                  </thead>
+                  <tbody id="tabla-clientes-body">
+                    <tr><td colspan="5" class="text-center text-muted py-3">Cargando clientes...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mt-4">
+        <div class="col-12">
+          <div class="card card-outline card-info shadow-sm">
+            <div class="card-header"><h3 class="card-title font-weight-bold">🏷️ Asignación de Listas de Precios por Cliente</h3></div>
+            <div class="card-body">
+              <form id="form-cliente-lista" class="row align-items-end mb-3">
+                <input type="hidden" id="asoc-id" value="">
+                <div class="col-12 col-md-4 mb-2">
+                  <label class="form-label font-weight-bold small">Cliente</label>
+                  <select id="asoc-select-cliente" class="form-control" required></select>
+                </div>
+                <div class="col-12 col-md-4 mb-2">
+                  <label class="form-label font-weight-bold small">Lista de Precios</label>
+                  <select id="asoc-select-lista" class="form-control" required></select>
+                </div>
+                <div class="col-12 col-md-2 mb-2">
+                  <div class="custom-control custom-checkbox pb-2">
+                    <input type="checkbox" class="custom-control-input" id="asoc-predeterminada">
+                    <label class="custom-control-label font-weight-bold small" for="asoc-predeterminada">Predeterminada</label>
+                  </div>
+                </div>
+                <div class="col-12 col-md-2 mb-2 text-right">
+                  <button type="submit" class="btn btn-info btn-block">Guardar</button>
+                </div>
+              </form>
+
+              <div class="table-responsive">
+                <table class="table table-hover table-striped border align-middle mb-0">
+                  <thead class="thead-light">
+                    <tr><th>Cliente</th><th>Lista de Precio</th><th class="text-center">Predeterminada</th><th class="text-right">Acciones</th></tr>
+                  </thead>
+                  <tbody id="tabla-asoc-cliente-lista">
+                    <tr><td colspan="4" class="text-center text-muted py-3">Cargando asignaciones...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 4: PRODUCTOS -->
+    <section id="sec-productos" class="modulo-app" style="display: none;">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-boxes mr-2 text-warning"></i>Gestión de Productos</h1></div>
+            <div class="col-sm-6 text-right">
+              <button class="btn btn-warning font-weight-bold" id="btn-nuevo-producto"><i class="fas fa-plus mr-1"></i> Nuevo Producto</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-warning mt-2">
+        <div class="card-header"><h3 class="card-title font-weight-bold">Catálogo de Productos</h3></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr><th># ID</th><th>Categoría</th><th>Producto</th><th class="text-center">Permite Docena</th><th class="text-center" style="width: 150px">Acciones</th></tr>
+              </thead>
+              <tbody id="tabla-productos-body">
+                <tr><td colspan="5" class="text-center py-4">Cargando productos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN 5: LISTAS DE PRECIOS -->
+    <section id="sec-listas" class="modulo-app" style="display: none;">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-tags mr-2 text-warning"></i>Listas de Precios</h1></div>
+            <div class="col-sm-6 text-right">
+              <div class="form-inline justify-content-end">
+                <label class="mr-2 font-weight-bold" for="select-lista-activa">Lista a editar:</label>
+                <select class="form-control font-weight-bold border-warning" id="select-lista-activa">
+                  <option value="">Cargando listas...</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6">
+          <div class="card card-warning card-outline">
+            <div class="card-header"><h3 class="card-title font-weight-bold"><i class="fas fa-folder mr-1"></i> Precios Base por Categoría</h3></div>
+            <div class="card-body p-0">
+              <table class="table table-hover mb-0">
+                <thead class="bg-light">
+                  <tr><th>Categoría</th><th class="text-right" style="width: 130px">Precio Un.</th><th class="text-right" style="width: 130px">Precio Doc.</th><th class="text-center" style="width: 80px">Acción</th></tr>
+                </thead>
+                <tbody id="tabla-precios-categorias-body">
+                  <tr><td colspan="4" class="text-center py-3">Seleccioná una lista...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="card card-secondary card-outline">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <h3 class="card-title font-weight-bold m-0"><i class="fas fa-star mr-1 text-warning"></i> Excepciones por Producto</h3>
+              <button class="btn btn-sm btn-outline-dark font-weight-bold ml-auto" id="btn-nueva-excepcion"><i class="fas fa-plus mr-1"></i> Agregar Excepción</button>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-hover mb-0">
+                <thead class="bg-light">
+                  <tr><th>Producto / Gusto</th><th class="text-right" style="width: 120px">Unidad</th><th class="text-right" style="width: 120px">Docena</th><th class="text-center" style="width: 70px"></th></tr>
+                </thead>
+                <tbody id="tabla-precios-productos-body">
+                  <tr><td colspan="4" class="text-center py-3">Sin excepciones para esta lista.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /.content-wrapper -->
+
+  <!-- MODALES DE LA APLICACIÓN -->
+
+  <!-- Modal Editar Cliente -->
+  <div class="modal fade" id="modal-editar-cliente" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-user-edit mr-2"></i>Editar Cliente</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-editar-cliente">
+          <div class="modal-body">
+            <input type="hidden" id="edit-cli-id">
+            <div class="form-group"><label for="edit-cli-nombre">Nombre y Apellido *</label><input type="text" class="form-control" id="edit-cli-nombre" required></div>
+            <div class="form-group"><label for="edit-cli-telefono">Teléfono / WhatsApp</label><input type="text" class="form-control" id="edit-cli-telefono"></div>
+            <div class="form-group"><label for="edit-cli-direccion">Dirección de Entrega</label><input type="text" class="form-control" id="edit-cli-direccion"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold"><i class="fas fa-sync-alt mr-1"></i> Actualizar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Crear/Editar Producto -->
+  <div class="modal fade" id="modal-producto" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold" id="modal-producto-title">Nuevo Producto</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-producto">
+          <div class="modal-body">
+            <input type="hidden" id="prod-id">
+            <div class="form-group">
+              <label for="prod-categoria">Categoría *</label>
+              <select class="form-control" id="prod-categoria" required></select>
+            </div>
+            <div class="form-group">
+              <label for="prod-nombre">Nombre del Producto / Gusto *</label>
+              <input type="text" class="form-control" id="prod-nombre" placeholder="Ej: Carne Cortada a Cuchillo" required>
+            </div>
+            <div class="form-group mb-0">
+              <div class="custom-control custom-checkbox">
+                <input type="checkbox" class="custom-control-input" id="prod-permite-docena" checked>
+                <label class="custom-control-label font-weight-bold" for="prod-permite-docena">Permite venta por docena</label>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold"><i class="fas fa-save mr-1"></i> Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Precio Especial -->
+  <div class="modal fade" id="modal-precio-especial" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-star mr-2"></i>Asignar Precio Especial</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-precio-especial">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="modal-especial-producto">Seleccionar Producto *</label>
+              <select class="form-control" id="modal-especial-producto" required></select>
+            </div>
+            <div class="row">
+              <div class="col-6">
+                <div class="form-group">
+                  <label for="modal-especial-unidad">Precio Unidad ($) *</label>
+                  <input type="number" step="0.01" class="form-control" id="modal-especial-unidad" required>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="form-group">
+                  <label for="modal-especial-docena">Precio Docena ($)</label>
+                  <input type="number" step="0.01" class="form-control" id="modal-especial-docena">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold">Guardar Precio</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>  
+
+  <!-- Modal Detalle Pedido -->
+  <div class="modal fade" id="modalDetallePedido" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Detalle del Pedido #<span id="detalle-id-pedido"></span></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3 text-muted small">
+            <div><strong>Cliente:</strong> <span id="detalle-cliente"></span></div>
+            <div><strong>Medio de Pago:</strong> <span id="detalle-medio-pago"></span></div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped">
+              <thead><tr><th>Producto</th><th class="text-center">Cantidad</th><th class="text-right">Precio</th></tr></thead>
+              <tbody id="tabla-detalle-body"></tbody>
+            </table>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+            <span class="font-weight-bold h5">Total Pedido:</span>
+            <span class="font-weight-bold h5 text-success" id="detalle-monto-total">$0</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Scripts dependencias -->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
+<!-- Carga del Módulo JS Principal -->
+<script type="module" src="./main.js"></script>
+
+</body>
+</html>
