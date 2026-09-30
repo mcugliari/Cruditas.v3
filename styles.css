@@ -40,29 +40,31 @@ body {
 
 
 /* ==========================================================================
-   2. MENÚ Y TARJETAS DE PRODUCTO (POS)
+   2. MENÚ Y TARJETAS DE PRODUCTO (PALETA SUAVE Y ARMONIOSA)
    ========================================================================== */
 
-/* Cabecera de Categorías */
+/* Cabecera de Categorías (Barra con Gradiente Suave) */
 .pos-cat-header {
-  background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+  background: linear-gradient(135deg, #334155 0%, #475569 100%);
   color: #ffffff;
-  font-weight: 600;
+  font-weight: 700;
   padding: 8px 16px;
   border-radius: 8px;
-  font-size: 0.9rem;
-  letter-spacing: 0.5px;
+  font-size: 0.88rem;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin-top: 15px;
+  margin-bottom: 12px;
 }
 
-/* Tarjeta de Producto */
+/* Tarjeta de Producto Base */
 .pos-card-producto {
   background-color: #ffffff;
-  border: 1px solid #eef2f5 !important;
+  border: 1px solid #e2e8f0 !important;
   border-radius: 12px;
-  padding: 14px 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  padding: 12px 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   transition: all 0.2s ease-in-out;
   display: flex;
   flex-direction: column;
@@ -71,57 +73,62 @@ body {
 }
 
 .pos-card-producto:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.07);
   border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.04);
 }
 
-/* Tarjeta Activa (Producto Seleccionado) */
+/* Tarjeta Activa (Azul Soft) */
 .pos-card-producto.pos-card-activa {
-  border: 2px solid #28a745 !important;
-  background-color: #e8f5e9 !important;
-  box-shadow: 0 4px 10px rgba(40, 167, 69, 0.25) !important;
+  border: 2px solid #3b82f6 !important;
+  background-color: #eff6ff !important;
+  box-shadow: 0 3px 8px rgba(59, 130, 246, 0.12) !important;
 }
 
-/* Título y Precio */
+/* Título de Producto */
 .pos-prod-title {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 600;
   color: #1e293b;
   margin-bottom: 2px;
+  line-height: 1.2;
 }
 
+/* Precio en Tono Neutro Elegante (No Azulea) */
 .pos-prod-price {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  color: #2563eb;
+  color: #0f172a; /* Gris pizarra oscuro muy legible */
 }
 
 /* Pastilla Central de Contador (- 0 +) */
 .pos-qty-pill {
   background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #cbd5e1;
   border-radius: 20px;
-  padding: 2px 6px;
+  padding: 3px 4px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.pos-card-activa .pos-qty-pill {
+  background-color: #ffffff;
+  border-color: #bfdbfe;
 }
 
 .btn-pos-sq {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  border: 1px solid #cbd5e1;
+  border: none;
   background-color: #ffffff;
   color: #334155;
-  font-weight: 600;
-  font-size: 0.9rem;
-  line-height: 1;
+  font-weight: 700;
+  font-size: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -129,40 +136,30 @@ body {
 .btn-pos-sq:hover {
   background-color: #2563eb;
   color: #ffffff;
-  border-color: #2563eb;
-}
-
-.btn-pos-sq:active {
-  transform: scale(0.92);
 }
 
 .pos-cant-num {
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: 800;
+  font-size: 0.92rem;
   color: #0f172a;
   min-width: 20px;
 }
 
-/* Botones de Docena (-12 u. / +12 u.) */
+/* Botones de Docenas (-12 u. / +12 u.) */
 .btn-docena-pill {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  background-color: #ffffff;
-  border: 1px solid #cbd5e1;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
-  color: #475569;
-  padding: 3px 8px;
+  color: #64748b;
+  padding: 3px 0;
   transition: all 0.15s ease;
 }
 
 .btn-docena-pill:hover {
-  background-color: #f1f5f9;
-  color: #0f172a;
-  border-color: #94a3b8;
-}
-
-.btn-docena-pill:active {
-  background-color: #e2e8f0;
+  background-color: #2563eb;
+  color: #ffffff;
 }
 
 
