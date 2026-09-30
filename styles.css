@@ -190,13 +190,20 @@ body {
   align-items: center;
   justify-content: center;
   padding: 8px 4px;
-  font-size: 0.78rem;
-  font-weight: bold;
   border-radius: 8px;
   border: 1px solid #ced4da;
   background-color: #f8f9fa;
   color: #212529;
+  letter-spacing: 0.3px;
   transition: all 0.2s ease-in-out;
+}
+
+/* Formato y tipografía del texto en los botones secundarios */
+.btn-pos-action span {
+  text-transform: capitalize;
+  font-weight: 600;
+  font-size: 0.78rem;
+  margin-top: 2px;
 }
 
 .btn-pos-action:hover {
@@ -243,8 +250,10 @@ body {
 .btn-pos-cobrar {
   width: 100%;
   padding: 12px;
-  font-size: 1.1rem;
-  font-weight: bold;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
   color: #ffffff;
   background-color: #28a745;
   border: none;
