@@ -21,7 +21,7 @@ export async function cargarTablaPedidos() {
 
   let query = supabaseClient
     .from('TB_TPEDIDOS')
-    .select('id, fecha, created_at, estado, importe_total, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
+    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
     .gte('created_at', fechaDesde)
     .lte('created_at', fechaHasta)
     .order('id', { ascending: false });
@@ -74,7 +74,8 @@ export async function cargarTablaPedidos() {
   }
 
   tbody.innerHTML = pedidosFiltrados.map(p => {
-    const clienteNombre = p.TB_BCLIENTES ? p.TB_BCLIENTES.nombre : 'Consumidor Final';
+    //const clienteNombre = p.TB_BCLIENTES ? p.TB_BCLIENTES.nombre : 'Consumidor Final';
+    const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
     const medioPago = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Sin especificar';
     const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
@@ -197,6 +198,12 @@ export async function editarPedido(idPedido) {
 
     if (document.getElementById('select-cliente-pedido')) {
       document.getElementById('select-cliente-pedido').value = pedido.id_cliente;
+
+    // CARGAR LA REFERENCIA/NOMBRE GUARDADO
+    const inputRef = document.getElementById('input-ref-cliente');
+    if (inputRef) {
+      inputRef.value = pedido.nombre_referencia || '';
+    }
     }
     if (document.getElementById('select-lista-pedido')) {
       document.getElementById('select-lista-pedido').value = pedido.id_lista_precio;
@@ -242,6 +249,7 @@ export async function verDetallePedido(idPedido) {
     document.getElementById('detalle-cliente').innerText = pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
     document.getElementById('detalle-medio-pago').innerText = pedido.TB_BMEDIO_PAGO?.nombre || 'Sin especificar';
     document.getElementById('detalle-monto-total').innerText = `$${formatearMoneda(pedido.importe_total)}`;
+    document.getElementById('detalle-cliente').innerText = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
 
     const items = pedido.TB_DPEDIDOS || [];
     const htmlItems = items.length > 0 

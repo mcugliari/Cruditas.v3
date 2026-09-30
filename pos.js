@@ -34,6 +34,20 @@ export async function alCambiarCliente() {
   const selectCli = document.getElementById('select-cliente-pedido');
   if (!selectCli || !selectCli.value) return;
 
+  const idCliente = selectCli.value;
+  const inputRef = document.getElementById('input-ref-cliente');
+
+  // Supongamos que el ID de Consumidor Final es 1 (o podés verificar por el texto)
+  const esConsumidorFinal = idCliente === '1' || selectCli.options[selectCli.selectedIndex]?.text.toLowerCase().includes('Consumidor Final');
+
+  if (inputRef) {
+    if (!esConsumidorFinal) {
+      // Si eligen un cliente registrado, limpiamos la referencia opcional
+      inputRef.value = '';
+    }
+  }
+
+  // Buscar la lista de precios predeterminada del cliente
   const { data } = await supabaseClient
     .from('TB_ACLIENTE_LISTA_PRECIOS')
     .select('id_lista_precio')
@@ -249,6 +263,9 @@ export function actualizarResumenCarrito() {
 }
 
 export function resetearPedido() {
+  const inputRef = document.getElementById('input-ref-cliente');
+  if (inputRef) inputRef.value = '';
+
   setPedidoEditandoId(null);
   setCarrito({});
   renderizarGrillaPOS();
@@ -269,6 +286,10 @@ export async function guardarPedido(estadoInicial) {
   const idLista = document.getElementById('select-lista-pedido').value;
   const selectMedio = document.getElementById('select-medio-pago');
   const idMedio = selectMedio ? selectMedio.value : null;
+
+  // CAPTURAR LA REFERENCIA DE TEXTO LIBRE
+  const inputRef = document.getElementById('input-ref-cliente');
+  const nombreReferencia = inputRef ? inputRef.value.trim() : null;
 
   let montoTotal = 0;
   const detalles = [];
@@ -324,6 +345,7 @@ export async function guardarPedido(estadoInicial) {
       .from('TB_TPEDIDOS')
       .update({
         id_cliente: idCliente,
+        nombre_referencia: nombreReferencia,
         id_lista_precio: idLista,
         id_medio_pago: idMedio,
         estado: estadoInicial,
@@ -344,6 +366,7 @@ export async function guardarPedido(estadoInicial) {
       .insert([{
         fecha: new Date().toISOString().split('T')[0],
         id_cliente: idCliente,
+        nombre_referencia: nombreReferencia,
         id_lista_precio: idLista,
         id_medio_pago: idMedio,
         estado: estadoInicial,
@@ -369,6 +392,9 @@ export async function guardarPedido(estadoInicial) {
   }
 
   mostrarNotificacion(`¡Pedido #${idPedidoFinal} ${pedidoEditandoId ? 'actualizado' : 'registrado'} con éxito!`, 'success');
+
+  // Limpiar campo de referencia tras guardar
+  if (inputRef) inputRef.value = '';
 
   setPedidoEditandoId(null);
   resetearPedido();
