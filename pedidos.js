@@ -245,11 +245,20 @@ export async function verDetallePedido(idPedido) {
       maximumFractionDigits: 2
     });
 
+    
+
     document.getElementById('detalle-id-pedido').innerText = pedido.id;
     document.getElementById('detalle-medio-pago').innerText = pedido.TB_BMEDIO_PAGO?.nombre || 'Sin especificar';
     document.getElementById('detalle-monto-total').innerText = `$${formatearMoneda(pedido.importe_total)}`;
-    document.getElementById('detalle-cliente').innerText = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
 
+    // Asignar cliente resaltado con badge
+    const clienteNombre = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
+    document.getElementById('detalle-cliente').innerHTML = `
+      <span class="badge badge-warning text-dark px-2 py-1 font-weight-bold" style="font-size: 0.95rem;">
+        <i class="fas fa-user mr-1"></i> ${clienteNombre}
+      </span>
+    `;
+    
     const items = pedido.TB_DPEDIDOS || [];
     const htmlItems = items.length > 0 
       ? items.map(item => {
