@@ -106,22 +106,30 @@ export function renderizarGrillaPOS() {
       const precios = obtenerPrecioProducto(p.id, idCatProd);
       const claseActiva = cant > 0 ? 'pos-card-activa' : '';
 
+      // VERIFICAR SI EL PRODUCTO PERMITE DOCENA
+      const permiteDocena = Boolean(p.m_permite_docena);
+
+      // Bloque condicional para los botones de docena
+      const botonesDocenaHTML = permiteDocena ? `
+        <div class="d-flex justify-content-between gap-1 mt-2">
+          <button type="button" class="btn btn-docena-pill flex-fill mr-1" data-action="alterar-cant" data-id="${p.id}" data-delta="-12">-12 u.</button>
+          <button type="button" class="btn btn-docena-pill flex-fill" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12 u.</button>
+        </div>
+      ` : '';
+
       htmlCompleto += `
         <div class="col-6 col-sm-4 col-md-3 col-lg-2 mb-3">
           <div class="card h-100 pos-card-producto border-0 border-left-${colorCat} ${claseActiva}">
             <strong class="pos-prod-title" title="${p.nombre}">${p.nombre}</strong>
-            <span class="pos-prod-price mb-3">$${precios.unidad.toLocaleString('es-AR')}</span>
+            <span class="pos-prod-price mb-2">$${precios.unidad.toLocaleString('es-AR')}</span>
             
-            <div class="pos-qty-pill mb-2">
+            <div class="pos-qty-pill">
               <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="-1">-</button>
               <span class="pos-cant-num" id="cant-prod-${p.id}">${cant}</span>
               <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="1">+</button>
             </div>
 
-            <div class="d-flex justify-content-between gap-1">
-              <button type="button" class="btn btn-docena-pill flex-fill mr-1" data-action="alterar-cant" data-id="${p.id}" data-delta="-12">-12 u.</button>
-              <button type="button" class="btn btn-docena-pill flex-fill" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12 u.</button>
-            </div>
+            ${botonesDocenaHTML}
           </div>
         </div>
       `;
@@ -209,7 +217,7 @@ export function actualizarResumenCarrito() {
 
   if (keys.length === 0) {
     if (contenedorItems) contenedorItems.innerHTML = `<p class="text-center text-muted small my-3">El carrito está vacío</p>`;
-    document.getElementById('cant-docenas').innerText = '0 u.';
+    //document.getElementById('cant-docenas').innerText = '0 u.';
     document.getElementById('cant-total-items').innerText = '0';
     document.getElementById('monto-total-pedido').innerText = '$0';
     return;
@@ -257,7 +265,7 @@ export function actualizarResumenCarrito() {
   if (contenedorItems) contenedorItems.innerHTML = html;
 
   const totalDocenas = (totalItems / 12).toFixed(1);
-  document.getElementById('cant-docenas').innerText = `${totalDocenas} doc.`;
+  //document.getElementById('cant-docenas').innerText = `${totalDocenas} doc.`;
   document.getElementById('cant-total-items').innerText = totalItems;
   document.getElementById('monto-total-pedido').innerText = `$${montoTotal.toLocaleString('es-AR')}`;
 }
@@ -309,30 +317,36 @@ export async function guardarPedido(estadoInicial) {
     if (permiteDocena && cantidadTotal >= 12) {
       const cantDocenas = Math.floor(cantidadTotal / 12);
       const unidadesSueltas = cantidadTotal % 12;
-
+      
+      // Renglón de Docenas
       detalles.push({
         id_pedido: null,
         id_producto: p.id,
         cantidad: cantDocenas * 12,
-        precio: precioDocena * cantDocenas
+        precioUnitario: precioDocena,
+        subTotal: precioDocena * cantDocenas
       });
       montoTotal += cantDocenas * precioDocena;
 
+      // Renglón de Unidades Sueltas
       if (unidadesSueltas > 0) {
         detalles.push({
           id_pedido: null,
           id_producto: p.id,
           cantidad: unidadesSueltas,
-          precio: precioUnidad * unidadesSueltas
+          precioUnitario: precioUnidad,
+          subTotal: precioUnidad * unidadesSueltas
         });
         montoTotal += unidadesSueltas * precioUnidad;
       }
     } else {
+      // Producto individual o menos de 12 empanadas
       detalles.push({
         id_pedido: null,
         id_producto: p.id,
         cantidad: cantidadTotal,
-        precio: precioUnidad
+        precioUnitario: precioUnidad,
+        subTotal: precioUnidad * cantidadTotal
       });
       montoTotal += cantidadTotal * precioUnidad;
     }

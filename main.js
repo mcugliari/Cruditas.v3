@@ -3,17 +3,22 @@ import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, gua
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial } from './listas.js';
 import { inicializarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido } from './pos.js';
 import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
+import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
 
 // FUNCION DE NAVEGACIÓN
 export function navegarA(seccionId, elementoMenu) {
   const secciones = document.querySelectorAll('.modulo-app');
-  secciones.forEach(sec => sec.style.display = 'none');
+  secciones.forEach(sec => {
+    sec.style.display = 'none';
+    sec.classList.add('d-none'); // <--- Forzar ocultado
+  });
 
   const links = document.querySelectorAll('#menu-navegacion .nav-link');
   links.forEach(l => l.classList.remove('active'));
 
   const seccionObjetivo = document.getElementById(`sec-${seccionId}`);
   if (seccionObjetivo) {
+    seccionObjetivo.classList.remove('d-none'); // <--- Remover d-none al activar
     seccionObjetivo.style.display = 'block';
   }
 
@@ -33,6 +38,8 @@ export function navegarA(seccionId, elementoMenu) {
     inicializarPOS();
   } else if (seccionId === 'pedidos-dia') {
     cargarTablaPedidos();
+  } else if (seccionId === 'resumen-ventas') {
+    inicializarReporteVentas();
   }
 }
 
@@ -178,5 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const id = Number(btn.dataset.id);
     eliminarPrecioEspecial(id);
   });
+
+  // 8. Event Listeners Resumen de Ventas
+  document.getElementById('btn-filtrar-resumen-prod')?.addEventListener('click', generarResumenVentasProductos);
 
 });

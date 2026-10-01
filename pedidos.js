@@ -234,7 +234,7 @@ export async function verDetallePedido(idPedido) {
   try {
     const { data: pedido, error } = await supabaseClient
       .from('TB_TPEDIDOS')
-      .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_DPEDIDOS(cantidad, precio, TB_BPRODUCTOS(nombre, TB_BCATEGORIAS(nombre)))')
+      .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_DPEDIDOS(cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(nombre, TB_BCATEGORIAS(nombre)))')
       .eq('id', idPedido)
       .single();
 
@@ -246,21 +246,30 @@ export async function verDetallePedido(idPedido) {
     });
 
     document.getElementById('detalle-id-pedido').innerText = pedido.id;
-    document.getElementById('detalle-cliente').innerText = pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
     document.getElementById('detalle-medio-pago').innerText = pedido.TB_BMEDIO_PAGO?.nombre || 'Sin especificar';
     document.getElementById('detalle-monto-total').innerText = `$${formatearMoneda(pedido.importe_total)}`;
     document.getElementById('detalle-cliente').innerText = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
 
     const items = pedido.TB_DPEDIDOS || [];
     const htmlItems = items.length > 0 
-      ? items.map(item => `
-          <tr>
-            <td>${item.TB_BPRODUCTOS?.TB_BCATEGORIAS?.nombre} ${item.TB_BPRODUCTOS?.nombre || 'Producto'}</td>
-            <td class="text-center">${item.cantidad}</td>
-            <td class="text-right">$${formatearMoneda(item.precio)}</td>
-          </tr>
-        `).join('')
-      : `<tr><td colspan="4" class="text-center text-muted">No hay ítems registrados.</td></tr>`;
+      ? items.map(item => {
+          const esDocena = item.cantidad >= 12 && (item.cantidad % 12 === 0);
+          const etiquetaCant = esDocena ? `${item.cantidad / 12} doc.` : `${item.cantidad} u.`;
+          const nombreCategoria = item.TB_BPRODUCTOS?.TB_BCATEGORIAS?.nombre || '';
+          
+          return `
+            <tr>
+              <td>
+                <span class="badge badge-light border mr-1">${nombreCategoria}</span>
+                <strong>${item.TB_BPRODUCTOS?.nombre || 'Producto'}</strong>
+              </td>
+              <td class="text-center font-weight-bold">${etiquetaCant}</td>
+              <td class="text-right text-muted">$${formatearMoneda(item.precioUnitario)} <small class="text-secondary">${esDocena ? '/doc' : '/u'}</small></td>
+              <td class="text-right font-weight-bold">$${formatearMoneda(item.subTotal)}</td>
+            </tr>
+          `;
+        }).join('')
+      : `<tr><td colspan="4" class="text-center text-muted py-3">No hay ítems registrados.</td></tr>`;
 
     document.getElementById('tabla-detalle-body').innerHTML = htmlItems;
     $('#modalDetallePedido').modal('show');
