@@ -187,7 +187,7 @@ function renderizarTarjetasGrupos(grupos) {
     <div class="row mb-3">
       <div class="col-md-4 col-sm-6 mb-2">
         <div class="info-box bg-light border">
-          <span class="info-box-icon bg-warning text-white"><i class="fas fa-utensils"></i></span>
+          <span class="info-box-icon bg-warning text-white" style="font-size: 1.8rem;">🥟</span>
           <div class="info-box-content">
             <span class="info-box-text font-weight-bold">Empanadas y Canastitas</span>
             <span class="info-box-number text-dark">${emp.unidades} u. <small class="text-muted">(${docenasEmp} doc.)</small></span>
