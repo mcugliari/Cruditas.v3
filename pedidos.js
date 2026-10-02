@@ -25,7 +25,7 @@ export async function cargarTablaPedidos() {
 
   let query = supabaseClient
     .from('TB_TPEDIDOS')
-    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
+    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
     .gte('created_at', fechaDesde)
     .lte('created_at', fechaHasta)
     .order('id', { ascending: false });
@@ -85,6 +85,10 @@ export async function cargarTablaPedidos() {
     const medioPago = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Sin especificar';
     const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
+    const htmlObservaciones = p.observaciones 
+    ? `<div class="mt-1"><span class="badge badge-warning text-dark border"><i class="fas fa-comment-alt mr-1"></i> ${p.observaciones}</span></div>` 
+    : '';
+
     const fechaPedido = new Date(`${p.fecha.split('T')[0]}T00:00:00`).toLocaleDateString('es-AR', {
       day: '2-digit',
       month: '2-digit',
@@ -163,7 +167,10 @@ export async function cargarTablaPedidos() {
       <tr>
         <td class="font-weight-bold">#${p.id}</td>
         <td>${fechaPedido} ${hora} hs</td>
-        <td class="font-weight-bold">${clienteNombre}</td>
+        <td>
+          <div class="font-weight-bold">${clienteNombre}</div>
+          ${htmlObservaciones}
+        </td>
         <td><small class="badge badge-light border">${medioPago}</small></td>
         <td class="text-right font-weight-bold">$${(p.importe_total || 0).toLocaleString('es-AR')}</td>
         <td class="text-center"><span class="badge ${badgeClass} p-2">${estadoTexto}</span></td>
@@ -308,6 +315,10 @@ export async function verDetallePedido(idPedido) {
 
     document.getElementById('tabla-detalle-body').innerHTML = htmlItems;
     $('#modalDetallePedido').modal('show');
+  
+    if (document.getElementById('detalle-observaciones')) {
+    document.getElementById('detalle-observaciones').innerText = pedido.observaciones || 'Sin observaciones';
+    }
 
   } catch (err) {
     console.error('Error al cargar detalle del pedido:', err);

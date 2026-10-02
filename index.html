@@ -627,7 +627,6 @@
   </div>  
 
   <!-- Modal Detalle Pedido -->
-  <!-- Modal Detalle Pedido -->
   <div class="modal fade" id="modalDetallePedido" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
       <div class="modal-content">
@@ -645,6 +644,13 @@
               <strong>Medio de Pago:</strong> <span id="detalle-medio-pago" class="font-weight-bold text-dark"></span>
             </div>
           </div>
+
+          <!-- BLOQUE PARA OBSERVACIONES -->
+          <div class="alert alert-warning border mb-3 py-2 px-3">
+            <small class="font-weight-bold d-block text-uppercase text-dark"><i class="fas fa-comment-alt mr-1"></i> Observaciones:</small>
+            <span id="detalle-observaciones" class="font-italic text-dark">Sin observaciones</span>
+          </div>
+
           <div class="table-responsive">
             <table class="table table-sm table-striped align-middle mb-0">
               <thead class="thead-light">
