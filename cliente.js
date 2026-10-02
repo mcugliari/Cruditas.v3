@@ -1,5 +1,4 @@
 import { supabaseClient } from './config.js';
-import { obtenerPrecioProducto, calcularSubtotalItem } from './pos.js';
 
 let cacheCategorias = [];
 let cacheProductos = [];
@@ -14,6 +13,22 @@ const ID_MEDIO_PAGO_EFECTIVO = 1;
 document.addEventListener('DOMContentLoaded', async () => {
   await cargarDatosMenu();
 
+  // Al abrir el modal de confirmación, autocompletar datos URL y renderizar el desglose
+  $('#modalConfirmarCliente').on('show.bs.modal', function () {
+    const params = new URLSearchParams(window.location.search);
+    const telParam = params.get('tel');
+    const nombreParam = params.get('nombre');
+
+    if (telParam && document.getElementById('cliente-telefono')) {
+      document.getElementById('cliente-telefono').value = telParam;
+    }
+    if (nombreParam && document.getElementById('cliente-nombre')) {
+      document.getElementById('cliente-nombre').value = nombreParam;
+    }
+
+    renderizarResumenEnModalCliente();
+  });
+
   document.getElementById('btn-confirmar-pedido')?.addEventListener('click', () => {
     $('#modalConfirmarCliente').modal('show');
   });
@@ -25,7 +40,6 @@ async function cargarDatosMenu() {
   const contenedor = document.getElementById('contenedor-productos-cliente');
 
   try {
-    // 1. Cargar Categorías, Productos y Lista de Precios de Consumidor Final de Supabase
     const [{ data: categorias }, { data: productos }, { data: precios }] = await Promise.all([
       supabaseClient.from('TB_BCATEGORIAS').select('*').order('id'),
       supabaseClient.from('TB_BPRODUCTOS').select('*').order('id'),
@@ -57,30 +71,33 @@ function renderizarMenuPorCategorias() {
   const contenedor = document.getElementById('contenedor-productos-cliente');
   if (!contenedor) return;
 
-  // Paleta de colores para destacar las categorías
   const paletaColores = [
-    { bg: '#0d6efd', text: '#ffffff' }, // Azul
-    { bg: '#198754', text: '#ffffff' }, // Verde
-    { bg: '#ffc107', text: '#000000' }, // Amarillo
-    { bg: '#dc3545', text: '#ffffff' }, // Rojo
-    { bg: '#0dcaf0', text: '#000000' }, // Celeste
-    { bg: '#6c757d', text: '#ffffff' }  // Gris
+    { bg: '#0d6efd', text: '#ffffff' },
+    { bg: '#198754', text: '#ffffff' },
+    { bg: '#ffc107', text: '#000000' },
+    { bg: '#dc3545', text: '#ffffff' },
+    { bg: '#0dcaf0', text: '#000000' },
+    { bg: '#6c757d', text: '#ffffff' }
   ];
 
   let html = '';
   let colorIndex = 0;
 
   cacheCategorias.forEach(cat => {
-    const prodsCat = cacheProductos.filter(p => Number(p.id_categoria || p.idCategoria) === Number(cat.id));
+    // Omitir categoría de ajuste/sistema
+    if (Number(cat.id) === 99) return;
+
+    // Filtrar producto bonificación 999
+    const prodsCat = cacheProductos.filter(p => 
+      Number(p.id_categoria || p.idCategoria) === Number(cat.id) && Number(p.id) !== 999
+    );
     if (prodsCat.length === 0) return;
 
-    // Asignar color de la paleta
     const estiloColor = paletaColores[colorIndex % paletaColores.length];
     colorIndex++;
 
     html += `
       <div class="mb-4">
-        <!-- Cabecera de Categoría Resaltada sin contador -->
         <div class="p-2 px-3 mb-2 font-weight-bold text-uppercase shadow-sm" 
              style="background-color: ${estiloColor.bg}; color: ${estiloColor.text}; border-radius: 8px; font-size: 0.95rem; letter-spacing: 0.5px;">
           ${cat.nombre}
@@ -90,7 +107,6 @@ function renderizarMenuPorCategorias() {
     prodsCat.forEach(p => {
       const cant = carrito[p.id] || 0;
       const idCatProd = p.id_categoria || p.idCategoria;
-
       const precios = obtenerPrecioProductoCliente(p.id, idCatProd);
 
       let textoPrecio = `$${precios.unidad.toLocaleString('es-AR')} <small class="text-muted">/u</small>`;
@@ -120,7 +136,6 @@ function renderizarMenuPorCategorias() {
 
   contenedor.innerHTML = html;
 
-  // Reasignar eventos
   contenedor.querySelectorAll('.btn-sumar').forEach(btn => {
     btn.onclick = () => cambiarCantidad(parseInt(btn.dataset.id), 1);
   });
@@ -131,7 +146,6 @@ function renderizarMenuPorCategorias() {
   actualizarBarraCarrito();
 }
 
-// Adaptador para usar los precios en la lista Consumidor Final
 function obtenerPrecioProductoCliente(idProd, idCat) {
   const idP = Number(idProd);
   const idC = Number(idCat);
@@ -166,38 +180,131 @@ function cambiarCantidad(idProd, cambio) {
   renderizarMenuPorCategorias();
 }
 
-function actualizarBarraCarrito() {
+// Cálculo centralizado para el cliente
+function obtenerResumenCarritoCliente() {
   let totalUnidades = 0;
-  let montoTotal = 0;
+  let subtotalSinDescuento = 0;
+  let totalSueltasDocenables = 0;
+  let precioDocenaSugerido = 0;
+  let precioUnidadDocenable = 0;
+
+  const listaItems = [];
 
   Object.entries(carrito).forEach(([idProd, cant]) => {
     const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
     if (!p) return;
 
+    const cantidad = Number(cant) || 0;
+    if (cantidad <= 0) return;
+
+    totalUnidades += cantidad;
+
     const idCatProd = p.id_categoria || p.idCategoria;
     const precios = obtenerPrecioProductoCliente(p.id, idCatProd);
-    
-    // Aplicar la regla de cálculo por unidad y por docena si completa 12 u.
-    const subtotal = calcularSubtotalItem(cant, precios, Boolean(p.m_permite_docena));
+    const precioUnidad = precios.unidad || 0;
+    const subTotal = cantidad * precioUnidad;
 
-    totalUnidades += cant;
-    montoTotal += subtotal;
+    subtotalSinDescuento += subTotal;
+
+    if (p.m_permite_docena) {
+      totalSueltasDocenables += cantidad;
+      if (precios.docena) precioDocenaSugerido = precios.docena;
+      if (precioUnidad) precioUnidadDocenable = precioUnidad;
+    }
+
+    listaItems.push({
+      id: p.id,
+      nombre: p.nombre,
+      cantidad: cantidad,
+      precioUnitario: precioUnidad,
+      subTotal: subTotal
+    });
   });
+
+  let descuentoTotal = 0;
+  const docenasCompletas = Math.floor(totalSueltasDocenables / 12);
+
+  if (docenasCompletas > 0 && precioDocenaSugerido > 0) {
+    const descuentoPorDocena = (precioUnidadDocenable * 12) - precioDocenaSugerido;
+    descuentoTotal = descuentoPorDocena * docenasCompletas;
+  }
+
+  const totalFinal = Math.max(0, subtotalSinDescuento - descuentoTotal);
+
+  return {
+    totalUnidades,
+    subtotalSinDescuento,
+    descuentoTotal,
+    docenasCompletas,
+    totalFinal,
+    listaItems
+  };
+}
+
+function actualizarBarraCarrito() {
+  const resumen = obtenerResumenCarritoCliente();
 
   const badgeQty = document.getElementById('cant-items-carrito');
   const badgeMonto = document.getElementById('monto-total-carrito');
   const btn = document.getElementById('btn-confirmar-pedido');
 
-  if (badgeQty) badgeQty.innerText = `${totalUnidades} u.`;
-  if (badgeMonto) badgeMonto.innerText = `$${montoTotal.toLocaleString('es-AR')}`;
+  if (badgeQty) badgeQty.innerText = `${resumen.totalUnidades} u.`;
+  if (badgeMonto) badgeMonto.innerText = `$${resumen.totalFinal.toLocaleString('es-AR')}`;
 
   if (btn) {
-    if (totalUnidades > 0) {
+    if (resumen.totalUnidades > 0) {
       btn.removeAttribute('disabled');
     } else {
       btn.setAttribute('disabled', 'true');
     }
   }
+}
+
+function renderizarResumenEnModalCliente() {
+  const contenedor = document.getElementById('resumen-pedido-modal-cliente');
+  if (!contenedor) return;
+
+  const resumen = obtenerResumenCarritoCliente();
+
+  if (resumen.listaItems.length === 0) {
+    contenedor.innerHTML = `<p class="text-center text-muted my-2">El carrito está vacío</p>`;
+    return;
+  }
+
+  let html = `<ul class="list-group list-group-flush mb-3">`;
+
+  resumen.listaItems.forEach(item => {
+    html += `
+      <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-transparent border-bottom">
+        <div>
+          <strong class="d-block text-dark">${item.nombre}</strong>
+          <small class="text-muted">${item.cantidad} u. x $${item.precioUnitario.toLocaleString('es-AR')}</small>
+        </div>
+        <span class="font-weight-bold text-dark">$${item.subTotal.toLocaleString('es-AR')}</span>
+      </li>
+    `;
+  });
+
+  if (resumen.descuentoTotal > 0) {
+    html += `
+      <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-light text-danger border-bottom">
+        <div>
+          <strong class="d-block text-danger"><i class="fas fa-tag mr-1"></i> Descuento por Docena</strong>
+          <small class="text-muted">${resumen.docenasCompletas} doc. promocional(es)</small>
+        </div>
+        <span class="font-weight-bold">-$${resumen.descuentoTotal.toLocaleString('es-AR')}</span>
+      </li>
+    `;
+  }
+
+  html += `</ul>
+    <div class="d-flex justify-content-between align-items-center p-2 bg-white rounded border">
+      <span class="font-weight-bold">TOTAL A PAGAR:</span>
+      <span class="h5 font-weight-bold text-success mb-0">$${resumen.totalFinal.toLocaleString('es-AR')}</span>
+    </div>
+  `;
+
+  contenedor.innerHTML = html;
 }
 
 async function enviarPedidoASupabase() {
@@ -209,61 +316,36 @@ async function enviarPedidoASupabase() {
   const telefono = inputTelefono ? inputTelefono.value.trim() : '';
   const observaciones = inputObservaciones ? inputObservaciones.value.trim() : '';
 
-  
   if (!nombre || !telefono) {
     alert('Por favor completá tu nombre y teléfono.');
     return;
   }
 
-  let montoTotalCalculado = 0;
-  const detalles = [];
+  const resumen = obtenerResumenCarritoCliente();
+  if (resumen.listaItems.length === 0) {
+    alert('El carrito está vacío.');
+    return;
+  }
 
-  Object.entries(carrito).forEach(([idProd, cant]) => {
-    const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
-    if (!p) return;
+  const detalles = resumen.listaItems.map(item => ({
+    id_pedido: null,
+    id_producto: item.id,
+    cantidad: item.cantidad,
+    precioUnitario: item.precioUnitario,
+    subTotal: item.subTotal
+  }));
 
-    const cantidadTotal = Number(cant) || 0;
-    if (cantidadTotal <= 0) return;
-
-    const precios = obtenerPrecioProductoCliente(p.id, p.id_categoria || p.idCategoria);
-    const precioUnidad = precios.unidad || 0;
-    const precioDocena = precios.docena || (precioUnidad * 12);
-    const permiteDocena = Boolean(p.m_permite_docena);
-
-    if (permiteDocena && cantidadTotal >= 12) {
-      const cantDocenas = Math.floor(cantidadTotal / 12);
-      const unidadesSueltas = cantidadTotal % 12;
-
-      detalles.push({
-        id_pedido: null,
-        id_producto: p.id,
-        cantidad: cantDocenas * 12,
-        precioUnitario: precioDocena,
-        subTotal: precioDocena * cantDocenas
-      });
-      montoTotalCalculado += cantDocenas * precioDocena;
-
-      if (unidadesSueltas > 0) {
-        detalles.push({
-          id_pedido: null,
-          id_producto: p.id,
-          cantidad: unidadesSueltas,
-          precioUnitario: precioUnidad,
-          subTotal: precioUnidad * unidadesSueltas
-        });
-        montoTotalCalculado += unidadesSueltas * precioUnidad;
-      }
-    } else {
-      detalles.push({
-        id_pedido: null,
-        id_producto: p.id,
-        cantidad: cantidadTotal,
-        precioUnitario: precioUnidad,
-        subTotal: precioUnidad * cantidadTotal
-      });
-      montoTotalCalculado += cantidadTotal * precioUnidad;
-    }
-  });
+  // Agregar el producto 999 (Descuento por Docena) en el detalle si aplica
+  if (resumen.descuentoTotal > 0) {
+    const descuentoPorDocenaUnidad = resumen.descuentoTotal / resumen.docenasCompletas;
+    detalles.push({
+      id_pedido: null,
+      id_producto: 999,
+      cantidad: resumen.docenasCompletas,
+      precioUnitario: -descuentoPorDocenaUnidad,
+      subTotal: -resumen.descuentoTotal
+    });
+  }
 
   const btnFinalizar = document.getElementById('btn-finalizar-pedido');
   if (btnFinalizar) {
@@ -272,18 +354,17 @@ async function enviarPedidoASupabase() {
   }
 
   try {
-    // 1. Guardar la cabecera en TB_TPEDIDOS guardando observaciones
     const { data: pedidoCreado, error: errPedido } = await supabaseClient
       .from('TB_TPEDIDOS')
       .insert([{
         fecha: new Date().toISOString().split('T')[0],
-        id_cliente: ID_CLIENTE_CONSUMIDOR_FINAL, // <--- Carga por defecto 'Consumidor Final'
-        id_lista_precio: ID_LISTA_MINORISTA, // <--- Carga por defecto 'Minorista'
-        id_medio_pago: ID_MEDIO_PAGO_EFECTIVO, // <--- Carga por defecto 'Efectivo'
+        id_cliente: ID_CLIENTE_CONSUMIDOR_FINAL,
+        id_lista_precio: ID_LISTA_MINORISTA,
+        id_medio_pago: ID_MEDIO_PAGO_EFECTIVO,
         estado: 'PREPARACION',
         nombre_referencia: `${nombre} (Tel: ${telefono})`,
-        observaciones: observaciones || null, // Se envía a la columna observaciones
-        importe_total: montoTotalCalculado
+        observaciones: observaciones || null,
+        importe_total: resumen.totalFinal
       }])
       .select('id')
       .single();
@@ -293,7 +374,6 @@ async function enviarPedidoASupabase() {
       return;
     }
 
-    // 2. Insertar renglones del detalle
     const detallesConPedido = detalles.map(d => ({
       ...d,
       id_pedido: pedidoCreado.id
@@ -309,9 +389,8 @@ async function enviarPedidoASupabase() {
     }
 
     $('#modalConfirmarCliente').modal('hide');
-    alert(`¡Pedido #${pedidoCreado.id} cargado con éxito por $${montoTotalCalculado.toLocaleString('es-AR')}!`);
+    alert(`¡Pedido #${pedidoCreado.id} cargado con éxito por $${resumen.totalFinal.toLocaleString('es-AR')}!`);
 
-    // Resetear campos
     carrito = {};
     if (inputNombre) inputNombre.value = '';
     if (inputTelefono) inputTelefono.value = '';

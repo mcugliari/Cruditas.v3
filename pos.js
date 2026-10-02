@@ -90,8 +90,13 @@ export function renderizarGrillaPOS() {
   let htmlCompleto = '';
 
   cacheCategorias.forEach((cat, index) => {
-    const prodsCat = cacheProductos.filter(p => Number(p.id_categoria || p.idCategoria) === Number(cat.id));
-    if (prodsCat.length === 0) return;
+  // Omitir la categoría del sistema / bonificaciones
+  if (Number(cat.id) === 99) return;
+
+  const prodsCat = cacheProductos.filter(p => 
+    Number(p.id_categoria || p.idCategoria) === Number(cat.id) && Number(p.id) !== 999
+  );
+  if (prodsCat.length === 0) return;
 
     const colorCat = paletaColores[index % paletaColores.length];
 
@@ -217,57 +222,87 @@ export function actualizarResumenCarrito() {
 
   if (keys.length === 0) {
     if (contenedorItems) contenedorItems.innerHTML = `<p class="text-center text-muted small my-3">El carrito está vacío</p>`;
-    //document.getElementById('cant-docenas').innerText = '0 u.';
     document.getElementById('cant-total-items').innerText = '0';
     document.getElementById('monto-total-pedido').innerText = '$0';
     return;
   }
 
+  const idLista = document.getElementById('select-lista-pedido')?.value;
+
   let totalItems = 0;
-  let montoTotal = 0;
+  let subtotalSinDescuento = 0;
+  let totalSueltasDocenables = 0;
+  let precioDocenaSugerido = 0;
+  let precioUnidadDocenable = 0;
+
   let html = '<ul class="list-group list-group-flush small">';
 
+  // 1. Renderizar cada producto a su precio unitario de lista
   keys.forEach(idProd => {
-    const p = cacheProductos.find(x => x.id == idProd);
+    const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
     if (!p) return;
 
-    const cant = carrito[idProd];
-    const idCatProd = p.id_categoria;
+    const cant = Number(carrito[idProd]) || 0;
+    if (cant <= 0) return;
+
+    totalItems += cant;
+
+    const idCatProd = p.id_categoria || p.idCategoria;
     const cat = cacheCategorias.find(c => Number(idCatProd) === Number(c.id));
     const nombreCat = cat ? cat.nombre : '';
     const textoProducto = nombreCat ? `${nombreCat} ${p.nombre}` : p.nombre;
-    
-    const precios = obtenerPrecioProducto(p.id, idCatProd);
-    const subtotal = calcularSubtotalItem(cant, precios, p.m_permite_docena);
 
-    totalItems += cant;
-    montoTotal += subtotal;
+    const precios = obtenerPrecioProducto(p.id, idCatProd, idLista);
+    const precioUnidad = precios.unidad || 0;
+    const subTotalProducto = cant * precioUnidad;
 
-    let detalleTexto = `${cant} u. x $${precios.unidad}`;
-    if (p.m_permite_docena && precios.docena && cant >= 12) {
-      const doc = Math.floor(cant / 12);
-      const ult = cant % 12;
-      detalleTexto = `${doc} doc. ($${precios.docena})` + (ult > 0 ? ` + ${ult} u. ($${precios.unidad})` : '');
+    subtotalSinDescuento += subTotalProducto;
+
+    if (p.m_permite_docena) {
+      totalSueltasDocenables += cant;
+      if (precios.docena) precioDocenaSugerido = precios.docena;
+      if (precioUnidad) precioUnidadDocenable = precioUnidad;
     }
 
     html += `
       <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-transparent border-bottom">
         <div>
-          <strong class="d-block">${textoProducto}</strong>
-          <small class="text-muted">${detalleTexto}</small>
+          <strong class="d-block text-dark">${textoProducto}</strong>
+          <small class="text-muted">${cant} u. x $${precioUnidad.toLocaleString('es-AR')}</small>
         </div>
-        <span class="font-weight-bold">$${subtotal.toLocaleString('es-AR')}</span>
+        <span class="font-weight-bold text-dark">$${subTotalProducto.toLocaleString('es-AR')}</span>
       </li>
     `;
   });
 
+  // 2. Calcular si corresponde el Descuento por Docena combinada
+  let montoTotalFinal = subtotalSinDescuento;
+  const docenasCompletas = Math.floor(totalSueltasDocenables / 12);
+
+  if (docenasCompletas > 0 && precioDocenaSugerido > 0) {
+    const descuentoUnidadDocena = (precioUnidadDocenable * 12) - precioDocenaSugerido;
+    const descuentoTotal = descuentoUnidadDocena * docenasCompletas;
+
+    if (descuentoTotal > 0) {
+      montoTotalFinal -= descuentoTotal;
+
+      html += `
+        <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-light text-danger border-bottom">
+          <div>
+            <strong class="d-block text-danger"><i class="fas fa-tag mr-1"></i> Descuento por Docena</strong>
+            <small class="text-muted">${docenasCompletas} doc. promocional(es)</small>
+          </div>
+          <span class="font-weight-bold">-$${descuentoTotal.toLocaleString('es-AR')}</span>
+        </li>
+      `;
+    }
+  }
+
   html += '</ul>';
   if (contenedorItems) contenedorItems.innerHTML = html;
 
-  const totalDocenas = (totalItems / 12).toFixed(1);
-  //document.getElementById('cant-docenas').innerText = `${totalDocenas} doc.`;
   document.getElementById('cant-total-items').innerText = totalItems;
-  document.getElementById('monto-total-pedido').innerText = `$${montoTotal.toLocaleString('es-AR')}`;
+  document.getElementById('monto-total-pedido').innerText = `$${montoTotalFinal.toLocaleString('es-AR')}`;
 }
 
 export function resetearPedido() {
@@ -295,13 +330,17 @@ export async function guardarPedido(estadoInicial) {
   const selectMedio = document.getElementById('select-medio-pago');
   const idMedio = selectMedio ? selectMedio.value : null;
 
-  // CAPTURAR LA REFERENCIA DE TEXTO LIBRE
   const inputRef = document.getElementById('input-ref-cliente');
   const nombreReferencia = inputRef ? inputRef.value.trim() : null;
 
   let montoTotal = 0;
   const detalles = [];
 
+  let totalSueltasDocenables = 0;
+  let precioDocenaSugerido = 0;
+  let precioUnidadDocenable = 0;
+
+  // 1. Guardar los productos seleccionados a precio unitario normal
   keys.forEach(idProd => {
     const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
     if (!p) return;
@@ -311,47 +350,45 @@ export async function guardarPedido(estadoInicial) {
 
     const precios = obtenerPrecioProducto(p.id, p.id_categoria || p.idCategoria, idLista);
     const precioUnidad = precios.unidad || 0;
-    const precioDocena = precios.docena || (precioUnidad * 12);
-    const permiteDocena = Boolean(p.m_permite_docena);
 
-    if (permiteDocena && cantidadTotal >= 12) {
-      const cantDocenas = Math.floor(cantidadTotal / 12);
-      const unidadesSueltas = cantidadTotal % 12;
-      
-      // Renglón de Docenas
-      detalles.push({
-        id_pedido: null,
-        id_producto: p.id,
-        cantidad: cantDocenas * 12,
-        precioUnitario: precioDocena,
-        subTotal: precioDocena * cantDocenas
-      });
-      montoTotal += cantDocenas * precioDocena;
-
-      // Renglón de Unidades Sueltas
-      if (unidadesSueltas > 0) {
-        detalles.push({
-          id_pedido: null,
-          id_producto: p.id,
-          cantidad: unidadesSueltas,
-          precioUnitario: precioUnidad,
-          subTotal: precioUnidad * unidadesSueltas
-        });
-        montoTotal += unidadesSueltas * precioUnidad;
-      }
-    } else {
-      // Producto individual o menos de 12 empanadas
-      detalles.push({
-        id_pedido: null,
-        id_producto: p.id,
-        cantidad: cantidadTotal,
-        precioUnitario: precioUnidad,
-        subTotal: precioUnidad * cantidadTotal
-      });
-      montoTotal += cantidadTotal * precioUnidad;
+    if (p.m_permite_docena) {
+      totalSueltasDocenables += cantidadTotal;
+      if (precios.docena) precioDocenaSugerido = precios.docena;
+      if (precioUnidad) precioUnidadDocenable = precioUnidad;
     }
+
+    const subTotalItem = cantidadTotal * precioUnidad;
+
+    detalles.push({
+      id_pedido: null,
+      id_producto: p.id,
+      cantidad: cantidadTotal,
+      precioUnitario: precioUnidad,
+      subTotal: subTotalItem
+    });
+
+    montoTotal += subTotalItem;
   });
-  
+
+  // 2. Si completa docenas combinadas, agregar renglón de bonificación (Producto 999)
+  const docenasCompletas = Math.floor(totalSueltasDocenables / 12);
+  if (docenasCompletas > 0 && precioDocenaSugerido > 0) {
+    const descuentoPorDocena = (precioUnidadDocenable * 12) - precioDocenaSugerido;
+    const descuentoTotal = descuentoPorDocena * docenasCompletas;
+
+    if (descuentoTotal > 0) {
+      detalles.push({
+        id_pedido: null,
+        id_producto: 999, // Producto 'Descuento por Docena'
+        cantidad: docenasCompletas,
+        precioUnitario: -descuentoPorDocena,
+        subTotal: -descuentoTotal
+      });
+
+      montoTotal -= descuentoTotal;
+    }
+  }
+
   let idPedidoFinal = pedidoEditandoId;
 
   if (pedidoEditandoId) {
@@ -407,7 +444,6 @@ export async function guardarPedido(estadoInicial) {
 
   mostrarNotificacion(`¡Pedido #${idPedidoFinal} ${pedidoEditandoId ? 'actualizado' : 'registrado'} con éxito!`, 'success');
 
-  // Limpiar campo de referencia tras guardar
   if (inputRef) inputRef.value = '';
 
   setPedidoEditandoId(null);
