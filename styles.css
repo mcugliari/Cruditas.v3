@@ -265,3 +265,100 @@ body {
   box-shadow: 0 6px 12px rgba(40, 167, 69, 0.4);
   transform: translateY(-1px);
 }
+
+/* ===================================================
+   ESTILOS DE IMPRESIÓN PARA TICKET TÉRMICO (80mm / 58mm)
+   =================================================== */
+#ticket-impresion {
+  display: none;
+}
+
+@media print {
+  /* Ocultar toda la interfaz de la app AdminLTE / Bootstrap */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Mostrar únicamente el contenedor del ticket */
+  #ticket-impresion, #ticket-impresion * {
+    visibility: visible !important;
+    display: block;
+  }
+
+  #ticket-impresion {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 72mm; /* Ancho utilizable para impresoras de 80mm (usar 48mm si es de 58mm) */
+    margin: 0;
+    padding: 2mm;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    line-height: 1.2;
+    color: #000;
+  }
+
+  .ticket-wrapper {
+    width: 100%;
+  }
+
+  .encabezado {
+    text-align: center;
+  }
+
+  .encabezado h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: bold;
+  }
+
+  .encabezado p {
+    margin: 2px 0;
+  }
+
+  .subtitulo {
+    font-size: 10px;
+    font-weight: bold;
+  }
+
+  .linea-item {
+    display: flex !important;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .linea-item .cant {
+    font-weight: bold;
+    width: 25%;
+  }
+
+  .linea-item .nombre {
+    width: 50%;
+    word-break: break-word;
+  }
+
+  .linea-item .precio {
+    width: 25%;
+    text-align: right;
+  }
+
+  .total-linea {
+    display: flex !important;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: bold;
+    margin-top: 5px;
+  }
+
+  .pie-pagina {
+    text-align: center;
+    font-size: 10px;
+    margin-top: 5px;
+  }
+
+  hr.dashed {
+    border: none;
+    border-top: 1px dashed #000;
+    margin: 5px 0;
+  }
+}

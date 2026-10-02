@@ -167,6 +167,7 @@
 
     <!-- SECCIÓN 2: GESTIÓN DE PEDIDOS -->
     <section id="sec-pedidos-dia" class="modulo-app" style="display: none;">
+
       <div class="content-header">
         <div class="container-fluid">
           <h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-list-alt mr-2 text-info"></i>Gestión de Pedidos</h1>
@@ -264,7 +265,7 @@
                   <th>Medio Pago</th>
                   <th class="text-right">Total</th>
                   <th class="text-center">Estado</th>
-                  <th class="text-center" style="width: 160px;">Acciones</th>
+                  <th class="text-center" style="width: 180px;">Acciones</th>
                 </tr>
               </thead>
               <tbody id="tabla-pedidos-body">
@@ -626,6 +627,7 @@
   </div>  
 
   <!-- Modal Detalle Pedido -->
+  <!-- Modal Detalle Pedido -->
   <div class="modal fade" id="modalDetallePedido" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
       <div class="modal-content">
@@ -661,9 +663,20 @@
             <span class="font-weight-bold h4 text-success mb-0" id="detalle-monto-total">$0</span>
           </div>
         </div>
-        <div class="modal-footer">
+        
+        <!-- PIE DEL MODAL CON BOTONES DE IMPRESIÓN Y CERRAR -->
+        <div class="modal-footer d-flex justify-content-between">
+          <div>
+            <button type="button" class="btn btn-outline-dark btn-sm font-weight-bold mr-1" id="btn-imprimir-cocina">
+              <i class="fas fa-receipt mr-1"></i> Comanda Cocina
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm font-weight-bold" id="btn-imprimir-cliente">
+              <i class="fas fa-print mr-1"></i> Ticket Cliente
+            </button>
+          </div>
           <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cerrar</button>
         </div>
+
       </div>
     </div>
   </div>

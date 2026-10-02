@@ -3,6 +3,10 @@ import { setPedidoEditandoId, setCarrito } from './state.js';
 import { mostrarNotificacion } from './utils.js';
 import { cargarPOS, renderizarGrillaPOS } from './pos.js';
 import { navegarA } from './main.js';
+import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
+
+// Variable para conservar el id del pedido que se está viendo en el modal
+let pedidoActualModalId = null;
 
 export async function cargarTablaPedidos() {
   const inputDesde = document.getElementById('filtro-fecha-desde');
@@ -31,7 +35,10 @@ export async function cargarTablaPedidos() {
   }
 
   const { data: pedidos, error } = await query;
-  if (error) return;
+  if (error) {
+    console.error('Error al cargar pedidos:', error);
+    return;
+  }
 
   let pedidosFiltrados = pedidos || [];
   if (inputBuscar && inputBuscar.value.trim() !== '') {
@@ -74,7 +81,6 @@ export async function cargarTablaPedidos() {
   }
 
   tbody.innerHTML = pedidosFiltrados.map(p => {
-    //const clienteNombre = p.TB_BCLIENTES ? p.TB_BCLIENTES.nombre : 'Consumidor Final';
     const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
     const medioPago = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Sin especificar';
     const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -143,6 +149,16 @@ export async function cargarTablaPedidos() {
       </button>
     `;
 
+    // BOTONES DE IMPRESIÓN DIRECTA EN LA TABLA
+    botonesAccion += `
+      <button class="btn btn-outline-dark btn-print-cocina" title="Imprimir Comanda Cocina" data-id="${p.id}">
+        <i class="fas fa-receipt"></i>
+      </button>
+      <button class="btn btn-outline-primary btn-print-cliente" title="Imprimir Ticket Cliente" data-id="${p.id}">
+        <i class="fas fa-print"></i>
+      </button>
+    `;
+
     return `
       <tr>
         <td class="font-weight-bold">#${p.id}</td>
@@ -199,11 +215,10 @@ export async function editarPedido(idPedido) {
     if (document.getElementById('select-cliente-pedido')) {
       document.getElementById('select-cliente-pedido').value = pedido.id_cliente;
 
-    // CARGAR LA REFERENCIA/NOMBRE GUARDADO
-    const inputRef = document.getElementById('input-ref-cliente');
-    if (inputRef) {
-      inputRef.value = pedido.nombre_referencia || '';
-    }
+      const inputRef = document.getElementById('input-ref-cliente');
+      if (inputRef) {
+        inputRef.value = pedido.nombre_referencia || '';
+      }
     }
     if (document.getElementById('select-lista-pedido')) {
       document.getElementById('select-lista-pedido').value = pedido.id_lista_precio;
@@ -240,24 +255,35 @@ export async function verDetallePedido(idPedido) {
 
     if (error || !pedido) return;
 
+    pedidoActualModalId = idPedido;
+
     const formatearMoneda = (val) => Number(val || 0).toLocaleString('es-AR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
 
-    
-
     document.getElementById('detalle-id-pedido').innerText = pedido.id;
     document.getElementById('detalle-medio-pago').innerText = pedido.TB_BMEDIO_PAGO?.nombre || 'Sin especificar';
     document.getElementById('detalle-monto-total').innerText = `$${formatearMoneda(pedido.importe_total)}`;
 
-    // Asignar cliente resaltado con badge
     const clienteNombre = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
     document.getElementById('detalle-cliente').innerHTML = `
       <span class="badge badge-warning text-dark px-2 py-1 font-weight-bold" style="font-size: 0.95rem;">
         <i class="fas fa-user mr-1"></i> ${clienteNombre}
       </span>
     `;
+
+    document.getElementById('btn-imprimir-cocina')?.addEventListener('click', async () => {
+      if (!pedidoActualModalId) return;
+      const pedidoObj = await obtenerPedidoParaImprimir(pedidoActualModalId);
+      imprimirComprobante(pedidoObj, true);
+    });
+
+    document.getElementById('btn-imprimir-cliente')?.addEventListener('click', async () => {
+      if (!pedidoActualModalId) return;
+      const pedidoObj = await obtenerPedidoParaImprimir(pedidoActualModalId);
+      imprimirComprobante(pedidoObj, false);
+    });
     
     const items = pedido.TB_DPEDIDOS || [];
     const htmlItems = items.length > 0 
@@ -288,3 +314,24 @@ export async function verDetallePedido(idPedido) {
     mostrarNotificacion('Ocurrió un error al cargar el detalle.', 'danger');
   }
 }
+
+// =========================================================================
+// ESCUCHADOR DE EVENTOS DE IMPRESIÓN DIRECTA EN LA TABLA
+// =========================================================================
+document.getElementById('tabla-pedidos-body')?.addEventListener('click', async (e) => {
+  const btnCocina = e.target.closest('.btn-print-cocina');
+  if (btnCocina) {
+    const idPedido = btnCocina.dataset.id;
+    const pedidoObj = await obtenerPedidoParaImprimir(idPedido);
+    if (pedidoObj) imprimirComprobante(pedidoObj, true);
+    return;
+  }
+
+  const btnCliente = e.target.closest('.btn-print-cliente');
+  if (btnCliente) {
+    const idPedido = btnCliente.dataset.id;
+    const pedidoObj = await obtenerPedidoParaImprimir(idPedido);
+    if (pedidoObj) imprimirComprobante(pedidoObj, false);
+    return;
+  }
+});
