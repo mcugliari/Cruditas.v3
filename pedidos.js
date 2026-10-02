@@ -82,7 +82,7 @@ export async function cargarTablaPedidos() {
 
   tbody.innerHTML = pedidosFiltrados.map(p => {
     const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
-    const medioPago = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Sin especificar';
+    const medioPago = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Efectivo';
     const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     const htmlObservaciones = p.observaciones 
