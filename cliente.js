@@ -6,8 +6,10 @@ let cacheProductos = [];
 let cachePrecios = [];
 let carrito = {}; // { id_producto: cantidad }
 
-// ID de la lista de precios para Consumidor Final
-const ID_LISTA_CONSUMIDOR_FINAL = 1;
+// Constantes de configuración por defecto
+const ID_CLIENTE_CONSUMIDOR_FINAL = 1;
+const ID_LISTA_MINORISTA = 1;
+const ID_MEDIO_PAGO_EFECTIVO = 1;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await cargarDatosMenu();
@@ -27,7 +29,7 @@ async function cargarDatosMenu() {
     const [{ data: categorias }, { data: productos }, { data: precios }] = await Promise.all([
       supabaseClient.from('TB_BCATEGORIAS').select('*').order('id'),
       supabaseClient.from('TB_BPRODUCTOS').select('*').order('id'),
-      supabaseClient.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', ID_LISTA_CONSUMIDOR_FINAL)
+      supabaseClient.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', ID_LISTA_MINORISTA)
     ]);
 
     cacheCategorias = categorias || [];
@@ -207,6 +209,7 @@ async function enviarPedidoASupabase() {
   const telefono = inputTelefono ? inputTelefono.value.trim() : '';
   const observaciones = inputObservaciones ? inputObservaciones.value.trim() : '';
 
+  
   if (!nombre || !telefono) {
     alert('Por favor completá tu nombre y teléfono.');
     return;
@@ -274,8 +277,9 @@ async function enviarPedidoASupabase() {
       .from('TB_TPEDIDOS')
       .insert([{
         fecha: new Date().toISOString().split('T')[0],
-        id_cliente: 1, // Consumidor Final
-        id_lista_precio: ID_LISTA_CONSUMIDOR_FINAL,
+        id_cliente: ID_CLIENTE_CONSUMIDOR_FINAL, // <--- Carga por defecto 'Consumidor Final'
+        id_lista_precio: ID_LISTA_MINORISTA, // <--- Carga por defecto 'Minorista'
+        id_medio_pago: ID_MEDIO_PAGO_EFECTIVO, // <--- Carga por defecto 'Efectivo'
         estado: 'PREPARACION',
         nombre_referencia: `${nombre} (Tel: ${telefono})`,
         observaciones: observaciones || null, // Se envía a la columna observaciones
