@@ -21,26 +21,28 @@ export async function cargarResumenVentasDia() {
     </div>
   `;
 
-  // Fecha local en formato YYYY-MM-DD
+  // 1. Manejo de fecha local
   const hoyObj = new Date();
-  const hoy = `${hoyObj.getFullYear()}-${String(hoyObj.getMonth() + 1).padStart(2, '0')}-${String(hoyObj.getDate()).padStart(2, '0')}`;
+  const offset = hoyObj.getTimezoneOffset() * 60000;
+  const fechaLocal = new Date(hoyObj.getTime() - offset);
+  const fechaISO = fechaLocal.toISOString().split('T')[0]; 
+
 
   try {
-    // A. Verificar si ya existe un cierre ACTIVO para la fecha actual
+    // A. Verificar si ya existe un cierre ACTIVO usando fechaISO ('2026-10-05')
     const { data: cierreExistente, error: errCierre } = await supabaseClient
       .from('TB_TCIERRE_CAJA')
       .select('id, total_general, diferencia_efectivo, observaciones, estado')
-      .eq('fecha', hoy)
+      .eq('fecha', fechaISO)
       .eq('estado', 'CERRADO')
       .maybeSingle();
 
     if (errCierre) throw errCierre;
 
-    // Si la caja ya fue cerrada hoy, mostramos pantalla de bloqueo con opción de anulación
     if (cierreExistente) {
       contenedor.innerHTML = `
         <div class="alert alert-warning text-center my-2 p-3">
-          <h6 class="font-weight-bold mb-1">🔒 La caja de hoy (${hoy}) ya se encuentra CERRADA.</h6>
+          <h6 class="font-weight-bold mb-1">🔒 La caja de hoy (${fechaISO}) ya se encuentra CERRADA.</h6>
           <p class="small mb-2">
             Total rendido: <strong>$${Number(cierreExistente.total_general).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong> | 
             Dif. Efectivo: <strong>$${Number(cierreExistente.diferencia_efectivo).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
@@ -51,10 +53,8 @@ export async function cargarResumenVentasDia() {
         </div>
       `;
 
-      // Deshabilitar controles de formulario
       alternarCamposFormulario(true);
 
-      // Evento para anular el cierre
       document.getElementById('btn-anular-cierre')?.addEventListener('click', async () => {
         if (!confirm('¿Estás seguro de anular el cierre actual? Quedará registrado en el historial como ANULADO y podrás efectuar un nuevo cierre.')) return;
         await anularCierreCaja(cierreExistente.id);
@@ -63,14 +63,13 @@ export async function cargarResumenVentasDia() {
       return;
     }
 
-    // Habilitar campos si no hay cierre activo
     alternarCamposFormulario(false);
 
-    // B. Consultar pedidos del día activos
+    // B. Consultar pedidos del día en TB_TPEDIDOS usando fechaTextoAR ('05/10/2026')
     const { data: pedidos, error: errPedidos } = await supabaseClient
       .from('TB_TPEDIDOS')
-      .select('importe_total, id_medio_pago, TB_BMEDIO_PAGO(nombre)')
-      .eq('fecha', hoy);
+      .select('importe_total, id_medio_pago, estado, fecha, TB_BMEDIO_PAGO(nombre)')
+      .eq('fecha', fechaISO);
 
     if (errPedidos) throw errPedidos;
 
@@ -80,8 +79,7 @@ export async function cargarResumenVentasDia() {
     let pedidosActivos = 0;
 
     (pedidos || []).forEach(p => {
-    // Solo se computa el dinero de pedidos cobrados/completados
-    if (p.estado !== 'COMPLETADO') return;
+      if (p.estado !== 'COMPLETADO') return;
 
       pedidosActivos++;
       const idMedio = p.id_medio_pago || 1;
@@ -111,7 +109,7 @@ export async function cargarResumenVentasDia() {
     if (pedidosActivos === 0) {
       contenedor.innerHTML = `
         <div class="alert alert-info text-center mb-0">
-          No hay ventas activas registradas para el día (<strong>${hoy}</strong>).
+          No hay ventas completadas/cobradas para hoy (<strong>${fechaTextoAR}</strong>).
         </div>
       `;
       return;
@@ -138,7 +136,6 @@ export async function cargarResumenVentasDia() {
 
     contenedor.innerHTML = html;
 
-    // Resetear input y actualizar arqueo
     const inputEf = document.getElementById('input-efectivo-real');
     if (inputEf) inputEf.value = '';
     actualizarDiferenciaEfectivo();

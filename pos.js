@@ -359,6 +359,11 @@ export async function guardarPedido(estadoInicial) {
   let precioDocenaSugerido = 0;
   let precioUnidadDocenable = 0;
 
+  // Obtener fecha local YYYY-MM-DD
+  const hoyObj = new Date();
+  const offset = hoyObj.getTimezoneOffset() * 60000;
+  const fechaISO = new Date(hoyObj.getTime() - offset).toISOString().split('T')[0];
+
   // 1. Guardar los productos seleccionados a precio unitario normal
   keys.forEach(idProd => {
     const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
@@ -434,7 +439,7 @@ export async function guardarPedido(estadoInicial) {
     const { data: pedido, error } = await supabaseClient
       .from('TB_TPEDIDOS')
       .insert([{
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: fechaISO,
         id_cliente: idCliente,
         nombre_referencia: nombreReferencia,
         id_lista_precio: idLista,
