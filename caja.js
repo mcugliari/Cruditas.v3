@@ -80,7 +80,8 @@ export async function cargarResumenVentasDia() {
     let pedidosActivos = 0;
 
     (pedidos || []).forEach(p => {
-      if (p.estado === 'CANCELADO') return;
+    // Solo se computa el dinero de pedidos cobrados/completados
+    if (p.estado !== 'COMPLETADO') return;
 
       pedidosActivos++;
       const idMedio = p.id_medio_pago || 1;
