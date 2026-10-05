@@ -4,14 +4,14 @@ import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, a
 import { inicializarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido } from './pos.js';
 import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
-import { inicializarCierreCaja } from './caja.js';
+import { inicializarCierreCaja, inicializarHistorialCierres, cargarTablaHistorialCierres, verDetalleCierre } from './caja.js';
 
 // FUNCION DE NAVEGACIÓN
 export function navegarA(seccionId, elementoMenu) {
   const secciones = document.querySelectorAll('.modulo-app');
   secciones.forEach(sec => {
     sec.style.display = 'none';
-    sec.classList.add('d-none'); // <--- Forzar ocultado
+    sec.classList.add('d-none');
   });
 
   const links = document.querySelectorAll('#menu-navegacion .nav-link');
@@ -19,7 +19,7 @@ export function navegarA(seccionId, elementoMenu) {
 
   const seccionObjetivo = document.getElementById(`sec-${seccionId}`);
   if (seccionObjetivo) {
-    seccionObjetivo.classList.remove('d-none'); // <--- Remover d-none al activar
+    seccionObjetivo.classList.remove('d-none');
     seccionObjetivo.style.display = 'block';
   }
 
@@ -41,6 +41,8 @@ export function navegarA(seccionId, elementoMenu) {
     cargarTablaPedidos();
   } else if (seccionId === 'resumen-ventas') {
     inicializarReporteVentas();
+  } else if (seccionId === 'historial-caja') {
+    inicializarHistorialCierres();
   }
 }
 
@@ -64,21 +66,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('sidebar-collapse');
   });
 
-  // 3. Event Listeners para POS (Columna de menú y tarjetas)
-    document.getElementById('contenedor-menu-productos')?.addEventListener('click', (e) => {
+  // 3. Event Listeners para POS
+  document.getElementById('contenedor-menu-productos')?.addEventListener('click', (e) => {
     const btnPill = e.target.closest('[data-action="alterar-cant"]');
     if (btnPill) {
-        const id = Number(btnPill.dataset.id);
-        const delta = Number(btnPill.dataset.delta);
-        alterarCantidad(id, delta);
+      const id = Number(btnPill.dataset.id);
+      const delta = Number(btnPill.dataset.delta);
+      alterarCantidad(id, delta);
     }
-    });
+  });
 
-  // Eventos Selects POS
   document.getElementById('select-cliente-pedido')?.addEventListener('change', alCambiarCliente);
   document.getElementById('select-lista-pedido')?.addEventListener('change', () => inicializarPOS());
 
-  // Botonera de acciones POS
   document.querySelector('.pos-actions-container')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 4. Event Listeners para Gestión de Pedidos del Día
+  // 4. Event Listeners Pedidos
   document.getElementById('btn-actualizar-pedidos')?.addEventListener('click', cargarTablaPedidos);
   document.getElementById('filtro-fecha-desde')?.addEventListener('change', cargarTablaPedidos);
   document.getElementById('filtro-fecha-hasta')?.addEventListener('change', cargarTablaPedidos);
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 7. Event Listeners Listas de Precios
+  // 7. Event Listeners Listas
   document.getElementById('select-lista-activa')?.addEventListener('change', cargarMatrizPrecios);
   document.getElementById('btn-nueva-excepcion')?.addEventListener('click', abrirModalPrecioEspecial);
   document.getElementById('form-precio-especial')?.addEventListener('submit', guardarPrecioEspecial);
@@ -187,10 +187,20 @@ document.addEventListener('DOMContentLoaded', () => {
     eliminarPrecioEspecial(id);
   });
 
-  // 8. Event Listeners Resumen de Ventas
+  // 8. Event Listeners Resumen Ventas
   document.getElementById('btn-filtrar-resumen-prod')?.addEventListener('click', generarResumenVentasProductos);
 
-  // ➕ 9. Inicializar Cierre de Caja
+  // 9. Cierre de Caja Modal
   inicializarCierreCaja();
-  
+
+  // 10. Historial Cierres
+  document.getElementById('btn-buscar-cierres')?.addEventListener('click', cargarTablaHistorialCierres);
+
+  document.getElementById('tabla-historial-cierres-body')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="ver-detalle-cierre"]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    verDetalleCierre(id);
+  });
+
 });
