@@ -239,6 +239,10 @@ export function actualizarResumenCarrito() {
 
   // 1. Renderizar cada producto a su precio unitario de lista
   keys.forEach(idProd => {
+
+    // FILTRO: Omitir el producto bonificación 999 para que no aparezca como ítem normal
+    if (Number(idProd) === 999) return;
+    
     const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
     if (!p) return;
 

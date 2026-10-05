@@ -1,9 +1,10 @@
 import { supabaseClient } from './config.js';
 
 export async function obtenerPedidoParaImprimir(idPedido) {
+  // Se agregan id, id_categoria e id_producto al SELECT para que el filtro funcione
   const { data: pedido, error } = await supabaseClient
     .from('TB_TPEDIDOS')
-    .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_DPEDIDOS(cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(nombre, TB_BCATEGORIAS(nombre)))')
+    .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_DPEDIDOS(id_producto, cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(id, id_categoria, nombre, TB_BCATEGORIAS(nombre)))')
     .eq('id', idPedido)
     .single();
 
@@ -38,10 +39,38 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
 
   const items = pedido.TB_DPEDIDOS || [];
 
-  const filasHTML = items.map(item => {
+  // Función helper para detectar si es el ítem de descuento
+  const esItemDescuento = (item) => {
+    const idCat = Number(item.TB_BPRODUCTOS?.id_categoria);
+    return idCat === 99;
+  };
+
+  // FILTRO: Excluir el producto de descuento si es comanda de cocina
+  const itemsAImprimir = esComandaCocina 
+    ? items.filter(item => !esItemDescuento(item))
+    : items;
+
+  const filasHTML = itemsAImprimir.map(item => {
+    const esDescuento = esItemDescuento(item);
+
+    // Renglón de descuento exclusivo para el comprobante del cliente
+    if (esDescuento) {
+      return `
+        <div class="linea-item text-danger" style="color: #dc3545;">
+          <span class="cant">1 doc.</span>
+          <span class="nombre">Descuento por Docena</span>
+          <span class="precio">-$${formatearMoneda(Math.abs(item.subTotal))}</span>
+        </div>
+      `;
+    }
+
     const esDocena = item.cantidad >= 12 && (item.cantidad % 12 === 0);
     const cantTexto = esDocena ? `${item.cantidad / 12} doc.` : `${item.cantidad} u.`;
-    const nombreProd = `${item.TB_BPRODUCTOS?.TB_BCATEGORIAS?.nombre || ''} ${item.TB_BPRODUCTOS?.nombre || 'Producto'}`;
+    
+    const categoriaNombre = item.TB_BPRODUCTOS?.TB_BCATEGORIAS?.nombre;
+    const nombreProd = categoriaNombre 
+      ? `${categoriaNombre} ${item.TB_BPRODUCTOS?.nombre || 'Producto'}` 
+      : (item.TB_BPRODUCTOS?.nombre || 'Producto');
     
     if (esComandaCocina) {
       return `
@@ -91,6 +120,6 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
     </div>
   `;
 
-  // Disparar la impresión nativa (se puede guardar como PDF para probar)
+  // Disparar la impresión nativa
   window.print();
 }

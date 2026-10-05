@@ -191,6 +191,10 @@ function obtenerResumenCarritoCliente() {
   const listaItems = [];
 
   Object.entries(carrito).forEach(([idProd, cant]) => {
+
+    // FILTRO: Omitir el producto bonificación 999 del desglose normal
+    if (Number(idProd) === 999) return;
+    
     const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
     if (!p) return;
 
@@ -388,8 +392,53 @@ async function enviarPedidoASupabase() {
       return;
     }
 
-    $('#modalConfirmarCliente').modal('hide');
-    alert(`¡Pedido #${pedidoCreado.id} cargado con éxito por $${resumen.totalFinal.toLocaleString('es-AR')}!`);
+   // =========================================================================
+    // DETECCIÓN DE ORIGEN: ¿Viene desde el bot de WhatsApp?
+    // =========================================================================
+    const urlParams = new URLSearchParams(window.location.search);
+    const vieneDeWhatsApp = urlParams.has('tel') && urlParams.get('tel').trim() !== '';
+
+    if (vieneDeWhatsApp) {
+      // -----------------------------------------------------------------------
+      // OPCIÓN 1: Redirección automática a WhatsApp
+      // -----------------------------------------------------------------------
+      const mensajeWS = `Hola! Ya confirmé mi Pedido *#${pedidoCreado.id}* por *$${resumen.totalFinal.toLocaleString('es-AR')}* a nombre de *${nombre}*. Quedo a la espera!`;
+      
+      // Podés usar el teléfono del negocio o reenviar al mismo número
+      const urlWhatsApp = `https://wa.me/549${telefono}?text=${encodeURIComponent(mensajeWS)}`;
+
+      // Vaciar carrito antes de redirigir
+      carrito = {};
+
+      // Redirigir directamente al chat
+      window.location.href = urlWhatsApp;
+
+    } else {
+      // -----------------------------------------------------------------------
+      // OPCIÓN 2: Pantalla de Éxito dentro del Modal
+      // -----------------------------------------------------------------------
+      const modalContent = document.querySelector('#modalConfirmarCliente .modal-content');
+      if (modalContent) {
+        modalContent.innerHTML = `
+          <div class="modal-body text-center py-4">
+            <div class="mb-2" style="font-size: 3.5rem; color: #198754;">🎉</div>
+            <h3 class="font-weight-bold text-dark">¡Pedido #${pedidoCreado.id} Recibido!</h3>
+            <p class="text-muted lead mb-2">Total a pagar: <strong class="text-success">$${resumen.totalFinal.toLocaleString('es-AR')}</strong></p>
+            <div class="alert alert-light border my-3">
+              <small class="text-secondary d-block">Cliente: <strong>${nombre}</strong></small>
+              <small class="text-secondary d-block">Teléfono: <strong>${telefono}</strong></small>
+            </div>
+            <p class="small text-muted mb-4">Ya ingresamos tu pedido a cocina. Podés cerrar esta ventana.</p>
+            <button class="btn btn-success btn-block font-weight-bold py-2" onclick="location.reload()">
+              ACEPTAR Y VOLVER
+            </button>
+          </div>
+        `;
+      }
+
+      // Vaciar el carrito local
+      carrito = {};
+    }
 
     carrito = {};
     if (inputNombre) inputNombre.value = '';
