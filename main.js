@@ -4,6 +4,7 @@ import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, a
 import { inicializarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido } from './pos.js';
 import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
+import { inicializarCierreCaja } from './caja.js';
 
 // FUNCION DE NAVEGACIÓN
 export function navegarA(seccionId, elementoMenu) {
@@ -189,4 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 8. Event Listeners Resumen de Ventas
   document.getElementById('btn-filtrar-resumen-prod')?.addEventListener('click', generarResumenVentasProductos);
 
+  // ➕ 9. Inicializar Cierre de Caja
+  inicializarCierreCaja();
+  
 });

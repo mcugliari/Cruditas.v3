@@ -309,13 +309,28 @@ export function actualizarResumenCarrito() {
   document.getElementById('monto-total-pedido').innerText = `$${montoTotalFinal.toLocaleString('es-AR')}`;
 }
 
-export function resetearPedido() {
+export async function resetearPedido() {
   const inputRef = document.getElementById('input-ref-cliente');
   if (inputRef) inputRef.value = '';
 
+  // 1. Resetear selector de Medio de Pago
+  const selectMedio = document.getElementById('select-medio-pago');
+  if (selectMedio) {
+    selectMedio.selectedIndex = 0;
+  }
+
+  // 2. Resetear selector de Cliente a Consumidor Final (ID 1)
+  const selectCli = document.getElementById('select-cliente-pedido');
+  if (selectCli) {
+    selectCli.value = '1';
+  }
+
   setPedidoEditandoId(null);
   setCarrito({});
-  renderizarGrillaPOS();
+
+  // 3. Sincronizar el cambio de cliente y recargar la grilla de precios del POS
+  await alCambiarCliente(); // Busca la lista predeterminada del Consumidor Final
+  await cargarPOS();        // Refresca la grilla con la lista de precios seleccionada
 }
 
 export function vaciarCarrito() {

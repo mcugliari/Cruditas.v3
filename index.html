@@ -80,6 +80,12 @@
               <p>Resumen de Ventas</p>
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" data-toggle="modal" data-target="#modalCierreCaja">
+              <i class="fas fa-cash-register mr-2"></i>
+              <span>Cierre de Caja</span>
+            </a>
+          </li>
         </ul>
       </nav>
     </div>
@@ -687,6 +693,42 @@
     </div>
   </div>
 
+</div>
+
+<!-- Modal Cierre de Caja -->
+<div class="modal fade" id="modalCierreCaja" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">🔒 Cierre de Caja Diaria</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Resumen de ventas del día por medio de pago antes de cerrar la jornada:</p>
+        
+        <!-- Aquí se cargan los totales dinámicamente -->
+        <div id="contenedor-resumen-cierre">
+          <div class="text-center py-3">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            Cargando totales...
+          </div>
+        </div>
+
+        <div class="form-group mt-3">
+          <label for="cierre-observaciones"><strong>Observaciones de Caja (Opcional):</strong></label>
+          <textarea id="cierre-observaciones" class="form-group class-control form-control" rows="2" placeholder="Ej: Faltante de $200 en efectivo, retiro de caja a las 18hs..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger font-weight-bold" id="btn-confirmar-cierre">
+          CONFIRMAR Y CERRAR CAJA
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Scripts dependencias -->
