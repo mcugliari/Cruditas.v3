@@ -43,12 +43,44 @@
     <div class="sidebar">
       <nav class="mt-2">
         <ul class="nav nav-pills nav-sidebar flex-column" id="menu-navegacion" role="menu">
+          
+          <!-- ACCESOS DIRECTOS (OPERA) -->
           <li class="nav-item">
             <a href="#" class="nav-link active" data-section="pedidos">
               <i class="nav-icon fas fa-cash-register"></i>
-              <p>Pedidos</p>
+              <p>Nuevo Pedido</p>
             </a>
           </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="pedidos-dia">
+              <i class="nav-icon fas fa-receipt"></i>
+              <p>Listado de Pedidos</p>
+            </a>
+          </li>
+
+          <!-- SECCIÓN CAJA -->
+          <li class="nav-header">CAJA</li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="resumen-ventas">
+              <i class="nav-icon fas fa-chart-pie"></i>
+              <p>Resumen de Ventas</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-toggle="modal" data-target="#modalCierreCaja">
+              <i class="nav-icon fas fa-calculator"></i>
+              <p>Cierre de Caja</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="historial-caja">
+              <i class="nav-icon fas fa-history"></i>
+              <p>Historial Cierres</p>
+            </a>
+          </li>
+
+          <!-- SECCIÓN CONFIGURACIÓN -->
+          <li class="nav-header">CONFIGURACIÓN</li>
           <li class="nav-item">
             <a href="#" class="nav-link" data-section="clientes">
               <i class="nav-icon fas fa-users"></i>
@@ -67,30 +99,7 @@
               <p>Listas de Precios</p>
             </a>
           </li>
-          <li class="nav-item">
-            <a href="#" class="nav-link" data-section="pedidos-dia">
-              <i class="fas fa-receipt mr-2"></i>
-              <span>Listado de Pedidos</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="#" class="nav-link" data-section="resumen-ventas">
-              <i class="nav-icon fas fa-chart-pie"></i>
-              <p>Resumen de Ventas</p>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="#" data-toggle="modal" data-target="#modalCierreCaja">
-              <i class="fas fa-cash-register mr-2"></i>
-              <span>Cierre de Caja</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="#" data-section="historial-caja">
-              <i class="fas fa-history mr-2"></i>
-              <span>Historial Cierres</span>
-            </a>
-          </li>
+
         </ul>
       </nav>
     </div>
