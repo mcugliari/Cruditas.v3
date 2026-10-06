@@ -1,4 +1,4 @@
-import { supabaseClient } from './config.js';
+import { supabaseAdmin } from './config.js';
 import { 
   carrito, setCarrito, 
   cacheProductos, setCacheProductos, 
@@ -15,9 +15,9 @@ export async function inicializarPOS() {
 }
 
 export async function cargarSelectsPOS() {
-  const { data: clientes } = await supabaseClient.from('TB_BCLIENTES').select('*').order('nombre');
-  const { data: listas } = await supabaseClient.from('TB_TLISTA_PRECIOS').select('*');
-  const { data: medios } = await supabaseClient.from('TB_BMEDIO_PAGO').select('*');
+  const { data: clientes } = await supabaseAdmin.from('TB_BCLIENTES').select('*').order('nombre');
+  const { data: listas } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*');
+  const { data: medios } = await supabaseAdmin.from('TB_BMEDIO_PAGO').select('*');
 
   const selectCli = document.getElementById('select-cliente-pedido');
   if (selectCli && clientes) selectCli.innerHTML = clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
@@ -56,7 +56,7 @@ export async function alCambiarCliente() {
   }
 
   // Buscar la lista de precios predeterminada del cliente
-  const { data } = await supabaseClient
+  const { data } = await supabaseAdmin
     .from('TB_ACLIENTE_LISTA_PRECIOS')
     .select('id_lista_precio')
     .eq('id_cliente', selectCli.value)
@@ -74,9 +74,9 @@ export async function cargarPOS() {
   const selectLis = document.getElementById('select-lista-pedido');
   const idLista = selectLis && selectLis.value ? parseInt(selectLis.value) : 1;
 
-  const { data: categorias } = await supabaseClient.from('TB_BCATEGORIAS').select('*').order('id');
-  const { data: productos } = await supabaseClient.from('TB_BPRODUCTOS').select('*').order('id');
-  const { data: precios } = await supabaseClient.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', idLista);
+  const { data: categorias } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('id');
+  const { data: productos } = await supabaseAdmin.from('TB_BPRODUCTOS').select('*').order('id');
+  const { data: precios } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', idLista);
 
   setCacheCategorias(categorias || []);
   setCacheProductos(productos || []);
@@ -428,7 +428,7 @@ export async function guardarPedido(estadoInicial) {
   let idPedidoFinal = pedidoEditandoId;
 
   if (pedidoEditandoId) {
-    const { error: errUpdate } = await supabaseClient
+    const { error: errUpdate } = await supabaseAdmin
       .from('TB_TPEDIDOS')
       .update({
         id_cliente: idCliente,
@@ -445,10 +445,10 @@ export async function guardarPedido(estadoInicial) {
       return;
     }
 
-    await supabaseClient.from('TB_DPEDIDOS').delete().eq('id_pedido', pedidoEditandoId);
+    await supabaseAdmin.from('TB_DPEDIDOS').delete().eq('id_pedido', pedidoEditandoId);
 
   } else {
-    const { data: pedido, error } = await supabaseClient
+    const { data: pedido, error } = await supabaseAdmin
       .from('TB_TPEDIDOS')
       .insert([{
         fecha: fechaISO,
@@ -471,7 +471,7 @@ export async function guardarPedido(estadoInicial) {
 
   detalles.forEach(d => d.id_pedido = idPedidoFinal);
 
-  const { error: errorDetalle } = await supabaseClient.from('TB_DPEDIDOS').insert(detalles);
+  const { error: errorDetalle } = await supabaseAdmin.from('TB_DPEDIDOS').insert(detalles);
 
   if (errorDetalle) {
     mostrarNotificacion('Error al guardar el detalle: ' + errorDetalle.message, 'danger');

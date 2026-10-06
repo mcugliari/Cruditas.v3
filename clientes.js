@@ -1,8 +1,8 @@
-import { supabaseClient } from './config.js';
+import { supabaseAdmin } from './config.js';
 
 export async function cargarClientes() {
   const tbody = document.getElementById('tabla-clientes-body');
-  const { data: clientes, error } = await supabaseClient
+  const { data: clientes, error } = await supabaseAdmin
     .from('TB_BCLIENTES')
     .select('*')
     .order('id', { ascending: false });
@@ -40,7 +40,7 @@ export async function guardarCliente(event) {
   const telefono = document.getElementById('cli-telefono').value;
   const direccion = document.getElementById('cli-direccion').value;
 
-  const { error } = await supabaseClient.from('TB_BCLIENTES').insert([{ nombre, telefono, direccion }]);
+  const { error } = await supabaseAdmin.from('TB_BCLIENTES').insert([{ nombre, telefono, direccion }]);
   if (error) alert('Error al guardar: ' + error.message);
   else {
     document.getElementById('form-cliente').reset();
@@ -63,7 +63,7 @@ export async function guardarEdicionCliente(event) {
   const telefono = document.getElementById('edit-cli-telefono').value;
   const direccion = document.getElementById('edit-cli-direccion').value;
 
-  const { error } = await supabaseClient.from('TB_BCLIENTES').update({ nombre, telefono, direccion }).eq('id', id);
+  const { error } = await supabaseAdmin.from('TB_BCLIENTES').update({ nombre, telefono, direccion }).eq('id', id);
   if (error) alert('Error al actualizar cliente: ' + error.message);
   else {
     $('#modal-editar-cliente').modal('hide');
@@ -73,7 +73,7 @@ export async function guardarEdicionCliente(event) {
 
 export async function eliminarCliente(id, nombre) {
   if (confirm(`¿Estás seguro de que querés eliminar a ${nombre}?`)) {
-    const { error } = await supabaseClient.from('TB_BCLIENTES').delete().eq('id', id);
+    const { error } = await supabaseAdmin.from('TB_BCLIENTES').delete().eq('id', id);
     if (error) alert('Error al eliminar: ' + error.message);
     else cargarClientes();
   }
@@ -85,8 +85,8 @@ export async function inicializarCrudClienteLista() {
 }
 
 async function cargarSelectsAsociacion() {
-  const { data: clientes } = await supabaseClient.from('TB_BCLIENTES').select('id, nombre').order('nombre');
-  const { data: listas } = await supabaseClient.from('TB_TLISTA_PRECIOS').select('id, nombre');
+  const { data: clientes } = await supabaseAdmin.from('TB_BCLIENTES').select('id, nombre').order('nombre');
+  const { data: listas } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('id, nombre');
 
   const selectCli = document.getElementById('asoc-select-cliente');
   const selectLis = document.getElementById('asoc-select-lista');
@@ -99,7 +99,7 @@ export async function listarAsociacionesClienteLista() {
   const tbody = document.getElementById('tabla-asoc-cliente-lista');
   if (!tbody) return;
 
-  const { data, error } = await supabaseClient
+  const { data, error } = await supabaseAdmin
     .from('TB_ACLIENTE_LISTA_PRECIOS')
     .select('id, id_cliente, id_lista_precio, m_predeterminada, TB_BCLIENTES(nombre), TB_TLISTA_PRECIOS(nombre)')
     .order('id_cliente');
@@ -129,13 +129,13 @@ export async function guardarAsociacionClienteLista(event) {
   const esPredeterminada = document.getElementById('asoc-predeterminada').checked;
 
   if (esPredeterminada) {
-    await supabaseClient.from('TB_ACLIENTE_LISTA_PRECIOS').update({ m_predeterminada: false }).eq('id_cliente', idCliente);
+    await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').update({ m_predeterminada: false }).eq('id_cliente', idCliente);
   }
 
   const payload = { id_cliente: idCliente, id_lista_precio: idLista, m_predeterminada: esPredeterminada };
   let res = id 
-    ? await supabaseClient.from('TB_ACLIENTE_LISTA_PRECIOS').update(payload).eq('id', id)
-    : await supabaseClient.from('TB_ACLIENTE_LISTA_PRECIOS').insert([payload]);
+    ? await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').update(payload).eq('id', id)
+    : await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').insert([payload]);
 
   if (res.error) alert('Error al guardar: ' + res.error.message);
   else {
@@ -153,7 +153,7 @@ export function editarAsociacion(id, idCliente, idLista, esPredeterminada) {
 
 export async function eliminarAsociacion(id) {
   if (!confirm('¿Eliminar esta asociación?')) return;
-  const { error } = await supabaseClient.from('TB_ACLIENTE_LISTA_PRECIOS').delete().eq('id', id);
+  const { error } = await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').delete().eq('id', id);
   if (error) alert('Error al eliminar: ' + error.message);
   else await listarAsociacionesClienteLista();
 }

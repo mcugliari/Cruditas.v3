@@ -1,8 +1,8 @@
-import { supabaseClient } from './config.js';
+import { supabaseAdmin } from './config.js';
 
 export async function obtenerPedidoParaImprimir(idPedido) {
   // Se agregan id, id_categoria e id_producto al SELECT para que el filtro funcione
-  const { data: pedido, error } = await supabaseClient
+  const { data: pedido, error } = await supabaseAdmin
     .from('TB_TPEDIDOS')
     .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_DPEDIDOS(id_producto, cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(id, id_categoria, nombre, TB_BCATEGORIAS(nombre)))')
     .eq('id', idPedido)

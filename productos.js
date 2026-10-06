@@ -1,4 +1,4 @@
-import { supabaseClient } from './config.js';
+import { supabaseAdmin } from './config.js';
 import { cacheCategorias, setCacheCategorias } from './state.js';
 
 export async function cargarCategoriasSelect() {
@@ -11,7 +11,7 @@ export async function cargarCategoriasSelect() {
     return;
   }
 
-  const { data: categorias, error } = await supabaseClient.from('TB_BCATEGORIAS').select('*').order('nombre', { ascending: true });
+  const { data: categorias, error } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('nombre', { ascending: true });
   if (!error && categorias) {
     setCacheCategorias(categorias);
     const select = document.getElementById('prod-categoria');
@@ -26,7 +26,7 @@ export async function cargarProductos() {
   await cargarCategoriasSelect();
   const tbody = document.getElementById('tabla-productos-body');
 
-  const { data: productos, error } = await supabaseClient
+  const { data: productos, error } = await supabaseAdmin
     .from('TB_BPRODUCTOS')
     .select('id, nombre, m_permite_docena, id_categoria, TB_BCATEGORIAS ( nombre )')
     .order('id_categoria', { ascending: true })
@@ -88,8 +88,8 @@ export async function guardarProducto(event) {
 
   const payload = { nombre, id_categoria, m_permite_docena };
   let result = id 
-    ? await supabaseClient.from('TB_BPRODUCTOS').update(payload).eq('id', id)
-    : await supabaseClient.from('TB_BPRODUCTOS').insert([payload]);
+    ? await supabaseAdmin.from('TB_BPRODUCTOS').update(payload).eq('id', id)
+    : await supabaseAdmin.from('TB_BPRODUCTOS').insert([payload]);
 
   if (result.error) alert('Error al guardar producto: ' + result.error.message);
   else {
@@ -100,7 +100,7 @@ export async function guardarProducto(event) {
 
 export async function eliminarProducto(id, nombre) {
   if (confirm(`¿Estás seguro de borrar "${nombre}"?`)) {
-    const { error } = await supabaseClient.from('TB_BPRODUCTOS').delete().eq('id', id);
+    const { error } = await supabaseAdmin.from('TB_BPRODUCTOS').delete().eq('id', id);
     if (error) alert('Error al eliminar: ' + error.message);
     else cargarProductos();
   }

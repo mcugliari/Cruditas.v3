@@ -1,4 +1,4 @@
-import { supabaseClient } from './config.js';
+import { supabaseAdmin } from './config.js';
 import { formatearFechaAR, obtenerFechaActualISO } from './utils.js';
 
 let resumenCierreActual = {
@@ -25,7 +25,7 @@ export async function cargarResumenVentasDia() {
   const fechaTextoAR = formatearFechaAR(fechaISO);
 
   try {
-    const { data: cierreExistente, error: errCierre } = await supabaseClient
+    const { data: cierreExistente, error: errCierre } = await supabaseAdmin
       .from('TB_TCIERRE_CAJA')
       .select('id, total_general, diferencia_efectivo, observaciones, estado')
       .eq('fecha', fechaISO)
@@ -60,7 +60,7 @@ export async function cargarResumenVentasDia() {
 
     alternarCamposFormulario(false);
 
-    const { data: pedidos, error: errPedidos } = await supabaseClient
+    const { data: pedidos, error: errPedidos } = await supabaseAdmin
       .from('TB_TPEDIDOS')
       .select('importe_total, id_medio_pago, estado, fecha, TB_BMEDIO_PAGO(nombre)')
       .eq('fecha', fechaISO);
@@ -188,7 +188,7 @@ function actualizarDiferenciaEfectivo() {
 // -----------------------------------------------------------------------------
 export async function anularCierreCaja(idCierre) {
   try {
-    const { error } = await supabaseClient
+    const { error } = await supabaseAdmin
       .from('TB_TCIERRE_CAJA')
       .update({ estado: 'ANULADO' })
       .eq('id', idCierre);
@@ -236,7 +236,7 @@ export function inicializarCierreCaja() {
 
     try {
       // 1. Insertar Cabecera (TB_TCIERRE_CAJA)
-      const { data: cierre, error: errCab } = await supabaseClient
+      const { data: cierre, error: errCab } = await supabaseAdmin
         .from('TB_TCIERRE_CAJA')
         .insert([{
           fecha: hoy,
@@ -267,7 +267,7 @@ export function inicializarCierreCaja() {
       }));
 
       if (detalles.length > 0) {
-        const { error: errDet } = await supabaseClient
+        const { error: errDet } = await supabaseAdmin
           .from('TB_DCIERRE_CAJA')
           .insert(detalles);
 
@@ -320,7 +320,7 @@ export async function cargarTablaHistorialCierres() {
   contenedor.innerHTML = `<tr><td colspan="7" class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> Buscando cierres...</td></tr>`;
 
   try {
-    const { data: cierres, error } = await supabaseClient
+    const { data: cierres, error } = await supabaseAdmin
       .from('TB_TCIERRE_CAJA')
       .select(`
         id, fecha, total_general, efectivo_real, diferencia_efectivo, observaciones, estado,

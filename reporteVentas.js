@@ -1,4 +1,4 @@
-import { supabaseClient } from './config.js';
+import { supabaseAdmin } from './config.js';
 import { mostrarNotificacion } from './utils.js';
 
 export async function inicializarReporteVentas() {
@@ -18,7 +18,7 @@ export async function cargarSelectClientesFiltro() {
   const select = document.getElementById('filtro-prod-cliente');
   if (!select) return;
 
-  const { data: clientes } = await supabaseClient
+  const { data: clientes } = await supabaseAdmin
     .from('TB_BCLIENTES')
     .select('id, nombre')
     .order('nombre');
@@ -43,7 +43,7 @@ export async function generarResumenVentasProductos() {
   const fechaHastaStr = `${fHasta}T23:59:59`;
 
   // 1. Consultar pedidos completados
-  let queryPedidos = supabaseClient
+  let queryPedidos = supabaseAdmin
     .from('TB_TPEDIDOS')
     .select('id')
     .eq('estado', 'COMPLETADO')
@@ -69,7 +69,7 @@ export async function generarResumenVentasProductos() {
   const idsPedidos = pedidos.map(p => p.id);
 
   // 2. Traer el detalle usando la columna 'grupo' de la tabla TB_BCATEGORIAS
-  const { data: detalles, error: errDet } = await supabaseClient
+  const { data: detalles, error: errDet } = await supabaseAdmin
     .from('TB_DPEDIDOS')
     .select(`
       cantidad,

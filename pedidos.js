@@ -1,4 +1,4 @@
-import { supabaseClient } from './config.js';
+import { supabaseAdmin } from './config.js';
 import { setPedidoEditandoId, setCarrito } from './state.js';
 import { mostrarNotificacion } from './utils.js';
 import { cargarPOS, renderizarGrillaPOS } from './pos.js';
@@ -23,7 +23,7 @@ export async function cargarTablaPedidos() {
   const fechaHasta = `${inputHasta.value}T23:59:59.999Z`;
   const estadoFiltro = document.getElementById('filtro-estado-pedido').value;
 
-  let query = supabaseClient
+  let query = supabaseAdmin
     .from('TB_TPEDIDOS')
     .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
     .gte('created_at', fechaDesde)
@@ -189,7 +189,7 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
     return;
   }
 
-  const { error } = await supabaseClient
+  const { error } = await supabaseAdmin
     .from('TB_TPEDIDOS')
     .update({ estado: nuevoEstado })
     .eq('id', idPedido);
@@ -203,7 +203,7 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
 
 export async function editarPedido(idPedido) {
   try {
-    const { data: pedido, error } = await supabaseClient
+    const { data: pedido, error } = await supabaseAdmin
       .from('TB_TPEDIDOS')
       .select('*, TB_DPEDIDOS(id_producto, cantidad)')
       .eq('id', idPedido)
@@ -254,7 +254,7 @@ export async function editarPedido(idPedido) {
 
 export async function verDetallePedido(idPedido) {
   try {
-    const { data: pedido, error } = await supabaseClient
+    const { data: pedido, error } = await supabaseAdmin
       .from('TB_TPEDIDOS')
       .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_DPEDIDOS(cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(nombre, TB_BCATEGORIAS(nombre)))')
       .eq('id', idPedido)

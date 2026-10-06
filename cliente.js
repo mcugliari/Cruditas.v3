@@ -41,9 +41,9 @@ async function cargarDatosMenu() {
 
   try {
     const [{ data: categorias }, { data: productos }, { data: precios }] = await Promise.all([
-      supabaseClient.from('TB_BCATEGORIAS').select('*').order('id'),
-      supabaseClient.from('TB_BPRODUCTOS').select('*').order('id'),
-      supabaseClient.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', ID_LISTA_MINORISTA)
+      supabasePublic.from('TB_BCATEGORIAS').select('*').order('id'),
+      supabasePublic.from('TB_BPRODUCTOS').select('*').order('id'),
+      supabasePublic.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', ID_LISTA_MINORISTA)
     ]);
 
     cacheCategorias = categorias || [];
@@ -383,7 +383,7 @@ async function enviarPedidoASupabase() {
       id_pedido: pedidoCreado.id
     }));
 
-    const { error: errDetalles } = await supabaseClient
+    const { error: errDetalles } = await supabasePublic
       .from('TB_DPEDIDOS')
       .insert(detallesConPedido);
 

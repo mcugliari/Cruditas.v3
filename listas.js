@@ -1,10 +1,10 @@
-import { supabaseClient } from './config.js';
+import { supabaseAdmin } from './config.js';
 
 export async function inicializarModuloListas() {
   const select = document.getElementById('select-lista-activa');
   if (select.children.length > 1 && select.value !== '') return;
 
-  const { data: listas, error } = await supabaseClient.from('TB_TLISTA_PRECIOS').select('*').order('id', { ascending: true });
+  const { data: listas, error } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*').order('id', { ascending: true });
   if (!error && listas && listas.length > 0) {
     select.innerHTML = listas.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
     cargarMatrizPrecios();
@@ -15,8 +15,8 @@ export async function cargarMatrizPrecios() {
   const idLista = document.getElementById('select-lista-activa').value;
   if (!idLista) return;
 
-  const { data: categorias } = await supabaseClient.from('TB_BCATEGORIAS').select('*').order('id', { ascending: true });
-  const { data: preciosExistentes } = await supabaseClient.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', idLista);
+  const { data: categorias } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('id', { ascending: true });
+  const { data: preciosExistentes } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', idLista);
 
   const tbodyCat = document.getElementById('tabla-precios-categorias-body');
   tbodyCat.innerHTML = categorias.map(cat => {
@@ -47,7 +47,7 @@ export async function cargarMatrizPrecios() {
   }
 
   const idsProds = preciosProd.map(x => x.id_producto);
-  const { data: productos } = await supabaseClient.from('TB_BPRODUCTOS').select('id, nombre').in('id', idsProds);
+  const { data: productos } = await supabaseAdmin.from('TB_BPRODUCTOS').select('id, nombre').in('id', idsProds);
 
   tbodyProd.innerHTML = preciosProd.map(p => {
     const prod = productos.find(x => x.id == p.id_producto) || { nombre: 'Producto #' + p.id_producto };
@@ -80,15 +80,15 @@ export async function guardarPrecioCategoria(id_categoria, idDetalle) {
   };
 
   let res = idDetalle 
-    ? await supabaseClient.from('TB_DLISTA_PRECIOS').update(payload).eq('id', idDetalle)
-    : await supabaseClient.from('TB_DLISTA_PRECIOS').insert([payload]);
+    ? await supabaseAdmin.from('TB_DLISTA_PRECIOS').update(payload).eq('id', idDetalle)
+    : await supabaseAdmin.from('TB_DLISTA_PRECIOS').insert([payload]);
 
   if (res.error) alert('Error: ' + res.error.message);
   else cargarMatrizPrecios();
 }
 
 export async function abrirModalPrecioEspecial() {
-  const { data: prods } = await supabaseClient.from('TB_BPRODUCTOS').select('id, nombre').order('nombre');
+  const { data: prods } = await supabaseAdmin.from('TB_BPRODUCTOS').select('id, nombre').order('nombre');
   const select = document.getElementById('modal-especial-producto');
   select.innerHTML = '<option value="">-- Seleccionar Producto --</option>' + 
     prods.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
@@ -107,7 +107,7 @@ export async function guardarPrecioEspecial(e) {
 
   const payload = { id_lista_precio: idLista, id_categoria: null, id_producto, precio_unidad, precio_docena };
 
-  const { error } = await supabaseClient.from('TB_DLISTA_PRECIOS').insert([payload]);
+  const { error } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').insert([payload]);
   if (error) alert('Error: ' + error.message);
   else {
     $('#modal-precio-especial').modal('hide');
@@ -117,7 +117,7 @@ export async function guardarPrecioEspecial(e) {
 
 export async function eliminarPrecioEspecial(idDetalle) {
   if (confirm('¿Eliminar precio especial? El producto volverá a tomar el precio base de su categoría.')) {
-    await supabaseClient.from('TB_DLISTA_PRECIOS').delete().eq('id', idDetalle);
+    await supabaseAdmin.from('TB_DLISTA_PRECIOS').delete().eq('id', idDetalle);
     cargarMatrizPrecios();
   }
 }
