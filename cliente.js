@@ -1,4 +1,4 @@
-import { supabaseClient } from './config.js';
+import { supabasePublic } from './config.js';
 
 let cacheCategorias = [];
 let cacheProductos = [];
@@ -358,7 +358,7 @@ async function enviarPedidoASupabase() {
   }
 
   try {
-    const { data: pedidoCreado, error: errPedido } = await supabaseClient
+    const { data: pedidoCreado, error: errPedido } = await supabasePublic
       .from('TB_TPEDIDOS')
       .insert([{
         fecha: new Date().toISOString().split('T')[0],
