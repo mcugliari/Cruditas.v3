@@ -39,3 +39,16 @@ export function mostrarNotificacion(mensaje, tipo = 'success') {
     setTimeout(() => toast.remove(), 250);
   }, 2500);
 }
+
+export function formatearFechaAR(fechaISO) {
+  if (!fechaISO) return '-';
+  const soloFecha = fechaISO.split('T')[0];
+  const [anio, mes, dia] = soloFecha.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
+export function obtenerFechaActualISO() {
+  const hoyObj = new Date();
+  const offset = hoyObj.getTimezoneOffset() * 60000;
+  return new Date(hoyObj.getTime() - offset).toISOString().split('T')[0];
+}

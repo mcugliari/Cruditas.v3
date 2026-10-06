@@ -1,4 +1,5 @@
 import { supabaseClient } from './config.js';
+import { formatearFechaAR, obtenerFechaActualISO } from './utils.js';
 
 let resumenCierreActual = {
   totalesPorMedio: {},
@@ -20,16 +21,10 @@ export async function cargarResumenVentasDia() {
       Cargando totales del día...
     </div>
   `;
-
-  // 1. Manejo de fecha local
-  const hoyObj = new Date();
-  const offset = hoyObj.getTimezoneOffset() * 60000;
-  const fechaLocal = new Date(hoyObj.getTime() - offset);
-  const fechaISO = fechaLocal.toISOString().split('T')[0]; 
-
+  const fechaISO = obtenerFechaActualISO();
+  const fechaTextoAR = formatearFechaAR(fechaISO);
 
   try {
-    // A. Verificar si ya existe un cierre ACTIVO usando fechaISO ('2026-10-05')
     const { data: cierreExistente, error: errCierre } = await supabaseClient
       .from('TB_TCIERRE_CAJA')
       .select('id, total_general, diferencia_efectivo, observaciones, estado')
@@ -42,7 +37,7 @@ export async function cargarResumenVentasDia() {
     if (cierreExistente) {
       contenedor.innerHTML = `
         <div class="alert alert-warning text-center my-2 p-3">
-          <h6 class="font-weight-bold mb-1">🔒 La caja de hoy (${fechaISO}) ya se encuentra CERRADA.</h6>
+          <h6 class="font-weight-bold mb-1">🔒 La caja de hoy (${fechaTextoAR}) ya se encuentra CERRADA.</h6>
           <p class="small mb-2">
             Total rendido: <strong>$${Number(cierreExistente.total_general).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong> | 
             Dif. Efectivo: <strong>$${Number(cierreExistente.diferencia_efectivo).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
@@ -65,7 +60,6 @@ export async function cargarResumenVentasDia() {
 
     alternarCamposFormulario(false);
 
-    // B. Consultar pedidos del día en TB_TPEDIDOS usando fechaTextoAR ('05/10/2026')
     const { data: pedidos, error: errPedidos } = await supabaseClient
       .from('TB_TPEDIDOS')
       .select('importe_total, id_medio_pago, estado, fecha, TB_BMEDIO_PAGO(nombre)')
@@ -355,7 +349,7 @@ export async function cargarTablaHistorialCierres() {
       html += `
         <tr>
           <td><strong>#${c.id}</strong></td>
-          <td>${c.fecha}</td>
+          <td>${formatearFechaAR(c.fecha)}</td>
           <td><span class="badge ${badgeClass}">${c.estado}</span></td>
           <td>$${Number(c.total_general).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
           <td>$${Number(c.efectivo_real).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>

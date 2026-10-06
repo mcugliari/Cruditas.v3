@@ -6,7 +6,8 @@ import {
   cacheCategorias, setCacheCategorias, 
   pedidoEditandoId, setPedidoEditandoId 
 } from './state.js';
-import { mostrarNotificacion } from './utils.js';
+
+import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO } from './utils.js';
 
 export async function inicializarPOS() {
   await cargarSelectsPOS();
@@ -39,11 +40,18 @@ export async function alCambiarCliente() {
 
   // Supongamos que el ID de Consumidor Final es 1 (o podés verificar por el texto)
   const esConsumidorFinal = idCliente === '1' || selectCli.options[selectCli.selectedIndex]?.text.toLowerCase().includes('Consumidor Final');
+  const inputNombre = document.getElementById('input-ref-cliente');
+  const labelNombre = document.getElementById('label-ref-cliente');
 
   if (inputRef) {
     if (!esConsumidorFinal) {
       // Si eligen un cliente registrado, limpiamos la referencia opcional
       inputRef.value = '';
+      if (labelNombre) labelNombre.innerText = 'Nombre / Referencia (Opcional)';
+      if (inputNombre) inputNombre.placeholder = 'Referencia opcional';
+    } else {
+      if (labelNombre) labelNombre.innerHTML = 'Nombre / Referencia <span class="text-danger">*</span>';
+      if (inputNombre) inputNombre.placeholder = 'Ingrese nombre o referencia (Obligatorio)'; 
     }
   }
 
@@ -352,6 +360,13 @@ export async function guardarPedido(estadoInicial) {
   const inputRef = document.getElementById('input-ref-cliente');
   const nombreReferencia = inputRef ? inputRef.value.trim() : null;
 
+  // ⚠️️ VALIDACIÓN: Si es ID 1 (Consumidor Final) y no puso nombre/referencia
+  if (idCliente === '1' && nombreReferencia === '') {
+    alert('⚠️ Para el cliente Consumidor Final es obligatorio ingresar un nombre o referencia.');
+    inputClienteNombre.focus();
+    return; // Interrumpe el guardado
+  }
+
   let montoTotal = 0;
   const detalles = [];
 
@@ -359,10 +374,7 @@ export async function guardarPedido(estadoInicial) {
   let precioDocenaSugerido = 0;
   let precioUnidadDocenable = 0;
 
-  // Obtener fecha local YYYY-MM-DD
-  const hoyObj = new Date();
-  const offset = hoyObj.getTimezoneOffset() * 60000;
-  const fechaISO = new Date(hoyObj.getTime() - offset).toISOString().split('T')[0];
+  const fechaISO = obtenerFechaActualISO();
 
   // 1. Guardar los productos seleccionados a precio unitario normal
   keys.forEach(idProd => {
