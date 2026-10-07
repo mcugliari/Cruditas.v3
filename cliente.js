@@ -5,10 +5,29 @@ let cacheProductos = [];
 let cachePrecios = [];
 let carrito = {}; // { id_producto: cantidad }
 
-// Constantes de configuración por defecto
-const ID_CLIENTE_CONSUMIDOR_FINAL = 1;
-const ID_LISTA_MINORISTA = 1;
-const ID_MEDIO_PAGO_EFECTIVO = 1;
+// Token opcional del link (?t=...). Lo genera el bot desde el servidor.
+// Cliente consumidor final, lista de precios y medio de pago se fijan en la base.
+const TOKEN_LINK = new URLSearchParams(window.location.search).get('t');
+
+// Escapa texto antes de ponerlo en innerHTML (evita inyección de HTML/JS)
+function esc(valor) {
+  return String(valor ?? '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+const MENSAJES_ERROR = {
+  demasiados_pedidos: 'Ya enviaste varios pedidos hace poco. Si necesitás cambiar algo, escribinos por WhatsApp.',
+  servicio_ocupado: 'Estamos recibiendo muchos pedidos. Probá de nuevo en unos minutos.',
+  link_invalido: 'Este link venció o ya fue usado. Pedí uno nuevo por WhatsApp.',
+  producto_invalido: 'Algún producto del pedido ya no está disponible. Recargá la página e intentá de nuevo.',
+  datos_invalidos: 'Revisá tu nombre y teléfono (solo números, con característica).'
+};
+
+function mensajeError(err) {
+  const clave = Object.keys(MENSAJES_ERROR).find(k => (err?.message || '').includes(k));
+  return MENSAJES_ERROR[clave] || 'No pudimos guardar el pedido. Intentá de nuevo en un momento.';
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   await cargarDatosMenu();
@@ -40,15 +59,12 @@ async function cargarDatosMenu() {
   const contenedor = document.getElementById('contenedor-productos-cliente');
 
   try {
-    const [{ data: categorias }, { data: productos }, { data: precios }] = await Promise.all([
-      supabasePublic.from('TB_BCATEGORIAS').select('*').order('id'),
-      supabasePublic.from('TB_BPRODUCTOS').select('*').order('id'),
-      supabasePublic.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', ID_LISTA_MINORISTA)
-    ]);
+    const { data: menu, error: errMenu } = await supabasePublic.rpc('menu_publico');
+    if (errMenu) throw errMenu;
 
-    cacheCategorias = categorias || [];
-    cacheProductos = productos || [];
-    cachePrecios = precios || [];
+    cacheCategorias = menu?.categorias || [];
+    cacheProductos = menu?.productos || [];
+    cachePrecios = menu?.precios || [];
 
     if (cacheProductos.length === 0) {
       if (contenedor) {
@@ -100,7 +116,7 @@ function renderizarMenuPorCategorias() {
       <div class="mb-4">
         <div class="p-2 px-3 mb-2 font-weight-bold text-uppercase shadow-sm" 
              style="background-color: ${estiloColor.bg}; color: ${estiloColor.text}; border-radius: 8px; font-size: 0.95rem; letter-spacing: 0.5px;">
-          ${cat.nombre}
+          ${esc(cat.nombre)}
         </div>
     `;
 
@@ -118,7 +134,7 @@ function renderizarMenuPorCategorias() {
         <div class="card card-prod p-3 shadow-sm mb-2" style="border: none; border-radius: 10px; border-left: 4px solid ${estiloColor.bg};">
           <div class="d-flex justify-content-between align-items-center">
             <div>
-              <h6 class="font-weight-bold m-0 text-dark">${p.nombre}</h6>
+              <h6 class="font-weight-bold m-0 text-dark">${esc(p.nombre)}</h6>
               <div class="text-success font-weight-bold small mt-1">${textoPrecio}</div>
             </div>
             <div class="d-flex align-items-center">
@@ -281,7 +297,7 @@ function renderizarResumenEnModalCliente() {
     html += `
       <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-transparent border-bottom">
         <div>
-          <strong class="d-block text-dark">${item.nombre}</strong>
+          <strong class="d-block text-dark">${esc(item.nombre)}</strong>
           <small class="text-muted">${item.cantidad} u. x $${item.precioUnitario.toLocaleString('es-AR')}</small>
         </div>
         <span class="font-weight-bold text-dark">$${item.subTotal.toLocaleString('es-AR')}</span>
@@ -331,26 +347,6 @@ async function enviarPedidoASupabase() {
     return;
   }
 
-  const detalles = resumen.listaItems.map(item => ({
-    id_pedido: null,
-    id_producto: item.id,
-    cantidad: item.cantidad,
-    precioUnitario: item.precioUnitario,
-    subTotal: item.subTotal
-  }));
-
-  // Agregar el producto 999 (Descuento por Docena) en el detalle si aplica
-  if (resumen.descuentoTotal > 0) {
-    const descuentoPorDocenaUnidad = resumen.descuentoTotal / resumen.docenasCompletas;
-    detalles.push({
-      id_pedido: null,
-      id_producto: 999,
-      cantidad: resumen.docenasCompletas,
-      precioUnitario: -descuentoPorDocenaUnidad,
-      subTotal: -resumen.descuentoTotal
-    });
-  }
-
   const btnFinalizar = document.getElementById('btn-finalizar-pedido');
   if (btnFinalizar) {
     btnFinalizar.disabled = true;
@@ -358,39 +354,23 @@ async function enviarPedidoASupabase() {
   }
 
   try {
-    const { data: pedidoCreado, error: errPedido } = await supabasePublic
-      .from('TB_TPEDIDOS')
-      .insert([{
-        fecha: new Date().toISOString().split('T')[0],
-        id_cliente: ID_CLIENTE_CONSUMIDOR_FINAL,
-        id_lista_precio: ID_LISTA_MINORISTA,
-        id_medio_pago: ID_MEDIO_PAGO_EFECTIVO,
-        estado: 'PREPARACION',
-        nombre_referencia: `${nombre} (Tel: ${telefono})`,
-        observaciones: observaciones || null,
-        importe_total: resumen.totalFinal
-      }])
-      .select('id')
-      .single();
+    const { data: resultado, error: errPedido } = await supabasePublic.rpc('crear_pedido_cliente', {
+      p_nombre: nombre,
+      p_telefono: telefono,
+      p_observaciones: observaciones || null,
+      p_items: resumen.listaItems.map(i => ({ id_producto: i.id, cantidad: i.cantidad })),
+      p_token: TOKEN_LINK
+    });
 
-    if (errPedido || !pedidoCreado) {
-      alert('Error al guardar el pedido: ' + (errPedido?.message || 'Error desconocido'));
+    if (errPedido || !resultado) {
+      console.error('Error al crear el pedido:', errPedido);
+      alert(mensajeError(errPedido));
       return;
     }
 
-    const detallesConPedido = detalles.map(d => ({
-      ...d,
-      id_pedido: pedidoCreado.id
-    }));
-
-    const { error: errDetalles } = await supabasePublic
-      .from('TB_DPEDIDOS')
-      .insert(detallesConPedido);
-
-    if (errDetalles) {
-      alert('Error al guardar el detalle del pedido.');
-      return;
-    }
+    // El id y el total válidos son los que calculó el servidor
+    const pedidoCreado = { id: resultado.id_pedido };
+    const totalServidor = Number(resultado.total);
 
    // =========================================================================
     // DETECCIÓN DE ORIGEN: ¿Viene desde el bot de WhatsApp?
@@ -402,7 +382,7 @@ async function enviarPedidoASupabase() {
       // -----------------------------------------------------------------------
       // OPCIÓN 1: Redirección automática a WhatsApp
       // -----------------------------------------------------------------------
-      const mensajeWS = `Hola! Ya confirmé mi Pedido *#${pedidoCreado.id}* por *$${resumen.totalFinal.toLocaleString('es-AR')}* a nombre de *${nombre}*. Quedo a la espera!`;
+      const mensajeWS = `Hola! Ya confirmé mi Pedido *#${pedidoCreado.id}* por *$${totalServidor.toLocaleString('es-AR')}* a nombre de *${nombre}*. Quedo a la espera!`;
       
       // Podés usar el teléfono del negocio o reenviar al mismo número
       const urlWhatsApp = `https://wa.me/549${telefono}?text=${encodeURIComponent(mensajeWS)}`;
@@ -423,10 +403,10 @@ async function enviarPedidoASupabase() {
           <div class="modal-body text-center py-4">
             <div class="mb-2" style="font-size: 3.5rem; color: #198754;">🎉</div>
             <h3 class="font-weight-bold text-dark">¡Pedido #${pedidoCreado.id} Recibido!</h3>
-            <p class="text-muted lead mb-2">Total a pagar: <strong class="text-success">$${resumen.totalFinal.toLocaleString('es-AR')}</strong></p>
+            <p class="text-muted lead mb-2">Total a pagar: <strong class="text-success">$${totalServidor.toLocaleString('es-AR')}</strong></p>
             <div class="alert alert-light border my-3">
-              <small class="text-secondary d-block">Cliente: <strong>${nombre}</strong></small>
-              <small class="text-secondary d-block">Teléfono: <strong>${telefono}</strong></small>
+              <small class="text-secondary d-block">Cliente: <strong>${esc(nombre)}</strong></small>
+              <small class="text-secondary d-block">Teléfono: <strong>${esc(telefono)}</strong></small>
             </div>
             <p class="small text-muted mb-4">Ya ingresamos tu pedido a cocina. Podés cerrar esta ventana.</p>
             <button class="btn btn-success btn-block font-weight-bold py-2" onclick="location.reload()">

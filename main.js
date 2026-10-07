@@ -1,3 +1,4 @@
+import { asegurarSesion } from './auth.js';
 import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente, eliminarCliente, inicializarCrudClienteLista, guardarAsociacionClienteLista, editarAsociacion, eliminarAsociacion } from './clientes.js';
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial } from './listas.js';
@@ -47,7 +48,10 @@ export function navegarA(seccionId, elementoMenu) {
 }
 
 // INICIALIZACIÓN GLOBAL Y DELEGACIÓN DE EVENTOS
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+
+  // 0. Sin sesión no se carga nada: muestra el login y espera
+  await asegurarSesion();
 
   // 1. Navegación inicial a Pedidos
   const primerLink = document.querySelector('#menu-navegacion .nav-link[data-section="pedidos"]');

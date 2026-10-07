@@ -363,7 +363,7 @@ export async function guardarPedido(estadoInicial) {
   // ⚠️️ VALIDACIÓN: Si es ID 1 (Consumidor Final) y no puso nombre/referencia
   if (idCliente === '1' && nombreReferencia === '') {
     alert('⚠️ Para el cliente Consumidor Final es obligatorio ingresar un nombre o referencia.');
-    inputClienteNombre.focus();
+    if (inputRef) inputRef.focus();
     return; // Interrumpe el guardado
   }
 

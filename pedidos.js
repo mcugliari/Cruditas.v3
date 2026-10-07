@@ -1,9 +1,17 @@
 import { supabaseAdmin } from './config.js';
 import { setPedidoEditandoId, setCarrito } from './state.js';
-import { mostrarNotificacion } from './utils.js';
+import { mostrarNotificacion, obtenerFechaActualISO } from './utils.js';
 import { cargarPOS, renderizarGrillaPOS } from './pos.js';
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
+
+// Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
+// nombre_referencia y observaciones los escribe un cliente anónimo desde la web.
+function esc(valor) {
+  return String(valor ?? '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
 
 // Variable para conservar el id del pedido que se está viendo en el modal
 let pedidoActualModalId = null;
@@ -14,20 +22,21 @@ export async function cargarTablaPedidos() {
   const inputBuscar = document.getElementById('filtro-buscar-pedido');
   
   if (inputDesde && !inputDesde.value) {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = obtenerFechaActualISO(); // fecha local (Argentina), no UTC
     inputDesde.value = hoy;
     inputHasta.value = hoy;
   }
 
-  const fechaDesde = `${inputDesde.value}T00:00:00.000Z`;
-  const fechaHasta = `${inputHasta.value}T23:59:59.999Z`;
+  // Se filtra por la columna "fecha" (día local), igual que el cierre de caja
+  const fechaDesde = inputDesde.value;
+  const fechaHasta = inputHasta.value;
   const estadoFiltro = document.getElementById('filtro-estado-pedido').value;
 
   let query = supabaseAdmin
     .from('TB_TPEDIDOS')
     .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
-    .gte('created_at', fechaDesde)
-    .lte('created_at', fechaHasta)
+    .gte('fecha', fechaDesde)
+    .lte('fecha', fechaHasta)
     .order('id', { ascending: false });
 
   if (estadoFiltro !== 'TODOS') {
@@ -86,7 +95,7 @@ export async function cargarTablaPedidos() {
     const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     const htmlObservaciones = p.observaciones 
-    ? `<div class="mt-1"><span class="badge badge-warning text-dark border"><i class="fas fa-comment-alt mr-1"></i> ${p.observaciones}</span></div>` 
+    ? `<div class="mt-1"><span class="badge badge-warning text-dark border"><i class="fas fa-comment-alt mr-1"></i> ${esc(p.observaciones)}</span></div>` 
     : '';
 
     const fechaPedido = new Date(`${p.fecha.split('T')[0]}T00:00:00`).toLocaleDateString('es-AR', {
@@ -168,12 +177,12 @@ export async function cargarTablaPedidos() {
         <td class="font-weight-bold">#${p.id}</td>
         <td>${fechaPedido} ${hora} hs</td>
         <td>
-          <div class="font-weight-bold">${clienteNombre}</div>
+          <div class="font-weight-bold">${esc(clienteNombre)}</div>
           ${htmlObservaciones}
         </td>
-        <td><small class="badge badge-light border">${medioPago}</small></td>
+        <td><small class="badge badge-light border">${esc(medioPago)}</small></td>
         <td class="text-right font-weight-bold">$${(p.importe_total || 0).toLocaleString('es-AR')}</td>
-        <td class="text-center"><span class="badge ${badgeClass} p-2">${estadoTexto}</span></td>
+        <td class="text-center"><span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span></td>
         <td class="text-center">
           <div class="btn-group btn-group-sm">
             ${botonesAccion}
@@ -239,6 +248,7 @@ export async function editarPedido(idPedido) {
     const nuevoCarrito = {};
     (pedido.TB_DPEDIDOS || []).forEach(item => {
       const idProd = item.id_producto;
+      if (Number(idProd) === 999) return; // el descuento por docena se recalcula al guardar
       nuevoCarrito[idProd] = (nuevoCarrito[idProd] || 0) + item.cantidad;
     });
     setCarrito(nuevoCarrito);
@@ -276,21 +286,23 @@ export async function verDetallePedido(idPedido) {
     const clienteNombre = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
     document.getElementById('detalle-cliente').innerHTML = `
       <span class="badge badge-warning text-dark px-2 py-1 font-weight-bold" style="font-size: 0.95rem;">
-        <i class="fas fa-user mr-1"></i> ${clienteNombre}
+        <i class="fas fa-user mr-1"></i> ${esc(clienteNombre)}
       </span>
     `;
 
-    document.getElementById('btn-imprimir-cocina')?.addEventListener('click', async () => {
+    const btnImprimirCocina = document.getElementById('btn-imprimir-cocina');
+    if (btnImprimirCocina) btnImprimirCocina.onclick = async () => {
       if (!pedidoActualModalId) return;
       const pedidoObj = await obtenerPedidoParaImprimir(pedidoActualModalId);
       imprimirComprobante(pedidoObj, true);
-    });
+    };
 
-    document.getElementById('btn-imprimir-cliente')?.addEventListener('click', async () => {
+    const btnImprimirCliente = document.getElementById('btn-imprimir-cliente');
+    if (btnImprimirCliente) btnImprimirCliente.onclick = async () => {
       if (!pedidoActualModalId) return;
       const pedidoObj = await obtenerPedidoParaImprimir(pedidoActualModalId);
       imprimirComprobante(pedidoObj, false);
-    });
+    };
     
     const items = pedido.TB_DPEDIDOS || [];
     const htmlItems = items.length > 0 
@@ -302,8 +314,8 @@ export async function verDetallePedido(idPedido) {
           return `
             <tr>
               <td>
-                <span class="badge badge-light border mr-1">${nombreCategoria}</span>
-                <strong>${item.TB_BPRODUCTOS?.nombre || 'Producto'}</strong>
+                <span class="badge badge-light border mr-1">${esc(nombreCategoria)}</span>
+                <strong>${esc(item.TB_BPRODUCTOS?.nombre || 'Producto')}</strong>
               </td>
               <td class="text-center font-weight-bold">${etiquetaCant}</td>
               <td class="text-right text-muted">$${formatearMoneda(item.precioUnitario)} <small class="text-secondary">${esDocena ? '/doc' : '/u'}</small></td>

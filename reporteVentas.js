@@ -1,10 +1,10 @@
 import { supabaseAdmin } from './config.js';
-import { mostrarNotificacion } from './utils.js';
+import { mostrarNotificacion, obtenerFechaActualISO } from './utils.js';
 
 export async function inicializarReporteVentas() {
   await cargarSelectClientesFiltro();
 
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = obtenerFechaActualISO(); // fecha local (Argentina), no UTC
   const inputDesde = document.getElementById('filtro-prod-fecha-desde');
   const inputHasta = document.getElementById('filtro-prod-fecha-hasta');
 
@@ -39,16 +39,13 @@ export async function generarResumenVentasProductos() {
     return;
   }
 
-  const fechaDesdeStr = `${fDesde}T00:00:00`;
-  const fechaHastaStr = `${fHasta}T23:59:59`;
-
   // 1. Consultar pedidos completados
   let queryPedidos = supabaseAdmin
     .from('TB_TPEDIDOS')
     .select('id')
     .eq('estado', 'COMPLETADO')
-    .gte('created_at', fechaDesdeStr)
-    .lte('created_at', fechaHastaStr);
+    .gte('fecha', fDesde)   // día local, igual que el cierre de caja
+    .lte('fecha', fHasta);
 
   if (idCliente) {
     queryPedidos = queryPedidos.eq('id_cliente', idCliente);
@@ -96,12 +93,21 @@ export async function generarResumenVentasProductos() {
     const prod = item.TB_BPRODUCTOS;
     if (!prod) return;
 
-    const cant = Number(item.cantidad || 0);
+    // El renglón de descuento (producto 999) guarda "docenas" en cantidad:
+    // suma el monto (negativo) pero no cuenta como unidades vendidas.
+    const esDescuento = Number(prod.id) === 999;
+    const cant = esDescuento ? 0 : Number(item.cantidad || 0);
     const monto = Number(item.subTotal || 0);
 
     // Leer el nuevo atributo 'grupo' (Ej: "EMPANADAS", "PIZZAS", u "OTROS")
-    const grupoNombre = (prod.TB_BCATEGORIAS?.grupo || 'OTROS').toUpperCase().trim();
+    let grupoNombre = (prod.TB_BCATEGORIAS?.grupo || 'OTROS').toUpperCase().trim();
     const catNombre = prod.TB_BCATEGORIAS?.nombre || 'Sin Categoría';
+
+    // 💡 SI ES UN DESCUENTO POR DOCENA, SE LO ASIGNAMOS AL GRUPO 'EMPANADAS'
+    if (grupoNombre === 'SISTEMA' || prod.nombre.toLowerCase().includes('docena')) {
+      grupoNombre = 'EMPANADAS';
+    }
+
 
     // Acumulador de KPI por grupo
     if (!gruposAcumulados[grupoNombre]) {
@@ -118,6 +124,7 @@ export async function generarResumenVentasProductos() {
         categoria: catNombre,
         producto: prod.nombre,
         permiteDocena: Boolean(prod.m_permite_docena),
+        esDescuento,
         unidades: 0,
         montoTotal: 0
       };
@@ -154,7 +161,7 @@ export async function generarResumenVentasProductos() {
           <small class="text-muted ml-1">(${row.categoria})</small>
         </td>
         <td class="font-weight-bold">${row.producto}</td>
-        <td class="text-center">${row.unidades} u.</td>
+        <td class="text-center">${row.esDescuento ? '-' : row.unidades + ' u.'}</td>
         <td class="text-center text-muted">${textoDocenas}</td>
         <td class="text-right font-weight-bold">$${row.montoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
       </tr>

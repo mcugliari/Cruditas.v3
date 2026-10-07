@@ -1,5 +1,13 @@
 import { supabaseAdmin } from './config.js';
 
+// Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
+// nombre_referencia lo escribe un cliente anónimo desde la web.
+function esc(valor) {
+  return String(valor ?? '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
 export async function obtenerPedidoParaImprimir(idPedido) {
   // Se agregan id, id_categoria e id_producto al SELECT para que el filtro funcione
   const { data: pedido, error } = await supabaseAdmin
@@ -46,9 +54,10 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
   };
 
   // FILTRO: Excluir el producto de descuento si es comanda de cocina
+  // (en el ticket del cliente también se oculta un renglón de descuento en $0)
   const itemsAImprimir = esComandaCocina 
     ? items.filter(item => !esItemDescuento(item))
-    : items;
+    : items.filter(item => !esItemDescuento(item) || Number(item.subTotal) !== 0);
 
   const filasHTML = itemsAImprimir.map(item => {
     const esDescuento = esItemDescuento(item);
@@ -57,7 +66,7 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
     if (esDescuento) {
       return `
         <div class="linea-item text-danger" style="color: #dc3545;">
-          <span class="cant">1 doc.</span>
+          <span class="cant">${item.cantidad} doc.</span>
           <span class="nombre">Descuento por Docena</span>
           <span class="precio">-$${formatearMoneda(Math.abs(item.subTotal))}</span>
         </div>
@@ -76,7 +85,7 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
       return `
         <div class="linea-item">
           <span class="cant">${cantTexto}</span>
-          <span class="nombre">${nombreProd}</span>
+          <span class="nombre">${esc(nombreProd)}</span>
         </div>
       `;
     }
@@ -84,7 +93,7 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
     return `
       <div class="linea-item">
         <span class="cant">${cantTexto}</span>
-        <span class="nombre">${nombreProd}</span>
+        <span class="nombre">${esc(nombreProd)}</span>
         <span class="precio">$${formatearMoneda(item.subTotal)}</span>
       </div>
     `;
@@ -97,8 +106,8 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
         <p class="subtitulo">${esComandaCocina ? '*** COMANDA COCINA ***' : 'COMPROBANTE DE VENTA'}</p>
         <hr class="dashed">
         <p><strong>Pedido #${pedido.id}</strong> | ${horaPedido} hs</p>
-        <p><strong>Cliente:</strong> ${clienteNombre}</p>
-        ${!esComandaCocina ? `<p><strong>Pago:</strong> ${pedido.TB_BMEDIO_PAGO?.nombre || 'Efectivo'}</p>` : ''}
+        <p><strong>Cliente:</strong> ${esc(clienteNombre)}</p>
+        ${!esComandaCocina ? `<p><strong>Pago:</strong> ${esc(pedido.TB_BMEDIO_PAGO?.nombre || 'Efectivo')}</p>` : ''}
       </div>
       
       <hr class="dashed">
