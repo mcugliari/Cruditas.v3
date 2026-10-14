@@ -85,6 +85,8 @@ export async function cargarPOS() {
   renderizarGrillaPOS();
 }
 
+let categoriaPOSActiva = null;
+
 export function renderizarGrillaPOS() {
   const contenedor = document.getElementById('contenedor-menu-productos');
   if (!contenedor) return;
@@ -94,64 +96,110 @@ export function renderizarGrillaPOS() {
     return;
   }
 
-  const paletaColores = ['primary', 'success', 'warning', 'danger', 'info', 'secondary'];
-  let htmlCompleto = '';
-
-  cacheCategorias.forEach((cat, index) => {
-  // Omitir la categoría del sistema / bonificaciones
-  if (Number(cat.id) === 99) return;
-
-  const prodsCat = cacheProductos.filter(p => 
-    Number(p.id_categoria || p.idCategoria) === Number(cat.id) && Number(p.id) !== 999
+  // Las categorías sin productos y las categorías internas del sistema no se muestran.
+  const categoriasVisibles = cacheCategorias.filter(cat =>
+    Number(cat.id) !== 99 && cacheProductos.some(p =>
+      Number(p.id_categoria || p.idCategoria) === Number(cat.id) && Number(p.id) !== 999
+    )
   );
-  if (prodsCat.length === 0) return;
 
-    const colorCat = paletaColores[index % paletaColores.length];
+  if (!categoriasVisibles.some(cat => String(cat.id) === String(categoriaPOSActiva))) {
+    categoriaPOSActiva = categoriasVisibles.length ? String(categoriasVisibles[0].id) : null;
+  }
 
-    htmlCompleto += `
-      <div class="pos-cat-header mb-2 mt-2">${cat.nombre}</div>
-      <div class="row">
-    `;
-
-    prodsCat.forEach(p => {
-      const cant = carrito[p.id] || 0;
-      const idCatProd = p.id_categoria || p.idCategoria;
-      const precios = obtenerPrecioProducto(p.id, idCatProd);
-      const claseActiva = cant > 0 ? 'pos-card-activa' : '';
-
-      // VERIFICAR SI EL PRODUCTO PERMITE DOCENA
-      const permiteDocena = Boolean(p.m_permite_docena);
-
-      // Bloque condicional para los botones de docena
-      const botonesDocenaHTML = permiteDocena ? `
-        <div class="d-flex justify-content-between gap-1 mt-2">
-          <button type="button" class="btn btn-docena-pill flex-fill mr-1" data-action="alterar-cant" data-id="${p.id}" data-delta="-12">-12 u.</button>
-          <button type="button" class="btn btn-docena-pill flex-fill" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12 u.</button>
-        </div>
-      ` : '';
-
-      htmlCompleto += `
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2 mb-3">
-          <div class="card h-100 pos-card-producto border-0 border-left-${colorCat} ${claseActiva}">
-            <strong class="pos-prod-title" title="${p.nombre}">${p.nombre}</strong>
-            <span class="pos-prod-price mb-2">$${precios.unidad.toLocaleString('es-AR')}</span>
-            
-            <div class="pos-qty-pill">
-              <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="-1">-</button>
-              <span class="pos-cant-num" id="cant-prod-${p.id}">${cant}</span>
-              <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="1">+</button>
-            </div>
-
-            ${botonesDocenaHTML}
-          </div>
-        </div>
-      `;
+  // Delegación propia de las solapas: se registra una sola vez y no interfiere
+  // con el listener existente de los botones de cantidad.
+  if (contenedor.dataset.tabsInicializadas !== 'true') {
+    contenedor.addEventListener('click', event => {
+      const tab = event.target.closest('[data-action="seleccionar-categoria"]');
+      if (!tab) return;
+      categoriaPOSActiva = String(tab.dataset.categoriaId);
+      renderizarGrillaPOS();
     });
+    contenedor.dataset.tabsInicializadas = 'true';
+  }
 
-    htmlCompleto += `</div>`;
-  });
+  // Iconos decorativos por categoría: la detección por nombre permite mantener
+  // las categorías configurables sin modificar los datos ni la lógica comercial.
+  const iconoCategoria = nombre => {
+    const n = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (n.includes('empanad')) return 'fa-cookie-bite';
+    if (n.includes('canast')) return 'fa-cookie-bite';
+    if (n.includes('pizza')) return 'fa-pizza-slice';
+    if (n.includes('bebida') || n.includes('gaseosa') || n.includes('jugo')) return 'fa-glass-martini-alt';
+    if (n.includes('postre') || n.includes('dulce')) return 'fa-ice-cream';
+    if (n.includes('sandwich') || n.includes('sanduich')) return 'fa-hamburger';
+    return 'fa-th-large';
+  };
 
-  contenedor.innerHTML = htmlCompleto;
+  const tabsHTML = `
+    <div class="pos-category-tabs" role="tablist" aria-label="Categorías de productos">
+      ${categoriasVisibles.map(cat => `
+        <button type="button"
+          class="pos-category-tab ${String(cat.id) === String(categoriaPOSActiva) ? 'is-active' : ''}"
+          role="tab"
+          aria-selected="${String(cat.id) === String(categoriaPOSActiva)}"
+          data-action="seleccionar-categoria"
+          data-categoria-id="${cat.id}">
+          <i class="fas ${iconoCategoria(cat.nombre)} pos-category-icon" aria-hidden="true"></i>
+          <span>${cat.nombre}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  const categoriaSeleccionada = categoriasVisibles.find(cat => String(cat.id) === String(categoriaPOSActiva));
+  let productosHTML = '';
+
+  if (categoriaSeleccionada) {
+    const productosCategoria = cacheProductos.filter(p =>
+      Number(p.id_categoria || p.idCategoria) === Number(categoriaSeleccionada.id) && Number(p.id) !== 999
+    );
+
+    productosHTML = `
+      <div class="pos-category-heading">
+        <div>
+          <span class="pos-section-eyebrow">CATÁLOGO</span>
+          <h4>${categoriaSeleccionada.nombre}</h4>
+        </div>
+        <span class="pos-product-count">${productosCategoria.length} productos</span>
+      </div>
+      <div class="pos-product-grid">
+        ${productosCategoria.map(p => {
+          const cant = carrito[p.id] || 0;
+          const idCatProd = p.id_categoria || p.idCategoria;
+          const precios = obtenerPrecioProducto(p.id, idCatProd);
+          const claseActiva = cant > 0 ? 'pos-card-activa' : '';
+          const permiteDocena = Boolean(p.m_permite_docena);
+          const botonesDocenaHTML = permiteDocena ? `
+            <div class="pos-dozen-controls">
+              <button type="button" class="btn btn-docena-pill" data-action="alterar-cant" data-id="${p.id}" data-delta="-12" aria-label="Quitar una docena de ${p.nombre}">−12 u.</button>
+              <button type="button" class="btn btn-docena-pill btn-docena-add" data-action="alterar-cant" data-id="${p.id}" data-delta="12" aria-label="Agregar una docena de ${p.nombre}">+12 u.</button>
+            </div>
+          ` : '';
+
+          return `
+            <article class="card pos-card-producto ${claseActiva}">
+              <div class="pos-product-info">
+                <strong class="pos-prod-title" title="${p.nombre}">${p.nombre}</strong>
+                <span class="pos-prod-price">$${precios.unidad.toLocaleString('es-AR')}</span>
+              </div>
+              <div class="pos-qty-pill" aria-label="Cantidad de ${p.nombre}">
+                <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="-1" aria-label="Quitar una unidad de ${p.nombre}">−</button>
+                <span class="pos-cant-num" id="cant-prod-${p.id}" aria-live="polite">${cant}</span>
+                <button type="button" class="btn btn-pos-sq btn-pos-add" data-action="alterar-cant" data-id="${p.id}" data-delta="1" aria-label="Agregar una unidad de ${p.nombre}">+</button>
+              </div>
+              ${botonesDocenaHTML}
+            </article>
+          `;
+        }).join('')}
+      </div>
+    `;
+  } else {
+    productosHTML = '<div class="pos-empty-category">No hay productos disponibles.</div>';
+  }
+
+  contenedor.innerHTML = tabsHTML + `<div class="pos-catalog-content">${productosHTML}</div>`;
   actualizarResumenCarrito();
 }
 

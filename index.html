@@ -151,19 +151,19 @@
 
     <!-- SECCIÓN 1: TOMA DE PEDIDOS -->
     <section id="sec-pedidos" class="modulo-app">
-      <div class="row p-2">
-        <div class="col-md-7 col-lg-8">
-          <div class="card card-outline card-warning shadow-sm">
-            <div class="card-header bg-white">
+      <div class="row p-2 pos-layout-row">
+        <div class="col-md-7 col-lg-8 pos-catalog-column">
+          <div class="card card-outline card-warning shadow-sm pos-main-card">
+            <div class="card-header bg-white pos-main-card-header">
               <h3 class="card-title font-weight-bold text-dark"><i class="fas fa-utensils mr-2"></i>Menú de Productos</h3>
             </div>
-            <div class="card-body p-2" id="contenedor-menu-productos" style="max-height: 80vh; overflow-y: auto;"></div>
+            <div class="card-body p-2 pos-catalog-scroll" id="contenedor-menu-productos"></div>
           </div>
         </div>
 
-        <div class="col-md-5 col-lg-4">
-          <div class="card card-outline card-primary shadow-sm" style="position: sticky; top: 10px;">
-            <div class="card-header bg-white border-bottom-0">
+        <div class="col-md-5 col-lg-4 pos-order-column">
+          <div class="card card-outline card-primary shadow-sm pos-order-card">
+            <div class="card-header bg-white border-bottom-0 pos-order-header">
               <h3 class="card-title font-weight-bold text-dark"><i class="fas fa-shopping-cart mr-2"></i>Pedido Actual</h3>
             </div>
             <div class="card-body pt-0">
@@ -187,7 +187,7 @@
                 <select class="form-control form-control-sm" id="select-medio-pago"></select>
               </div>
 
-              <div id="resumen-carrito-items" class="border rounded p-2 mb-3 bg-light" style="max-height: 180px; overflow-y: auto;">
+              <div id="resumen-carrito-items" class="border rounded p-2 mb-3 bg-light pos-cart-items">
                 <p class="text-center text-muted small my-3">El carrito está vacío</p>
               </div>
 
@@ -205,13 +205,13 @@
               <div class="pos-actions-container">
                 <div class="pos-btn-grid">
                   <button type="button" class="btn btn-pos-action btn-pos-preparar" data-action="guardar-pedido" data-estado="PREPARACION">
-                    ⏳ <span>Solo Preparar</span>
+                    <i class="fas fa-hourglass-half" aria-hidden="true"></i> <span>Solo Preparar</span>
                   </button>
                   <button type="button" class="btn btn-pos-action btn-pos-impago" data-action="guardar-pedido" data-estado="ENTREGADO_IMPAGO">
-                    📦 <span>Entregar Impago</span>
+                    <i class="fas fa-box-open" aria-hidden="true"></i> <span>Entregar Impago</span>
                   </button>
                   <button type="button" class="btn btn-pos-action btn-pos-limpiar" data-action="vaciar-carrito">
-                    🗑️ <span>Limpiar</span>
+                    <i class="fas fa-trash-alt" aria-hidden="true"></i> <span>Limpiar</span>
                   </button>
                 </div>
                 <button type="button" class="btn btn-pos-cobrar" data-action="guardar-pedido" data-estado="COMPLETADO">

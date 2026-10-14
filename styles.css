@@ -362,3 +362,248 @@ body {
     margin: 5px 0;
   }
 }
+/* =====================================================================
+   CRUDITAS POS — rediseño moderno para operación táctil
+   Mantiene los selectores funcionales y estilos de impresión existentes.
+   ===================================================================== */
+:root {
+  --cruditas-ink: #24364b;
+  --cruditas-ink-soft: #34465d;
+  --cruditas-brand: #ffc43d;
+  --cruditas-bg: #f3f6fa;
+  --cruditas-line: #e2e8f0;
+  --cruditas-muted: #64748b;
+  --cruditas-green: #168647;
+  --cruditas-radius: 14px;
+}
+
+body { background: var(--cruditas-bg); color: #172334; touch-action: manipulation; }
+.main-header.navbar { min-height: 58px; border-bottom: 1px solid var(--cruditas-line); box-shadow: 0 2px 8px rgba(20, 35, 55, .04); }
+.main-header .nav-link { color: var(--cruditas-ink) !important; }
+.main-sidebar.sidebar-dark-primary { background: #202d3d; }
+.brand-link { border-bottom: 1px solid rgba(255,255,255,.08) !important; }
+.content-wrapper { background: var(--cruditas-bg); }
+.pos-layout-row { align-items: flex-start; margin-left: -8px; margin-right: -8px; }
+.pos-layout-row > [class*="col-"] { padding-left: 8px; padding-right: 8px; }
+.pos-main-card, .pos-order-card { border: 1px solid #e7ecf2 !important; border-top-width: 3px !important; border-radius: var(--cruditas-radius); overflow: hidden; box-shadow: 0 5px 18px rgba(26, 42, 63, .06) !important; }
+.pos-main-card { border-top-color: var(--cruditas-brand) !important; }
+.pos-order-card { border-top-color: #4b8cf5 !important; position: sticky; top: 12px; }
+.pos-main-card-header, .pos-order-header { padding: 16px 18px; min-height: 54px; }
+.pos-main-card-header .card-title, .pos-order-header .card-title { font-size: 1rem; letter-spacing: -.01em; }
+.pos-catalog-scroll { padding: 0 !important; max-height: calc(100vh - 112px); overflow-y: auto; overscroll-behavior: contain; }
+.pos-category-tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; overflow-x: auto; padding: 12px 14px; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--cruditas-line); scrollbar-width: thin; }
+.pos-category-tab { flex: 0 0 auto; min-height: 44px; padding: 0 17px; border: 1px solid #dce4ee; border-radius: 10px; background: #f8fafc; color: #425168; font-size: .9rem; font-weight: 650; white-space: nowrap; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.pos-category-tab:hover { border-color: #aebdd0; background: #eef3f8; }
+.pos-category-tab.is-active { background: var(--cruditas-ink); border-color: var(--cruditas-ink); color: #fff; box-shadow: 0 3px 8px rgba(36,54,75,.16); }
+.pos-category-tab:focus-visible, .pos-card-producto button:focus-visible { outline: 3px solid rgba(59,130,246,.35); outline-offset: 2px; }
+.pos-catalog-content { padding: 16px; }
+.pos-category-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 2px 0 14px; }
+.pos-section-eyebrow { display: block; margin-bottom: 3px; color: var(--cruditas-muted); font-size: .68rem; font-weight: 800; letter-spacing: .1em; }
+.pos-category-heading h4 { margin: 0; color: var(--cruditas-ink); font-size: 1.18rem; font-weight: 750; }
+.pos-product-count { color: var(--cruditas-muted); font-size: .78rem; white-space: nowrap; }
+.pos-product-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pos-card-producto { min-width: 0; min-height: 154px; margin: 0; padding: 13px 12px 11px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; border: 1px solid var(--cruditas-line) !important; border-radius: 12px; background: #fff; box-shadow: 0 2px 6px rgba(30,45,65,.025); transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+.pos-card-producto:hover { border-color: #b9c8da !important; box-shadow: 0 5px 14px rgba(30,45,65,.07); }
+.pos-card-producto.pos-card-activa { border: 1px solid #6c9df0 !important; background: #f3f7ff !important; box-shadow: 0 0 0 1px rgba(77,132,225,.08); }
+.pos-product-info { display: flex; flex-direction: column; gap: 8px; min-height: 45px; }
+.pos-prod-title { display: -webkit-box; overflow: hidden; color: #29384c; font-size: .9rem; font-weight: 650; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.pos-prod-price { color: #111d2e; font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pos-qty-pill { display: grid; grid-template-columns: 40px minmax(24px,1fr) 40px; align-items: center; min-height: 42px; padding: 3px; border: 1px solid #d8e1eb; border-radius: 999px; background: #f7f9fc; }
+.pos-card-activa .pos-qty-pill { border-color: #c5d8fa; background: #fff; }
+.btn-pos-sq { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: #fff; color: var(--cruditas-ink); font-size: 1.15rem; font-weight: 750; box-shadow: 0 1px 3px rgba(15,30,50,.10); }
+.btn-pos-sq:hover, .btn-pos-add { background: var(--cruditas-ink); color: #fff; }
+.pos-cant-num { color: #1e2d41; text-align: center; font-size: .95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pos-dozen-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.btn-docena-pill { min-height: 36px; padding: 5px 4px; border: 1px solid #dce4ee; border-radius: 8px; background: #f8fafc; color: #53657b; font-size: .78rem; font-weight: 750; }
+.btn-docena-pill:hover { border-color: #bdcbdc; background: #edf2f8; color: var(--cruditas-ink); }
+.btn-docena-pill.btn-docena-add { border-color: #f1d58a; background: #fff4d5; color: #77530b; }
+.btn-docena-pill.btn-docena-add:hover { border-color: #e7bf4e; background: #ffe9a8; }
+.pos-empty-category { padding: 36px 16px; color: var(--cruditas-muted); text-align: center; }
+.pos-order-card .card-body { padding: 0 18px 18px; }
+.pos-order-card label { color: #46566b; font-size: .78rem; font-weight: 700 !important; }
+.pos-order-card .form-control { min-height: 42px; border: 1px solid #d8e1eb; border-radius: 9px; color: #27384d; font-size: .88rem; box-shadow: none; }
+.pos-order-card .form-control:focus { border-color: #7da7ec; box-shadow: 0 0 0 3px rgba(72,130,225,.12); }
+.pos-cart-items { max-height: 29vh; min-height: 64px; overflow-y: auto; border-color: var(--cruditas-line) !important; border-radius: 10px !important; background: #f8fafc !important; }
+#cant-total-items { color: var(--cruditas-ink); font-weight: 800; }
+#monto-total-pedido { color: var(--cruditas-green) !important; font-size: clamp(1.5rem, 2vw, 1.9rem); font-weight: 850 !important; font-variant-numeric: tabular-nums; }
+.pos-actions-container { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; }
+.pos-btn-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.btn-pos-action { min-height: 58px; padding: 8px 5px; border: 1px solid transparent; border-radius: 10px; font-size: 1.05rem; transition: filter .15s ease, transform .15s ease; }
+.btn-pos-action span { display: block; margin-top: 4px; font-size: .72rem; font-weight: 750; line-height: 1.15; }
+.btn-pos-preparar { background: #fff3cf; border-color: #f5df9e; color: #79580a; }
+.btn-pos-impago { background: #e0f3f7; border-color: #bde4eb; color: #155c6b; }
+.btn-pos-limpiar { background: #fff0f0; border-color: #f3cccc; color: #9b3030; }
+.btn-pos-action:hover { filter: brightness(.97); transform: translateY(-1px); }
+.btn-pos-cobrar { width: 100%; min-height: 54px; padding: 12px; border: 0; border-radius: 10px; background: var(--cruditas-green); color: #fff; font-size: .96rem; font-weight: 800; letter-spacing: .025em; box-shadow: 0 4px 9px rgba(22,134,71,.18); transition: background .15s ease, transform .15s ease; }
+.btn-pos-cobrar:hover { background: #11743c; color: #fff; transform: translateY(-1px); }
+.btn, button, select, input { touch-action: manipulation; }
+
+@media (max-width: 1199.98px) {
+  .pos-product-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .pos-card-producto { min-height: 150px; }
+}
+@media (max-width: 767.98px) {
+  .content-wrapper { padding: 8px !important; }
+  .pos-layout-row { margin: 0; padding: 0 !important; }
+  .pos-layout-row > [class*="col-"] { padding: 0; }
+  .pos-order-column { margin-top: 14px; }
+  .pos-order-card { position: static; }
+  .pos-catalog-scroll { max-height: 58vh; }
+  .pos-product-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
+  .pos-catalog-content { padding: 12px; }
+  .pos-category-tabs { padding: 10px; gap: 7px; }
+  .pos-category-tab { min-height: 44px; padding: 0 13px; }
+  .pos-card-producto { min-height: 148px; padding: 11px 9px; }
+  .pos-order-card .card-body { padding: 0 12px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pos-card-producto, .pos-category-tab, .btn-pos-action, .btn-pos-cobrar { transition: none; }
+}
+
+
+/* =====================================================================
+   CRUDITAS POS — refinamiento visual v2
+   Solapas con iconos, paleta cálida y tarjetas activas más reconocibles.
+   ===================================================================== */
+:root {
+  --cruditas-ink: #26364a;
+  --cruditas-ink-soft: #3d4d61;
+  --cruditas-brand: #e9b83f;
+  --cruditas-bg: #f5f6f8;
+  --cruditas-line: #e4e7ec;
+  --cruditas-muted: #6b7280;
+  --cruditas-green: #168647;
+  --cruditas-radius: 14px;
+}
+
+body { background: var(--cruditas-bg); color: #202b3a; }
+.pos-main-card, .pos-order-card { border-color: #e6e9ee !important; box-shadow: 0 6px 22px rgba(27, 39, 54, .055) !important; }
+.pos-main-card { border-top-color: var(--cruditas-brand) !important; }
+.pos-order-card { border-top-color: #8b9aab !important; }
+
+.pos-category-tabs { gap: 9px; padding: 13px 16px; background: #fff; border-bottom: 1px solid #e8ebef; }
+.pos-category-tab {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 48px; padding: 0 17px; border: 1px solid #e1e5eb;
+  border-radius: 11px; background: #f8f9fb; color: #465366;
+  font-size: .9rem; font-weight: 650; box-shadow: 0 1px 2px rgba(20,30,45,.025);
+}
+.pos-category-icon { font-size: 1rem; opacity: .78; }
+.pos-category-tab:hover { background: #f0f3f7; border-color: #cbd3de; color: #26364a; }
+.pos-category-tab.is-active {
+  background: #26364a; border-color: #26364a; color: #fff;
+  box-shadow: 0 3px 8px rgba(38,54,74,.16);
+}
+.pos-category-tab.is-active .pos-category-icon { color: #f5c85b; opacity: 1; }
+.pos-category-tab:focus-visible { outline: 3px solid rgba(233,184,63,.55); outline-offset: 2px; }
+
+.pos-category-heading { margin-bottom: 16px; }
+.pos-section-eyebrow { color: #8a929e; letter-spacing: .12em; }
+.pos-category-heading h4 { color: #26364a; }
+.pos-product-grid { gap: 11px; }
+.pos-card-producto {
+  position: relative; min-height: 150px; padding: 13px 12px 12px;
+  border: 1px solid #e2e6ec !important; border-radius: 13px;
+  background: #fff !important; box-shadow: 0 2px 5px rgba(24,35,49,.025);
+}
+.pos-card-producto:hover { border-color: #c7ced8 !important; box-shadow: 0 5px 13px rgba(24,35,49,.07); }
+.pos-card-producto.pos-card-activa {
+  border: 1.5px solid #d8b44b !important;
+  background: #fff9e9 !important;
+  box-shadow: inset 3px 0 0 #e4bd4e, 0 3px 9px rgba(150,112,18,.07) !important;
+}
+.pos-card-activa .pos-prod-title { color: #283548; }
+.pos-card-activa .pos-prod-price { color: #6f5010; }
+.pos-product-info { gap: 7px; }
+.pos-qty-pill { background: #f4f6f8; border-color: #dce1e8; }
+.pos-card-activa .pos-qty-pill { background: #fff; border-color: #e2ca7d; }
+.pos-cant-num { color: #26364a; }
+.pos-card-activa .pos-cant-num { color: #72520b; font-size: 1rem; }
+.btn-pos-sq { width: 38px; height: 36px; background: #fff; color: #35465a; }
+.btn-pos-sq:hover, .btn-pos-add { background: #26364a; color: #fff; }
+.pos-card-activa .btn-pos-add { background: #26364a; color: #fff; }
+.btn-docena-pill { min-height: 36px; background: #f7f8fa; border-color: #e1e5eb; color: #596678; }
+.btn-docena-pill.btn-docena-add { background: #fff0c2; border-color: #ead18a; color: #6d4d08; }
+.pos-card-activa .btn-docena-pill.btn-docena-add { background: #f4d779; border-color: #e2c15b; color: #5c4308; }
+.btn-docena-pill:hover { background: #e9edf2; color: #26364a; }
+.btn-docena-pill.btn-docena-add:hover { background: #f0d16b; color: #5c4308; }
+
+@media (max-width: 767.98px) {
+  .pos-category-tab { gap: 7px; min-height: 46px; padding: 0 13px; }
+  .pos-category-icon { font-size: .95rem; }
+}
+
+
+/* Las tarjetas seleccionadas conservan el amarillo cálido del diseño aprobado. */
+.pos-card-producto.pos-card-activa {
+  border: 1.5px solid #d8b44b !important;
+  background: #fff9e9 !important;
+  box-shadow: inset 3px 0 0 #e4bd4e, 0 3px 9px rgba(150,112,18,.07) !important;
+}
+.pos-card-activa .pos-prod-title { color: #283548; }
+.pos-card-activa .pos-prod-price { color: #6f5010; }
+.pos-card-activa .pos-qty-pill { background: #fff; border-color: #e2ca7d; }
+.pos-card-activa .pos-cant-num { color: #72520b; }
+.btn-docena-pill.btn-docena-add {
+  background: #fff0c2;
+  border-color: #ead18a;
+  color: #6d4d08;
+}
+.pos-card-activa .btn-docena-pill.btn-docena-add {
+  background: #f4d779;
+  border-color: #e2c15b;
+  color: #5c4308;
+}
+.btn-docena-pill.btn-docena-add:hover { background: #f0d16b; color: #5c4308; }
+
+/* Acciones inferiores: estilo consistente, iconos alineados y colores semánticos suaves. */
+.btn-pos-action {
+  min-height: 58px;
+  gap: 5px;
+  border-radius: 10px !important;
+  border-width: 1px !important;
+  font-weight: 600;
+  box-shadow: 0 2px 5px rgba(28, 43, 60, .04);
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.btn-pos-action > i { font-size: 1.05rem; line-height: 1; }
+.btn-pos-action span { margin-top: 1px; font-size: .78rem; letter-spacing: 0; text-transform: none; }
+.btn-pos-preparar {
+  /* Azul: pedido guardado para continuar la preparación */
+  background: #e8effb !important;
+  border-color: #c4d5f2 !important;
+  color: #294f85 !important;
+}
+.btn-pos-preparar:hover {
+  background: #d9e6fa !important;
+  border-color: #a9c2eb !important;
+  color: #203f6c !important;
+  box-shadow: 0 4px 10px rgba(41, 79, 133, .13);
+}
+.btn-pos-impago {
+  /* Coral suave: pedido entregado que todavía no fue cobrado */
+  background: #fff0e8 !important;
+  border-color: #f0cbbb !important;
+  color: #914d2d !important;
+}
+.btn-pos-impago:hover {
+  background: #ffe3d5 !important;
+  border-color: #e8b49b !important;
+  color: #793c22 !important;
+  box-shadow: 0 4px 10px rgba(145, 77, 45, .12);
+}
+.btn-pos-limpiar {
+  background: #f7eeee !important;
+  border-color: #ead8d8 !important;
+  color: #8a4d4d !important;
+}
+.btn-pos-limpiar:hover {
+  background: #f1e1e1 !important;
+  border-color: #e2c8c8 !important;
+  color: #743d3d !important;
+}
+.btn-pos-action:focus-visible { outline: 3px solid rgba(79, 132, 190, .35); outline-offset: 2px; }
+@media (max-width: 575.98px) {
+  .btn-pos-action { min-height: 54px; }
+  .btn-pos-action span { font-size: .74rem; }
+}
