@@ -34,7 +34,7 @@ export async function cargarTablaPedidos() {
 
   let query = supabaseAdmin
     .from('TB_TPEDIDOS')
-    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
+    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
     .gte('fecha', fechaDesde)
     .lte('fecha', fechaHasta)
     .order('id', { ascending: false });
@@ -92,6 +92,10 @@ export async function cargarTablaPedidos() {
   tbody.innerHTML = pedidosFiltrados.map(p => {
     const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
     const medioPago = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Efectivo';
+    // Marca del canal de venta (solo se muestra si no es MOSTRADOR, para no saturar la tabla)
+    const badgeCanal = (p.canal && p.canal !== 'MOSTRADOR')
+      ? ` <span class="badge badge-dark ml-1">${esc(p.canal)}</span>`
+      : '';
     const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     const htmlObservaciones = p.observaciones 
@@ -177,7 +181,7 @@ export async function cargarTablaPedidos() {
         <td class="font-weight-bold">#${p.id}</td>
         <td>${fechaPedido} ${hora} hs</td>
         <td>
-          <div class="font-weight-bold">${esc(clienteNombre)}</div>
+          <div class="font-weight-bold">${esc(clienteNombre)}${badgeCanal}</div>
           ${htmlObservaciones}
         </td>
         <td><small class="badge badge-light border">${esc(medioPago)}</small></td>
@@ -288,6 +292,7 @@ export async function verDetallePedido(idPedido) {
       <span class="badge badge-warning text-dark px-2 py-1 font-weight-bold" style="font-size: 0.95rem;">
         <i class="fas fa-user mr-1"></i> ${esc(clienteNombre)}
       </span>
+      ${pedido.canal && pedido.canal !== 'MOSTRADOR' ? `<span class="badge badge-dark ml-1">${esc(pedido.canal)}</span>` : ''}
     `;
 
     const btnImprimirCocina = document.getElementById('btn-imprimir-cocina');

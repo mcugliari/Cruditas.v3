@@ -87,6 +87,27 @@
             </a>
           </li>
 
+          <!-- SECCIÓN COMPRAS -->
+          <li class="nav-header">COMPRAS</li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="compras">
+              <i class="nav-icon fas fa-shopping-basket"></i>
+              <p>Compras</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="deuda">
+              <i class="nav-icon fas fa-file-invoice-dollar"></i>
+              <p>Deuda a Proveedores</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="egresos">
+              <i class="nav-icon fas fa-money-bill-wave"></i>
+              <p>Gastos y Retiros</p>
+            </a>
+          </li>
+
           <!-- SECCIÓN CONFIGURACIÓN -->
           <li class="nav-header">CONFIGURACIÓN</li>
           <li class="nav-item">
@@ -105,6 +126,18 @@
             <a href="#" class="nav-link" data-section="listas">
               <i class="nav-icon fas fa-tags"></i>
               <p>Listas de Precios</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="proveedores">
+              <i class="nav-icon fas fa-truck"></i>
+              <p>Proveedores</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="insumos">
+              <i class="nav-icon fas fa-carrot"></i>
+              <p>Insumos</p>
             </a>
           </li>
 
@@ -421,6 +454,272 @@
       </div>
     </section>
 
+    <!-- SECCIÓN: GASTOS Y RETIROS -->
+    <section id="sec-egresos" class="modulo-app d-none">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-5"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-money-bill-wave mr-2 text-warning"></i>Gastos y Retiros</h1></div>
+            <div class="col-sm-7 text-right">
+              <button class="btn btn-warning font-weight-bold mr-1" id="btn-nuevo-gasto"><i class="fas fa-plus mr-1"></i> Nuevo Gasto</button>
+              <button class="btn btn-dark font-weight-bold" id="btn-nuevo-retiro"><i class="fas fa-hand-holding-usd mr-1"></i> Nuevo Retiro</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-warning mt-2">
+        <div class="card-header">
+          <div class="form-row align-items-end">
+            <div class="form-group col-md-2 mb-2">
+              <label class="small font-weight-bold mb-0" for="filtro-egreso-desde">Desde</label>
+              <input type="date" class="form-control form-control-sm" id="filtro-egreso-desde">
+            </div>
+            <div class="form-group col-md-2 mb-2">
+              <label class="small font-weight-bold mb-0" for="filtro-egreso-hasta">Hasta</label>
+              <input type="date" class="form-control form-control-sm" id="filtro-egreso-hasta">
+            </div>
+            <div class="form-group col-md-3 mb-2">
+              <label class="small font-weight-bold mb-0" for="filtro-egreso-tipo">Tipo</label>
+              <select class="form-control form-control-sm" id="filtro-egreso-tipo">
+                <option value="">Todos</option>
+                <option value="GASTO">Gastos</option>
+                <option value="RETIRO">Retiros</option>
+                <option value="PAGO_PROVEEDOR">Pagos a proveedores</option>
+              </select>
+            </div>
+            <div class="form-group col-md-3 mb-2">
+              <label class="small font-weight-bold mb-0" for="filtro-egreso-estado">Estado</label>
+              <select class="form-control form-control-sm" id="filtro-egreso-estado">
+                <option value="ACTIVO">Activos</option>
+                <option value="ANULADO">Anulados</option>
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="form-group col-md-2 mb-2">
+              <button class="btn btn-sm btn-dark btn-block" id="btn-filtrar-egresos"><i class="fas fa-search mr-1"></i> Filtrar</button>
+            </div>
+          </div>
+          <div id="resumen-egresos" class="small text-muted"></div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th>Fecha</th><th>Tipo</th><th>Detalle</th><th>Categoría</th><th>Medio</th>
+                  <th class="text-right">Monto</th><th class="text-center">Estado</th><th class="text-center" style="width: 80px">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-egresos-body">
+                <tr><td colspan="8" class="text-center py-4">Cargando movimientos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN: DEUDA A PROVEEDORES -->
+    <section id="sec-deuda" class="modulo-app d-none">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-12"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-file-invoice-dollar mr-2 text-warning"></i>Deuda a Proveedores</h1></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mb-2">
+        <div class="col-md-4 col-sm-6 mb-2">
+          <div class="info-box bg-light border">
+            <span class="info-box-icon bg-danger text-white"><i class="fas fa-file-invoice-dollar"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text font-weight-bold">Deuda total</span>
+              <span class="info-box-number text-dark" id="kpi-deuda-total">$0,00</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4 col-sm-6 mb-2">
+          <div class="info-box bg-light border">
+            <span class="info-box-icon bg-warning text-white"><i class="fas fa-exclamation-triangle"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text font-weight-bold">Deuda vencida</span>
+              <span class="info-box-number text-dark" id="kpi-deuda-vencida">$0,00</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4 col-sm-12 mb-2">
+          <div class="info-box bg-light border">
+            <span class="info-box-icon bg-info text-white"><i class="fas fa-truck"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text font-weight-bold">Proveedores con deuda</span>
+              <span class="info-box-number text-dark" id="kpi-deuda-proveedores">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-warning">
+        <div class="card-header">
+          <div class="custom-control custom-checkbox">
+            <input type="checkbox" class="custom-control-input" id="filtro-deuda-vencida">
+            <label class="custom-control-label" for="filtro-deuda-vencida">Mostrar solo proveedores con deuda vencida</label>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th>Proveedor</th><th class="text-center">Compras pendientes</th>
+                  <th class="text-right">Deuda total</th><th class="text-right">Deuda vencida</th>
+                  <th class="text-center">Primer vencimiento</th><th class="text-center" style="width: 120px">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-deuda-body">
+                <tr><td colspan="6" class="text-center py-4">Cargando deuda...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN: COMPRAS -->
+    <section id="sec-compras" class="modulo-app d-none">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-shopping-basket mr-2 text-warning"></i>Compras</h1></div>
+            <div class="col-sm-6 text-right">
+              <button class="btn btn-warning font-weight-bold" id="btn-nueva-compra"><i class="fas fa-plus mr-1"></i> Nueva Compra</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-warning mt-2">
+        <div class="card-header">
+          <div class="form-row align-items-end">
+            <div class="form-group col-md-2 mb-2">
+              <label class="small font-weight-bold mb-0" for="filtro-compra-desde">Desde</label>
+              <input type="date" class="form-control form-control-sm" id="filtro-compra-desde">
+            </div>
+            <div class="form-group col-md-2 mb-2">
+              <label class="small font-weight-bold mb-0" for="filtro-compra-hasta">Hasta</label>
+              <input type="date" class="form-control form-control-sm" id="filtro-compra-hasta">
+            </div>
+            <div class="form-group col-md-3 mb-2">
+              <label class="small font-weight-bold mb-0" for="filtro-compra-proveedor">Proveedor</label>
+              <select class="form-control form-control-sm" id="filtro-compra-proveedor">
+                <option value="">Todos los proveedores</option>
+              </select>
+            </div>
+            <div class="form-group col-md-3 mb-2">
+              <label class="small font-weight-bold mb-0" for="filtro-compra-estado">Estado de pago</label>
+              <select class="form-control form-control-sm" id="filtro-compra-estado">
+                <option value="">Todos</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="PARCIAL">Parcial</option>
+                <option value="PAGADA">Pagada</option>
+                <option value="ANULADA">Anulada</option>
+              </select>
+            </div>
+            <div class="form-group col-md-2 mb-2">
+              <button class="btn btn-sm btn-dark btn-block" id="btn-filtrar-compras"><i class="fas fa-search mr-1"></i> Filtrar</button>
+            </div>
+          </div>
+          <div id="resumen-compras" class="small text-muted"></div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th># ID</th><th>Fecha</th><th>Proveedor</th><th>Comprobante</th>
+                  <th class="text-right">Total</th><th class="text-right">Pagado</th><th class="text-right">Saldo</th>
+                  <th class="text-center">Estado</th><th class="text-center" style="width: 80px">Ver</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-compras-body">
+                <tr><td colspan="9" class="text-center py-4">Cargando compras...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN: PROVEEDORES -->
+    <section id="sec-proveedores" class="modulo-app d-none">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-truck mr-2 text-warning"></i>Proveedores</h1></div>
+            <div class="col-sm-6 text-right">
+              <button class="btn btn-warning font-weight-bold" id="btn-nuevo-proveedor"><i class="fas fa-plus mr-1"></i> Nuevo Proveedor</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-warning mt-2">
+        <div class="card-header"><h3 class="card-title font-weight-bold">Listado de Proveedores</h3></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr><th># ID</th><th>Proveedor</th><th>Teléfono</th><th>CUIT</th><th class="text-center">Estado</th><th class="text-center" style="width: 150px">Acciones</th></tr>
+              </thead>
+              <tbody id="tabla-proveedores-body">
+                <tr><td colspan="6" class="text-center py-4">Cargando proveedores...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN: INSUMOS -->
+    <section id="sec-insumos" class="modulo-app d-none">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-carrot mr-2 text-warning"></i>Insumos</h1></div>
+            <div class="col-sm-6 text-right">
+              <button class="btn btn-warning font-weight-bold" id="btn-nuevo-insumo"><i class="fas fa-plus mr-1"></i> Nuevo Insumo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-warning mt-2">
+        <div class="card-header">
+          <div class="row align-items-center">
+            <div class="col-md-5 mb-2 mb-md-0">
+              <input type="text" class="form-control" id="filtro-insumo" placeholder="Buscar insumo...">
+            </div>
+            <div class="col-md-4">
+              <select class="form-control" id="filtro-insumo-categoria"></select>
+            </div>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr><th># ID</th><th>Categoría</th><th>Insumo</th><th>Unidad</th><th class="text-center">Estado</th><th class="text-center" style="width: 150px">Acciones</th></tr>
+              </thead>
+              <tbody id="tabla-insumos-body">
+                <tr><td colspan="6" class="text-center py-4">Cargando insumos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- SECCIÓN 5: LISTAS DE PRECIOS -->
     <section id="sec-listas" class="modulo-app d-none">
       <div class="content-header">
@@ -647,6 +946,302 @@
                 <input type="checkbox" class="custom-control-input" id="prod-permite-docena" checked>
                 <label class="custom-control-label font-weight-bold" for="prod-permite-docena">Permite venta por docena</label>
               </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold"><i class="fas fa-save mr-1"></i> Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Gasto / Retiro -->
+  <div class="modal fade" id="modal-egreso" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold" id="modal-egreso-title">Nuevo Gasto</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-egreso">
+          <div class="modal-body">
+            <input type="hidden" id="egreso-tipo">
+            <div class="form-group">
+              <label for="egreso-concepto">Concepto *</label>
+              <input type="text" class="form-control" id="egreso-concepto" maxlength="150" required>
+            </div>
+            <div class="form-group" id="grupo-egreso-categoria">
+              <label for="egreso-categoria">Categoría</label>
+              <select class="form-control" id="egreso-categoria"></select>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label for="egreso-medio">Medio de pago *</label>
+                <select class="form-control" id="egreso-medio" required></select>
+              </div>
+              <div class="form-group col-md-6">
+                <label for="egreso-monto">Monto *</label>
+                <input type="number" class="form-control" id="egreso-monto" min="0.01" step="0.01" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="egreso-fecha">Fecha *</label>
+              <input type="date" class="form-control" id="egreso-fecha" required>
+              <small class="form-text text-muted">Si ese día ya tiene la caja cerrada, no se puede registrar.</small>
+            </div>
+            <div class="form-group mb-0">
+              <label for="egreso-observaciones">Observaciones</label>
+              <input type="text" class="form-control" id="egreso-observaciones" maxlength="300">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold" id="btn-guardar-egreso"><i class="fas fa-save mr-1"></i> Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Deuda de un Proveedor -->
+  <div class="modal fade" id="modal-deuda-proveedor" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-truck mr-2"></i><span id="deuda-proveedor-titulo">Proveedor</span></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <p id="deuda-proveedor-resumen" class="mb-3"></p>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped">
+              <thead class="bg-light">
+                <tr><th>#</th><th>Fecha</th><th>Comprobante</th><th>Vence</th><th class="text-right">Total</th><th class="text-right">Saldo</th><th class="text-center"></th></tr>
+              </thead>
+              <tbody id="tabla-deuda-compras-body"></tbody>
+            </table>
+          </div>
+          <small class="text-muted">Las compras se listan en el orden en que se pagan a cuenta: primero las que vencen antes.</small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-success mr-auto" id="btn-pagar-deuda-proveedor"><i class="fas fa-dollar-sign mr-1"></i> Pagar a cuenta</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Registrar Pago -->
+  <div class="modal fade" id="modal-pago" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title font-weight-bold" id="pago-titulo">Registrar pago</h5>
+          <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-pago">
+          <div class="modal-body">
+            <div id="pago-info" class="mb-3"></div>
+            <div class="form-group">
+              <label for="pago-medio">Medio de pago *</label>
+              <select class="form-control" id="pago-medio" required></select>
+            </div>
+            <div class="form-group">
+              <label for="pago-monto">Monto a pagar *</label>
+              <input type="number" class="form-control" id="pago-monto" min="0.01" step="0.01" required>
+            </div>
+            <div class="form-group mb-0">
+              <label for="pago-observaciones">Observaciones</label>
+              <input type="text" class="form-control" id="pago-observaciones" maxlength="300">
+            </div>
+            <small class="form-text text-muted" id="pago-ayuda"></small>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-success font-weight-bold" id="btn-guardar-pago"><i class="fas fa-check mr-1"></i> Registrar pago</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Nueva Compra -->
+  <div class="modal fade" id="modal-compra" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-shopping-basket mr-2"></i>Nueva Compra</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-compra">
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label for="compra-proveedor">Proveedor *</label>
+                <select class="form-control" id="compra-proveedor" required></select>
+              </div>
+              <div class="form-group col-md-3">
+                <label for="compra-fecha">Fecha *</label>
+                <input type="date" class="form-control" id="compra-fecha" required>
+              </div>
+              <div class="form-group col-md-3">
+                <label for="compra-comprobante">Remito / Factura</label>
+                <input type="text" class="form-control" id="compra-comprobante" maxlength="50" placeholder="Ej: 0001-00012345">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-3">
+                <label for="compra-vencimiento">Vencimiento</label>
+                <input type="date" class="form-control" id="compra-vencimiento">
+              </div>
+              <div class="form-group col-md-9">
+                <label for="compra-observaciones">Observaciones</label>
+                <input type="text" class="form-control" id="compra-observaciones" maxlength="300">
+              </div>
+            </div>
+
+            <h6 class="font-weight-bold mt-2">Detalle de insumos</h6>
+            <div class="table-responsive">
+              <table class="table table-sm mb-2">
+                <thead class="bg-light">
+                  <tr><th>Insumo</th><th>Cantidad</th><th>Precio unit.</th><th class="text-right">Subtotal</th><th></th></tr>
+                </thead>
+                <tbody id="tabla-lineas-compra-body"></tbody>
+              </table>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <button type="button" class="btn btn-sm btn-outline-dark" id="btn-agregar-linea"><i class="fas fa-plus mr-1"></i> Agregar línea</button>
+              <div class="h5 mb-0">Total: <strong>$<span id="compra-total">0,00</span></strong></div>
+            </div>
+
+            <div class="custom-control custom-checkbox mb-2">
+              <input type="checkbox" class="custom-control-input" id="compra-pagar-ahora">
+              <label class="custom-control-label font-weight-bold" for="compra-pagar-ahora">Registrar un pago ahora</label>
+            </div>
+            <div id="bloque-pago-compra" class="d-none border rounded p-3 bg-light">
+              <div class="form-row">
+                <div class="form-group col-md-6 mb-2">
+                  <label for="compra-pago-medio">Medio de pago</label>
+                  <select class="form-control" id="compra-pago-medio"></select>
+                </div>
+                <div class="form-group col-md-6 mb-2">
+                  <label for="compra-pago-monto">Monto a pagar</label>
+                  <input type="number" class="form-control" id="compra-pago-monto" min="0.01" step="0.01">
+                </div>
+              </div>
+              <small class="text-muted">El pago se registra con la fecha de hoy. Si no se paga el total, el resto queda como deuda con el proveedor. Si no marcás esta opción, la compra queda a crédito.</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold" id="btn-guardar-compra"><i class="fas fa-save mr-1"></i> Guardar compra</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Detalle de Compra -->
+  <div class="modal fade" id="modal-detalle-compra" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold" id="detalle-compra-titulo">Detalle de compra</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <div id="detalle-compra-info" class="mb-3"></div>
+
+          <h6 class="font-weight-bold">Detalle</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped">
+              <thead class="bg-light">
+                <tr><th>Insumo</th><th class="text-center">Cantidad</th><th class="text-right">Precio unit.</th><th class="text-right">Subtotal</th></tr>
+              </thead>
+              <tbody id="tabla-detalle-compra-lineas"></tbody>
+              <tfoot>
+                <tr><th colspan="3" class="text-right">Total</th><th class="text-right" id="detalle-compra-total"></th></tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <h6 class="font-weight-bold mt-3">Pagos</h6>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead class="bg-light">
+                <tr><th>Fecha</th><th>Medio</th><th class="text-right">Monto</th><th class="text-center">Estado</th><th style="width: 50px"></th></tr>
+              </thead>
+              <tbody id="tabla-detalle-compra-pagos"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-danger mr-auto d-none" id="btn-anular-compra"><i class="fas fa-ban mr-1"></i> Anular compra</button>
+          <button type="button" class="btn btn-success d-none" id="btn-pagar-compra"><i class="fas fa-dollar-sign mr-1"></i> Registrar pago</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Crear/Editar Proveedor -->
+  <div class="modal fade" id="modal-proveedor" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold" id="modal-proveedor-title">Nuevo Proveedor</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-proveedor">
+          <div class="modal-body">
+            <input type="hidden" id="prov-id">
+            <div class="form-group">
+              <label for="prov-nombre">Nombre del Proveedor *</label>
+              <input type="text" class="form-control" id="prov-nombre" maxlength="120" placeholder="Ej: Distribuidora Lácteos Sur" required>
+            </div>
+            <div class="form-group">
+              <label for="prov-telefono">Teléfono</label>
+              <input type="text" class="form-control" id="prov-telefono" maxlength="30" placeholder="Ej: 1122334455">
+            </div>
+            <div class="form-group mb-0">
+              <label for="prov-cuit">CUIT</label>
+              <input type="text" class="form-control" id="prov-cuit" maxlength="20" placeholder="Ej: 30-12345678-9">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold"><i class="fas fa-save mr-1"></i> Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Crear/Editar Insumo -->
+  <div class="modal fade" id="modal-insumo" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold" id="modal-insumo-title">Nuevo Insumo</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-insumo">
+          <div class="modal-body">
+            <input type="hidden" id="insumo-id">
+            <div class="form-group">
+              <label for="insumo-categoria">Categoría *</label>
+              <select class="form-control" id="insumo-categoria" required></select>
+            </div>
+            <div class="form-group">
+              <label for="insumo-nombre">Nombre del Insumo *</label>
+              <input type="text" class="form-control" id="insumo-nombre" maxlength="120" placeholder="Ej: Muzzarella" required>
+            </div>
+            <div class="form-group mb-0">
+              <label for="insumo-unidad">Unidad de medida *</label>
+              <select class="form-control" id="insumo-unidad" required></select>
+              <small class="form-text text-muted">Es la unidad en la que se compra. No se puede cambiar una vez que el insumo se usó en una compra.</small>
             </div>
           </div>
           <div class="modal-footer">
