@@ -1323,6 +1323,35 @@
     </div>
   </div>  
 
+  <!-- MODAL: elegir el medio de pago al cobrar un pedido ya cargado -->
+  <div class="modal fade" id="modal-cobro-pedido" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-cash-register mr-2"></i> Registrar cobro · Pedido #<span id="cobro-id-pedido"></span></h5>
+          <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-cobro-pedido">
+          <div class="modal-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <span class="text-muted" id="cobro-cliente"></span>
+              <strong class="h4 mb-0 text-success">$<span id="cobro-total"></span></strong>
+            </div>
+            <div class="form-group mb-0">
+              <label for="cobro-medio-pago" class="font-weight-bold">Medio de pago con el que se cobra</label>
+              <select class="form-control" id="cobro-medio-pago" required></select>
+              <small class="form-text text-muted">Se propone el medio con el que se cargó el pedido; cambialo si el cliente pagó de otra forma.</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-success font-weight-bold" id="btn-confirmar-cobro"><i class="fas fa-check mr-1"></i> Confirmar cobro</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Detalle Pedido -->
   <div class="modal fade" id="modalDetallePedido" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">

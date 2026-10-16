@@ -172,7 +172,7 @@ function mostrarLogin() {
         //
         // .value es lo que el usuario escribió en el campo.
         // .trim() borra los espacios sobrantes al principio y al final.
-        const { error } = await supabaseClient.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
           email: inputEmail.value.trim(),
           password: inputPass.value
         });
@@ -192,7 +192,9 @@ function mostrarLogin() {
 
         // ...y cumplimos la promesa. Esto "despierta" al await que está
         // esperando en asegurarSesion.
-        resolve();
+        // Pasamos la sesión recién creada a quien esté esperando (asegurarSesion),
+        // así puede mostrar el usuario sin volver a consultarla.
+        resolve(data?.session || null);
 
       } catch (err) {
         // Error inesperado (sin conexión, por ejemplo).
@@ -249,7 +251,9 @@ export async function asegurarSesion() {
     // Mostramos el login y ESPERAMOS (await) hasta que el usuario ingrese bien.
     // Mientras tanto, el resto de main.js queda pausado: por eso el POS no
     // carga ningún dato antes de tiempo.
-    await mostrarLogin();
+    // Guardamos lo que devuelve el login: antes, "session" seguía en null
+    // después de ingresar y por eso no se mostraba el usuario.
+    session = await mostrarLogin();
 
     // Ya hay sesión: volvemos a mostrar el POS. Una cadena vacía '' le dice
     // al navegador "volvé al valor normal".
@@ -260,11 +264,17 @@ export async function asegurarSesion() {
   prepararSalir();
 
   // NUEVO: Mostrar el usuario (email) en la barra superior
+  // Mostrar el usuario (la parte del email antes de la @) en la barra superior.
   const userEmail = session?.user?.email;
   if (userEmail) {
     const spanUser = document.getElementById('nav-usuario-conectado');
-    // split('@')[0] hace que si es "admin@cruditas", solo muestre "admin"
-    if (spanUser) spanUser.innerHTML = `<i class="far fa-user mr-1"></i> ${userEmail.split('@')[0]}`;
+    if (spanUser) {
+      // Ponemos el ícono con innerHTML (es HTML fijo, nuestro)...
+      spanUser.innerHTML = '<i class="far fa-user mr-1"></i> ';
+      // ...y el nombre como "nodo de texto": el navegador lo muestra siempre
+      // como texto, sin interpretarlo como HTML. Así no hace falta escaparlo.
+      spanUser.appendChild(document.createTextNode(userEmail.split('@')[0]));
+    }
   }
   
 }

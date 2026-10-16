@@ -237,7 +237,7 @@ export function renderizarGrillaPOS() {
     const botonesDocenaHTML = permiteDocena ? `
       <div class="d-flex justify-content-between gap-1 mt-2">
         <button type="button" class="btn btn-docena-pill flex-fill mr-1" data-action="alterar-cant" data-id="${p.id}" data-delta="-12">-12 u.</button>
-        <button type="button" class="btn btn-docena-pill flex-fill" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12 u.</button>
+        <button type="button" class="btn btn-docena-pill btn-docena-add flex-fill" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12 u.</button>
       </div>
     ` : '';
 

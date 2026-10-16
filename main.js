@@ -3,7 +3,7 @@ import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial } from './listas.js';
 import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito} from './pos.js';
-import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
+import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido, confirmarCobroPedido } from './pedidos.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
 import { cargarCompras, verDetalleCompra, anularCompraAbierta, pagarCompraAbierta, anularPagoDeCompra } from './compras.js';
 import { guardarPago } from './pagos.js';
@@ -149,6 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('filtro-fecha-hasta')?.addEventListener('change', cargarTablaPedidos);
   document.getElementById('filtro-estado-pedido')?.addEventListener('change', cargarTablaPedidos);
   document.getElementById('filtro-buscar-pedido')?.addEventListener('keyup', cargarTablaPedidos);
+  document.getElementById('form-cobro-pedido')?.addEventListener('submit', confirmarCobroPedido);
 
   document.getElementById('tabla-pedidos-body')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');

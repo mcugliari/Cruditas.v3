@@ -1,6 +1,6 @@
 import { supabaseAdmin } from './config.js';
 import { setPedidoEditandoId, setCarrito } from './state.js';
-import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion } from './utils.js';
+import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, formatearMoneda } from './utils.js';
 import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo } from './pos.js';
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
@@ -198,7 +198,10 @@ export async function cargarTablaPedidos() {
 }
 
 export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
-  if (nuevoEstado === 'ANULADO' && !confirm('¿Seguro que deseas anular este pedido? Se excluirá del cierre de caja.')) {
+  // Cobrar: antes de marcar COMPLETADO preguntamos con qué medio se cobra.
+  // La ventana se encarga de guardar el estado y el medio juntos.
+  if (nuevoEstado === 'COMPLETADO') {
+    await abrirModalCobro(idPedido);
     return;
   }
 
@@ -213,6 +216,91 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
     mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
   } else {
     cargarTablaPedidos();
+  }
+}
+
+// =============================================================================
+// COBRO DE UN PEDIDO YA CARGADO (elegir el medio de pago en el momento del cobro)
+// =============================================================================
+
+// Id del pedido que se está cobrando. Vive afuera de las funciones para que
+// la ventana (abrir) y el envío del formulario (confirmar) compartan el dato.
+let pedidoCobroId = null;
+
+// Arma la ventana: trae el pedido y la lista de medios de pago, y propone el
+// medio con el que se cargó el pedido.
+async function abrirModalCobro(idPedido) {
+  // Promise.all lanza las dos consultas AL MISMO TIEMPO y espera a que terminen
+  // ambas (más rápido que pedirlas una después de la otra).
+  const [resPedido, resMedios] = await Promise.all([
+    supabaseAdmin.from('TB_TPEDIDOS')
+      .select('id, importe_total, id_medio_pago, nombre_referencia, TB_BCLIENTES(nombre)')
+      .eq('id', idPedido)
+      .single(),
+    supabaseAdmin.from('TB_BMEDIO_PAGO').select('id, nombre').order('id')
+  ]);
+
+  if (resPedido.error || !resPedido.data || resMedios.error) {
+    mostrarNotificacion('No se pudo cargar el pedido para cobrarlo.', 'danger');
+    return;
+  }
+
+  const pedido = resPedido.data;
+  pedidoCobroId = pedido.id;
+
+  // textContent escribe texto plano: no hace falta escapar.
+  document.getElementById('cobro-id-pedido').textContent = pedido.id;
+  document.getElementById('cobro-cliente').textContent =
+    pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
+  document.getElementById('cobro-total').textContent = formatearMoneda(pedido.importe_total);
+
+  // Opciones del select. Como van en innerHTML, el nombre pasa por esc().
+  const select = document.getElementById('cobro-medio-pago');
+  select.innerHTML = resMedios.data
+    .map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`)
+    .join('');
+  // Proponemos el medio original del pedido (si todavía existe en la lista).
+  if (pedido.id_medio_pago) select.value = pedido.id_medio_pago;
+
+  $('#modal-cobro-pedido').modal('show');
+}
+
+// Se ejecuta al enviar el formulario de la ventana (botón "Confirmar cobro").
+export async function confirmarCobroPedido(e) {
+  e.preventDefault();
+  if (!pedidoCobroId) return;
+
+  const idMedio = Number(document.getElementById('cobro-medio-pago').value);
+  if (!idMedio) {
+    mostrarNotificacion('Elegí un medio de pago.', 'warning');
+    return;
+  }
+
+  // Desactivamos el botón para evitar un doble clic que cobre dos veces.
+  const btn = document.getElementById('btn-confirmar-cobro');
+  btn.disabled = true;
+
+  // try / finally: el bloque "finally" se ejecuta SIEMPRE al salir (haya error
+  // o no), así el botón nunca queda trabado.
+  try {
+    // Estado y medio van en la MISMA actualización: se guardan juntos o no se guarda nada.
+    const { error } = await supabaseAdmin
+      .from('TB_TPEDIDOS')
+      .update({ estado: 'COMPLETADO', id_medio_pago: idMedio })
+      .eq('id', pedidoCobroId);
+
+    if (error) {
+      // Por ejemplo, si la caja de ese día ya está cerrada.
+      mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
+      return;
+    }
+
+    $('#modal-cobro-pedido').modal('hide');
+    pedidoCobroId = null;
+    mostrarNotificacion('Cobro registrado.');
+    cargarTablaPedidos();
+  } finally {
+    btn.disabled = false;
   }
 }
 
