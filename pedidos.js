@@ -1,7 +1,7 @@
 import { supabaseAdmin } from './config.js';
 import { setPedidoEditandoId, setCarrito } from './state.js';
-import { mostrarNotificacion, obtenerFechaActualISO } from './utils.js';
-import { cargarPOS, renderizarGrillaPOS } from './pos.js';
+import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion } from './utils.js';
+import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo } from './pos.js';
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
 
@@ -208,7 +208,9 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
     .eq('id', idPedido);
 
   if (error) {
-    mostrarNotificacion('Error al cambiar el estado: ' + error.message, 'danger');
+    // La base puede rechazar el cambio con un código (por ejemplo, si la caja del día ya está cerrada)
+    // y mensajeErrorFuncion lo traduce a un mensaje claro.
+    mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
   } else {
     cargarTablaPedidos();
   }
@@ -232,21 +234,36 @@ export async function editarPedido(idPedido) {
     const linkPedidos = document.querySelector('#menu-navegacion .nav-link[data-section="pedidos"]');
     navegarA('pedidos', linkPedidos);
 
+    // navegarA arranca inicializarPOS(), que reconstruye los selects (cliente,
+    // lista, medio de pago) cuando le llegan los datos de la base. Si pusiéramos
+    // los valores del pedido antes de que termine, esa reconstrucción los pisaría.
+    // Por eso esperamos acá.
+    await esperarPOSListo();
+
+    // Cliente. El cliente usa Select2, que dibuja su propio cuadro encima del
+    // <select>: cambiar solo .value no actualiza lo que se ve.
+    // trigger('change.select2') le avisa SOLO a Select2 (el sufijo ".select2" es
+    // un "espacio de nombres" del evento), sin disparar alCambiarCliente por su cuenta.
     if (document.getElementById('select-cliente-pedido')) {
-      document.getElementById('select-cliente-pedido').value = pedido.id_cliente;
-
-      const inputRef = document.getElementById('input-ref-cliente');
-      if (inputRef) {
-        inputRef.value = pedido.nombre_referencia || '';
-      }
-    }
-    if (document.getElementById('select-lista-pedido')) {
-      document.getElementById('select-lista-pedido').value = pedido.id_lista_precio;
-    }
-    if (document.getElementById('select-medio-pago') && pedido.id_medio_pago) {
-      document.getElementById('select-medio-pago').value = pedido.id_medio_pago;
+      $('#select-cliente-pedido').val(pedido.id_cliente).trigger('change.select2');
+      // Esperamos a alCambiarCliente para que ajuste la etiqueta de "Referencia"
+      // según el cliente. También pone la lista predeterminada: la pisamos abajo.
+      await alCambiarCliente();
     }
 
+    // Lista de precios del pedido (la que se usó al crearlo, no la predeterminada).
+    // El "if" evita escribir null en pedidos viejos sin lista.
+    const selectLista = document.getElementById('select-lista-pedido');
+    if (selectLista && pedido.id_lista_precio) selectLista.value = pedido.id_lista_precio;
+
+    // Referencia: va DESPUÉS de alCambiarCliente porque esa función la limpia.
+    const inputRef = document.getElementById('input-ref-cliente');
+    if (inputRef) inputRef.value = pedido.nombre_referencia || '';
+
+    const selectMedio = document.getElementById('select-medio-pago');
+    if (selectMedio && pedido.id_medio_pago) selectMedio.value = pedido.id_medio_pago;
+
+    // Recarga los precios con la lista del pedido
     await cargarPOS();
 
     const nuevoCarrito = {};

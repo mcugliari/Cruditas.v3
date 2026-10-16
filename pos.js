@@ -7,11 +7,43 @@ import {
   pedidoEditandoId, setPedidoEditandoId 
 } from './state.js';
 
-import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO } from './utils.js';
+import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc } from './utils.js';
 
-export async function inicializarPOS() {
-  await cargarSelectsPOS();
-  await cargarPOS();
+// Nuevas variables de estado para el POS
+let categoriaSeleccionadaId = null;
+let filtroBusqueda = '';
+
+export function setFiltroBusquedaPOS(texto) {
+  filtroBusqueda = texto.toLowerCase();
+  renderizarGrillaPOS();
+}
+
+export function setCategoriaActivaPOS(id) {
+  categoriaSeleccionadaId = Number(id);
+  filtroBusqueda = ''; // Limpiamos la búsqueda si cambia de solapa
+  const inputSearch = document.getElementById('input-busqueda-pos');
+  if (inputSearch) inputSearch.value = '';
+  renderizarGrillaPOS();
+}
+
+// Guardamos la "promesa" de la inicialización en curso. Una promesa representa
+// un trabajo que todavía puede estar corriendo; con "await" se puede esperar a
+// que termine. Así, otros módulos (pedidos.js) pueden esperar a que el POS
+// tenga sus selects listos antes de tocarlos.
+let promesaInicioPOS = null;
+
+export function inicializarPOS() {
+  // cargarSelectsPOS ya termina llamando a alCambiarCliente(), que a su vez
+  // llama a cargarPOS(). Por eso no hace falta llamarlo de nuevo acá.
+  // Se guarda la promesa en el momento de arrancar (antes de cualquier espera).
+  promesaInicioPOS = cargarSelectsPOS();
+  return promesaInicioPOS;
+}
+
+// Devuelve algo que se puede esperar con "await". Si nunca se inicializó el POS,
+// devuelve una promesa ya resuelta (no espera nada).
+export function esperarPOSListo() {
+  return promesaInicioPOS || Promise.resolve();
 }
 
 export async function cargarSelectsPOS() {
@@ -20,13 +52,31 @@ export async function cargarSelectsPOS() {
   const { data: medios } = await supabaseAdmin.from('TB_BMEDIO_PAGO').select('*');
 
   const selectCli = document.getElementById('select-cliente-pedido');
-  if (selectCli && clientes) selectCli.innerHTML = clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+  if (selectCli && clientes) {
+    selectCli.innerHTML = clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+    
+    // Convertimos el select normal en un buscador usando Select2
+    $('#select-cliente-pedido').select2({
+      width: '100%',
+      placeholder: 'Buscar cliente...',
+      language: { noResults: () => "No se encontraron clientes" }
+    });
+  }
 
   const selectLis = document.getElementById('select-lista-pedido');
-  if (selectLis && listas) selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
+  if (selectLis && listas) selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
 
+ // 3. Cargar Medios de Pago
   const selectMed = document.getElementById('select-medio-pago');
-  if (selectMed && medios) selectMed.innerHTML = medios.map(m => `<option value="${m.id}">${m.nombre}</option>`).join('');
+  if (selectMed && medios) {
+    selectMed.innerHTML = medios.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('');
+    
+    // NUEVO: Buscar "Efectivo" inteligentemente y dejarlo seleccionado por defecto
+    const optEfectivo = Array.from(selectMed.options).find(opt => opt.text.toLowerCase().includes('efectivo'));
+    if (optEfectivo) {
+      selectMed.value = optEfectivo.value;
+    }
+  }
 
   await alCambiarCliente();
 }
@@ -39,7 +89,7 @@ export async function alCambiarCliente() {
   const inputRef = document.getElementById('input-ref-cliente');
 
   // Supongamos que el ID de Consumidor Final es 1 (o podés verificar por el texto)
-  const esConsumidorFinal = idCliente === '1' || selectCli.options[selectCli.selectedIndex]?.text.toLowerCase().includes('Consumidor Final');
+  const esConsumidorFinal = idCliente === '1' || selectCli.options[selectCli.selectedIndex]?.text.toLowerCase().includes('consumidor final');
   const inputNombre = document.getElementById('input-ref-cliente');
   const labelNombre = document.getElementById('label-ref-cliente');
 
@@ -50,8 +100,8 @@ export async function alCambiarCliente() {
       if (labelNombre) labelNombre.innerText = 'Nombre / Referencia (Opcional)';
       if (inputNombre) inputNombre.placeholder = 'Referencia opcional';
     } else {
-      if (labelNombre) labelNombre.innerHTML = 'Nombre / Referencia <span class="text-danger">*</span>';
-      if (inputNombre) inputNombre.placeholder = 'Ingrese nombre o referencia (Obligatorio)'; 
+      if (labelNombre) labelNombre.innerHTML = 'Nombre / Referencia <small class="text-muted font-weight-normal">(obligatorio, salvo al cobrar y entregar)</small>';
+      if (inputNombre) inputNombre.placeholder = 'Ej: Carlos (Retira 21hs)'; 
     }
   }
 
@@ -63,8 +113,19 @@ export async function alCambiarCliente() {
     .eq('m_predeterminada', true)
     .maybeSingle();
 
-  if (data && data.id_lista_precio) {
-    document.getElementById('select-lista-pedido').value = data.id_lista_precio;
+  const selectLista = document.getElementById('select-lista-pedido');
+  if (selectLista) {
+    if (data && data.id_lista_precio) {
+      // El cliente tiene lista predeterminada: la usamos.
+      selectLista.value = data.id_lista_precio;
+    } else {
+      // No tiene: volvemos a la lista base (id 1, la misma que usa cargarPOS
+      // como respaldo) para no arrastrar la lista del cliente anterior.
+      selectLista.value = '1';
+      // Si por algún motivo no existe una lista con id 1, el select queda
+      // vacío (value ''); en ese caso elegimos la primera opción disponible.
+      if (!selectLista.value) selectLista.selectedIndex = 0;
+    }
   }
   
   await cargarPOS();
@@ -85,10 +146,22 @@ export async function cargarPOS() {
   renderizarGrillaPOS();
 }
 
-let categoriaPOSActiva = null;
+// Devuelve la clase del ícono de Font Awesome según el nombre de la categoría.
+// Está en una función aparte porque lo usan las solapas Y las etiquetas de las
+// tarjetas cuando se busca: así los dos lugares siempre muestran el mismo ícono.
+function iconoCategoria(nombre) {
+  const nom = String(nombre || '').toLowerCase();
+  if (nom.includes('pizza')) return 'fa-pizza-slice';
+  if (nom.includes('empanada')) return 'fa-cookie-bite';
+  if (nom.includes('canastita')) return 'fa-shopping-basket';
+  if (nom.includes('bebida')) return 'fa-wine-bottle';
+  if (nom.includes('otros')) return 'fa-th-large';
+  return 'fa-utensils'; // respaldo para cualquier categoría nueva
+}
 
 export function renderizarGrillaPOS() {
   const contenedor = document.getElementById('contenedor-menu-productos');
+  const contenedorTabs = document.getElementById('pos-tabs-categorias');
   if (!contenedor) return;
 
   if (!Array.isArray(cacheCategorias) || !Array.isArray(cacheProductos)) {
@@ -96,111 +169,99 @@ export function renderizarGrillaPOS() {
     return;
   }
 
-  // Las categorías sin productos y las categorías internas del sistema no se muestran.
-  const categoriasVisibles = cacheCategorias.filter(cat =>
-    Number(cat.id) !== 99 && cacheProductos.some(p =>
-      Number(p.id_categoria || p.idCategoria) === Number(cat.id) && Number(p.id) !== 999
-    )
-  );
+  // ¿Hay una búsqueda activa? Lo calculamos una sola vez y lo usan las solapas
+  // y las tarjetas más abajo.
+  const buscando = filtroBusqueda.trim() !== '';
 
-  if (!categoriasVisibles.some(cat => String(cat.id) === String(categoriaPOSActiva))) {
-    categoriaPOSActiva = categoriasVisibles.length ? String(categoriasVisibles[0].id) : null;
-  }
+  // 1. RENDERIZAR SOLAPAS (TABS)
+  if (contenedorTabs) {
+    let tabsHtml = '';
+    cacheCategorias.forEach(cat => {
+      if (Number(cat.id) === 99) return; // Omitir sistema/bonificaciones
+      
+      // Si no hay categoría seleccionada, marcamos la primera por defecto
+      if (!categoriaSeleccionadaId) categoriaSeleccionadaId = Number(cat.id);
+      
+      const isActive = (!buscando && categoriaSeleccionadaId === Number(cat.id)) ? 'is-active' : '';
+      
+      // Asignar un icono según el nombre de la categoría (puedes personalizarlos)
+      const iconClass = iconoCategoria(cat.nombre);
 
-  // Delegación propia de las solapas: se registra una sola vez y no interfiere
-  // con el listener existente de los botones de cantidad.
-  if (contenedor.dataset.tabsInicializadas !== 'true') {
-    contenedor.addEventListener('click', event => {
-      const tab = event.target.closest('[data-action="seleccionar-categoria"]');
-      if (!tab) return;
-      categoriaPOSActiva = String(tab.dataset.categoriaId);
-      renderizarGrillaPOS();
-    });
-    contenedor.dataset.tabsInicializadas = 'true';
-  }
-
-  // Iconos decorativos por categoría: la detección por nombre permite mantener
-  // las categorías configurables sin modificar los datos ni la lógica comercial.
-  const iconoCategoria = nombre => {
-    const n = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    if (n.includes('empanad')) return 'fa-cookie-bite';
-    if (n.includes('canast')) return 'fa-cookie-bite';
-    if (n.includes('pizza')) return 'fa-pizza-slice';
-    if (n.includes('bebida') || n.includes('gaseosa') || n.includes('jugo')) return 'fa-glass-martini-alt';
-    if (n.includes('postre') || n.includes('dulce')) return 'fa-ice-cream';
-    if (n.includes('sandwich') || n.includes('sanduich')) return 'fa-hamburger';
-    return 'fa-th-large';
-  };
-
-  const tabsHTML = `
-    <div class="pos-category-tabs" role="tablist" aria-label="Categorías de productos">
-      ${categoriasVisibles.map(cat => `
-        <button type="button"
-          class="pos-category-tab ${String(cat.id) === String(categoriaPOSActiva) ? 'is-active' : ''}"
-          role="tab"
-          aria-selected="${String(cat.id) === String(categoriaPOSActiva)}"
-          data-action="seleccionar-categoria"
-          data-categoria-id="${cat.id}">
-          <i class="fas ${iconoCategoria(cat.nombre)} pos-category-icon" aria-hidden="true"></i>
-          <span>${cat.nombre}</span>
+      tabsHtml += `
+        <button class="pos-category-tab ${isActive}" data-id="${cat.id}">
+          <i class="fas ${iconClass} pos-category-icon"></i> ${esc(cat.nombre)}
         </button>
-      `).join('')}
-    </div>
-  `;
+      `;
+    });
+    contenedorTabs.innerHTML = tabsHtml;
+  }
 
-  const categoriaSeleccionada = categoriasVisibles.find(cat => String(cat.id) === String(categoriaPOSActiva));
-  let productosHTML = '';
+  // 2. FILTRAR PRODUCTOS (Por búsqueda o por categoría activa)
+  let prodsMostrar = cacheProductos.filter(p => Number(p.id) !== 999);
 
-  if (categoriaSeleccionada) {
-    const productosCategoria = cacheProductos.filter(p =>
-      Number(p.id_categoria || p.idCategoria) === Number(categoriaSeleccionada.id) && Number(p.id) !== 999
-    );
+  if (filtroBusqueda.trim() !== '') {
+    // Si hay texto en el buscador, ignoramos la solapa y buscamos en todo
+    prodsMostrar = prodsMostrar.filter(p => p.nombre.toLowerCase().includes(filtroBusqueda));
+  } else {
+    // Si no busca nada, mostramos solo los de la solapa activa
+    prodsMostrar = prodsMostrar.filter(p => Number(p.id_categoria || p.idCategoria) === categoriaSeleccionadaId);
+  }
 
-    productosHTML = `
-      <div class="pos-category-heading">
-        <div>
-          <span class="pos-section-eyebrow">CATÁLOGO</span>
-          <h4>${categoriaSeleccionada.nombre}</h4>
-        </div>
-        <span class="pos-product-count">${productosCategoria.length} productos</span>
+  // 3. RENDERIZAR GRILLA
+  if (prodsMostrar.length === 0) {
+    contenedor.innerHTML = '<p class="text-muted text-center my-4 w-100">No se encontraron productos.</p>';
+    return;
+  }
+
+  let htmlCompleto = '<div class="pos-catalog-content"><div class="pos-product-grid">';
+
+  prodsMostrar.forEach(p => {
+    const cant = carrito[p.id] || 0;
+    const idCatProd = p.id_categoria || p.idCategoria;
+    const precios = obtenerPrecioProducto(p.id, idCatProd);
+    const claseActiva = cant > 0 ? 'pos-card-activa' : '';
+    const permiteDocena = Boolean(p.m_permite_docena);
+
+    
+    // Etiqueta de categoría: solo mientras se busca. Dentro de una solapa ya se
+    // sabe a qué categoría pertenece cada tarjeta, así que sería redundante.
+    let etiquetaCategoria = '';
+    if (buscando) {
+      // .find() devuelve la primera categoría cuyo id coincide (o undefined)
+      const cat = cacheCategorias.find(c => Number(c.id) === Number(idCatProd));
+      if (cat) {
+        etiquetaCategoria = `<span class="pos-prod-cat"><i class="fas ${iconoCategoria(cat.nombre)}"></i>${esc(cat.nombre)}</span>`;
+      }
+    }
+
+    const botonesDocenaHTML = permiteDocena ? `
+      <div class="d-flex justify-content-between gap-1 mt-2">
+        <button type="button" class="btn btn-docena-pill flex-fill mr-1" data-action="alterar-cant" data-id="${p.id}" data-delta="-12">-12 u.</button>
+        <button type="button" class="btn btn-docena-pill flex-fill" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12 u.</button>
       </div>
-      <div class="pos-product-grid">
-        ${productosCategoria.map(p => {
-          const cant = carrito[p.id] || 0;
-          const idCatProd = p.id_categoria || p.idCategoria;
-          const precios = obtenerPrecioProducto(p.id, idCatProd);
-          const claseActiva = cant > 0 ? 'pos-card-activa' : '';
-          const permiteDocena = Boolean(p.m_permite_docena);
-          const botonesDocenaHTML = permiteDocena ? `
-            <div class="pos-dozen-controls">
-              <button type="button" class="btn btn-docena-pill" data-action="alterar-cant" data-id="${p.id}" data-delta="-12" aria-label="Quitar una docena de ${p.nombre}">−12 u.</button>
-              <button type="button" class="btn btn-docena-pill btn-docena-add" data-action="alterar-cant" data-id="${p.id}" data-delta="12" aria-label="Agregar una docena de ${p.nombre}">+12 u.</button>
-            </div>
-          ` : '';
+    ` : '';
 
-          return `
-            <article class="card pos-card-producto ${claseActiva}">
-              <div class="pos-product-info">
-                <strong class="pos-prod-title" title="${p.nombre}">${p.nombre}</strong>
-                <span class="pos-prod-price">$${precios.unidad.toLocaleString('es-AR')}</span>
-              </div>
-              <div class="pos-qty-pill" aria-label="Cantidad de ${p.nombre}">
-                <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="-1" aria-label="Quitar una unidad de ${p.nombre}">−</button>
-                <span class="pos-cant-num" id="cant-prod-${p.id}" aria-live="polite">${cant}</span>
-                <button type="button" class="btn btn-pos-sq btn-pos-add" data-action="alterar-cant" data-id="${p.id}" data-delta="1" aria-label="Agregar una unidad de ${p.nombre}">+</button>
-              </div>
-              ${botonesDocenaHTML}
-            </article>
-          `;
-        }).join('')}
+    htmlCompleto += `
+      <!-- Eliminamos el borde de color (border-left-...) para dejar el diseño más limpio de la imagen -->
+      <div class="card h-100 pos-card-producto border-0 ${claseActiva}">
+        ${etiquetaCategoria}
+        <strong class="pos-prod-title" title="${esc(p.nombre)}">${esc(p.nombre)}</strong>
+        <span class="pos-prod-price mb-2">$${precios.unidad.toLocaleString('es-AR')}</span>
+        
+        <div class="pos-qty-pill">
+          <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="-1">-</button>
+          <span class="pos-cant-num" id="cant-prod-${p.id}">${cant}</span>
+          <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="1">+</button>
+        </div>
+
+        ${botonesDocenaHTML}
       </div>
     `;
-  } else {
-    productosHTML = '<div class="pos-empty-category">No hay productos disponibles.</div>';
-  }
+  });
 
-  contenedor.innerHTML = tabsHTML + `<div class="pos-catalog-content">${productosHTML}</div>`;
-  actualizarResumenCarrito();
+  htmlCompleto += '</div></div>';
+  contenedor.innerHTML = htmlCompleto;
+  actualizarResumenCarrito(); // Garantizamos sincronización del carrito visual
 }
 
 export function obtenerPrecioProducto(idProd, idCat, idLista = null) {
@@ -325,12 +386,18 @@ export function actualizarResumenCarrito() {
     }
 
     html += `
-      <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-transparent border-bottom">
-        <div>
-          <strong class="d-block text-dark">${textoProducto}</strong>
-          <small class="text-muted">${cant} u. x $${precioUnidad.toLocaleString('es-AR')}</small>
+      <li class="list-group-item p-2 bg-transparent border-bottom">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <strong class="text-dark d-block" style="line-height: 1.2;">${esc(textoProducto)}</strong>
+          <button class="btn btn-sm text-secondary p-0 ml-2" data-action="eliminar-item-carrito" data-id="${idProd}" title="Eliminar ítem">
+            <i class="far fa-trash-alt"></i>
+          </button>
         </div>
-        <span class="font-weight-bold text-dark">$${subTotalProducto.toLocaleString('es-AR')}</span>
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="text-muted small font-weight-bold" style="width: 25%;">${cant} u.</span>
+          <span class="text-muted small text-center" style="width: 40%;">$${precioUnidad.toLocaleString('es-AR')} c/u</span>
+          <strong class="text-dark text-right" style="width: 35%;">$${subTotalProducto.toLocaleString('es-AR')}</strong>
+        </div>
       </li>
     `;
   });
@@ -372,21 +439,27 @@ export async function resetearPedido() {
   // 1. Resetear selector de Medio de Pago
   const selectMedio = document.getElementById('select-medio-pago');
   if (selectMedio) {
-    selectMedio.selectedIndex = 0;
+    // Buscar inteligentemente "Efectivo" para volver a ponerlo por defecto
+    const optEfectivo = Array.from(selectMedio.options).find(opt => opt.text.toLowerCase().includes('efectivo'));
+    if (optEfectivo) {
+      selectMedio.value = optEfectivo.value;
+    } else {
+      selectMedio.selectedIndex = 0; // Respaldo por si algun dia borran "Efectivo"
+    }
   }
 
   // 2. Resetear selector de Cliente a Consumidor Final (ID 1)
-  const selectCli = document.getElementById('select-cliente-pedido');
-  if (selectCli) {
-    selectCli.value = '1';
+  // Como ahora usamos Select2, lo actualizamos con jQuery
+  const selectCli = $('#select-cliente-pedido');
+  if (selectCli.length) {
+    selectCli.val('1').trigger('change');
   }
 
   setPedidoEditandoId(null);
   setCarrito({});
 
-  // 3. Sincronizar el cambio de cliente y recargar la grilla de precios del POS
-  await alCambiarCliente(); // Busca la lista predeterminada del Consumidor Final
-  await cargarPOS();        // Refresca la grilla con la lista de precios seleccionada
+  // 3. Recargar la grilla de precios del POS
+  await cargarPOS();        
 }
 
 export function vaciarCarrito() {
@@ -409,8 +482,13 @@ export async function guardarPedido(estadoInicial) {
   const nombreReferencia = inputRef ? inputRef.value.trim() : null;
 
   // ⚠️️ VALIDACIÓN: Si es ID 1 (Consumidor Final) y no puso nombre/referencia
-  if (idCliente === '1' && nombreReferencia === '') {
-    alert('⚠️ Para el cliente Consumidor Final es obligatorio ingresar un nombre o referencia.');
+   // La referencia solo se exige si el pedido NO se cobra y entrega en el momento.
+  // estadoInicial llega desde el botón que se apretó: 'COMPLETADO' es "Cobrar y Entregar".
+  // Con PREPARACION o ENTREGADO_IMPAGO hace falta saber a quién entregar o reclamar.
+  const seCobraYEntregaYa = estadoInicial === 'COMPLETADO';
+  if (idCliente === '1' && nombreReferencia === '' && !seCobraYEntregaYa) {
+    // Cambié alert() por el aviso del sistema, como en el resto de la app
+    mostrarNotificacion('Indicá un nombre o referencia. Solo podés omitirlo si cobrás y entregás en el momento.', 'warning');
     if (inputRef) inputRef.focus();
     return; // Interrumpe el guardado
   }
@@ -489,7 +567,7 @@ export async function guardarPedido(estadoInicial) {
       .eq('id', pedidoEditandoId);
 
     if (errUpdate) {
-      mostrarNotificacion('Error al actualizar cabecera: ' + errUpdate.message, 'danger');
+      mostrarNotificacion('Error al actualizar cabecera: ' + mensajeErrorFuncion(errUpdate, 'pedido'), 'danger');
       return;
     }
 
@@ -511,7 +589,7 @@ export async function guardarPedido(estadoInicial) {
       .single();
 
     if (error) {
-      mostrarNotificacion('Error al guardar el pedido: ' + error.message, 'danger');
+      mostrarNotificacion('Error al guardar el pedido: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
       return;
     }
     idPedidoFinal = pedido.id;
@@ -532,4 +610,23 @@ export async function guardarPedido(estadoInicial) {
 
   setPedidoEditandoId(null);
   resetearPedido();
+}
+
+export function eliminarItemCarrito(idProducto) {
+  if (carrito[idProducto]) {
+    delete carrito[idProducto]; // Borramos el ítem del estado
+    
+    // Si el producto se está viendo ahora mismo en la grilla, reseteamos el contador
+    const elCant = document.getElementById(`cant-prod-${idProducto}`);
+    if (elCant) {
+      elCant.innerText = '0';
+      const tarjeta = elCant.closest('.pos-card-producto');
+      if (tarjeta) tarjeta.classList.remove('pos-card-activa');
+    } else {
+      // Si el producto está en otra solapa oculta, re-renderizamos todo
+      renderizarGrillaPOS();
+    }
+    
+    actualizarResumenCarrito();
+  }
 }

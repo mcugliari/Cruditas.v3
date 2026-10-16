@@ -258,4 +258,13 @@ export async function asegurarSesion() {
 
   // Dejamos listo el botón "Salir" y el aviso de sesión cerrada.
   prepararSalir();
+
+  // NUEVO: Mostrar el usuario (email) en la barra superior
+  const userEmail = session?.user?.email;
+  if (userEmail) {
+    const spanUser = document.getElementById('nav-usuario-conectado');
+    // split('@')[0] hace que si es "admin@cruditas", solo muestre "admin"
+    if (spanUser) spanUser.innerHTML = `<i class="far fa-user mr-1"></i> ${userEmail.split('@')[0]}`;
+  }
+  
 }

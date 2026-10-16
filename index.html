@@ -9,6 +9,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap">
+
+  <!-- NUEVO: Select2 para el buscador de clientes -->
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
   <!-- ESTILOS PERSONALIZADOS -->
   <link rel="stylesheet" href="styles.css">
@@ -20,21 +24,30 @@
 <div class="wrapper">
 
   <!-- NAVBAR SUPERIOR -->
-  <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+  <nav class="main-header navbar navbar-expand navbar-dark cruditas-header">
     <ul class="navbar-nav align-items-center">
       <li class="nav-item">
         <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
       </li>
-      <li class="nav-item d-none d-sm-inline-block ml-2">
-        <span class="nav-link font-weight-bold text-dark">
-          🍕🥟 <strong>CRUDITAS</strong> <small class="text-muted ml-1">| Fábrica de Pizzas y Empanadas</small> 
-        </span>
+      <li class="nav-item d-none d-sm-flex align-items-center ml-2">
+        <img src="img/logo.png" alt="" class="cruditas-header-logo mr-2">
+        <span class="cruditas-header-marca">CRUDITAS</span>
+        <span class="cruditas-header-sub">Fábrica de Pizzas y Empanadas</span>
       </li>
     </ul>
-    <ul class="navbar-nav ml-auto">
-      <li class="nav-item">
-        <button type="button" id="btn-cerrar-sesion" class="btn btn-sm btn-outline-secondary">
-          <i class="fas fa-sign-out-alt"></i> Salir
+    <ul class="navbar-nav ml-auto align-items-center">
+      <li class="nav-item d-none d-sm-inline-block mr-3">
+        <!-- Estado de la caja: pos.js/caja.js le cambian la clase (is-abierta / is-cerrada) y el texto -->
+        <span id="nav-estado-caja" class="nav-estado-caja is-desconocida" title="Estado de la caja de hoy">
+          <span class="punto"></span><span id="nav-estado-caja-texto">Caja…</span>
+        </span>
+      </li>
+      <li class="nav-item mr-3 cruditas-header-sep pl-3">
+        <span class="text-white font-weight-bold" id="nav-usuario-conectado"><i class="far fa-user mr-1"></i> Usuario</span>
+      </li>
+      <li class="nav-item cruditas-header-sep pl-2">
+        <button type="button" id="btn-cerrar-sesion" class="btn btn-link" title="Salir" style="text-decoration: none;">
+          <i class="fas fa-power-off fa-lg"></i>
         </button>
       </li>
     </ul>
@@ -136,7 +149,7 @@
           </li>
           <li class="nav-item">
             <a href="#" class="nav-link" data-section="insumos">
-              <i class="nav-icon fas fa-carrot"></i>
+              <i class="nav-icon fas fa-boxes-stacked"></i>
               <p>Insumos</p>
             </a>
           </li>
@@ -154,9 +167,28 @@
       <div class="row p-2 pos-layout-row">
         <div class="col-md-7 col-lg-8 pos-catalog-column">
           <div class="card card-outline card-warning shadow-sm pos-main-card">
+            <!-- NUEVO HEADER: Título, subtítulo y buscador -->
             <div class="card-header bg-white pos-main-card-header">
-              <h3 class="card-title font-weight-bold text-dark"><i class="fas fa-utensils mr-2"></i>Menú de Productos</h3>
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="d-flex flex-column">
+                    <h4 class="font-weight-bold text-dark mb-0" style="font-size: 1.25rem;">Menú de Productos</h4>
+                    <span class="text-muted small mt-1">Seleccioná una categoría para ver sus productos.</span>
+                  </div>
+                </div>
+                <div class="input-group input-group-sm" style="width: 250px;">
+                  <div class="input-group-prepend">
+                    <span class="input-group-text bg-light border-right-0"><i class="fas fa-search text-muted"></i></span>
+                  </div>
+                  <input type="text" id="input-busqueda-pos" class="form-control border-left-0" placeholder="Buscar producto...">
+                </div>
+              </div>
             </div>
+            
+            <!-- NUEVO: Contenedor de las Solapas (Tabs) -->
+            <div class="pos-category-tabs" id="pos-tabs-categorias"></div>
+            
+            <!-- Grilla de productos -->
             <div class="card-body p-2 pos-catalog-scroll" id="contenedor-menu-productos"></div>
           </div>
         </div>
@@ -686,7 +718,7 @@
       <div class="content-header">
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
-            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-carrot mr-2 text-warning"></i>Insumos</h1></div>
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-boxes-stacked mr-2 text-warning"></i>Insumos</h1></div>
             <div class="col-sm-6 text-right">
               <button class="btn btn-warning font-weight-bold" id="btn-nuevo-insumo"><i class="fas fa-plus mr-1"></i> Nuevo Insumo</button>
             </div>
@@ -1419,6 +1451,9 @@
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
+<!-- NUEVO: JS de Select2 -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <!-- Carga del Módulo JS Principal -->
 <script type="module" src="./main.js"></script>

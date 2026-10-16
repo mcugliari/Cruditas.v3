@@ -2,7 +2,7 @@ import { asegurarSesion } from './auth.js';
 import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente, eliminarCliente, inicializarCrudClienteLista, guardarAsociacionClienteLista, editarAsociacion, eliminarAsociacion } from './clientes.js';
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial } from './listas.js';
-import { inicializarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido } from './pos.js';
+import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito} from './pos.js';
 import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
 import { cargarCompras, verDetalleCompra, anularCompraAbierta, pagarCompraAbierta, anularPagoDeCompra } from './compras.js';
@@ -12,16 +12,20 @@ import { cargarDeuda, renderizarDeuda, verDeudaProveedor, pagarCompraDeLaDeuda, 
 import { abrirModalNuevaCompra, guardarCompra, agregarLinea, quitarLinea, alCambiarLinea, alCambiarPagarAhora } from './compraForm.js';
 import { cargarProveedores, abrirModalNuevoProveedor, abrirModalEditarProveedor, guardarProveedor, cambiarEstadoProveedor } from './proveedores.js';
 import { cargarInsumos, renderizarInsumos, abrirModalNuevoInsumo, abrirModalEditarInsumo, guardarInsumo, cambiarEstadoInsumo } from './insumos.js';
-import { inicializarCierreCaja, inicializarHistorialCierres, cargarTablaHistorialCierres, verDetalleCierre } from './caja.js';
+import { inicializarCierreCaja, inicializarHistorialCierres, cargarTablaHistorialCierres, verDetalleCierre, actualizarIndicadorCaja } from './caja.js';
 
 // FUNCION DE NAVEGACIÓN
 export function navegarA(seccionId, elementoMenu) {
+  // Refresca el indicador de caja en cada cambio de sección. No se usa "await"
+  // a propósito: se actualiza solo cuando llega la respuesta y no demora la navegación.
+  actualizarIndicadorCaja();
   const secciones = document.querySelectorAll('.modulo-app');
   secciones.forEach(sec => {
     sec.style.display = 'none';
     sec.classList.add('d-none');
   });
 
+  
   const links = document.querySelectorAll('#menu-navegacion .nav-link');
   links.forEach(l => l.classList.remove('active'));
 
@@ -88,6 +92,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // 3. Event Listeners para POS
+  
+  // NUEVO: Escuchar el input de búsqueda de productos
+  document.getElementById('input-busqueda-pos')?.addEventListener('input', (e) => {
+    setFiltroBusquedaPOS(e.target.value);
+  });
+
+  // NUEVO: Escuchar clics en las solapas de categorías
+  document.getElementById('pos-tabs-categorias')?.addEventListener('click', (e) => {
+    const tab = e.target.closest('.pos-category-tab');
+    if (tab) {
+      setCategoriaActivaPOS(tab.dataset.id);
+    }
+  });
+
+  // NUEVO: Escuchar clic en el tachito de basura del resumen del carrito
+  document.getElementById('resumen-carrito-items')?.addEventListener('click', (e) => {
+    const btnEliminar = e.target.closest('[data-action="eliminar-item-carrito"]');
+    if (btnEliminar) {
+      eliminarItemCarrito(Number(btnEliminar.dataset.id));
+    }
+  });
+
+  // (Este es el que ya tenías)
   document.getElementById('contenedor-menu-productos')?.addEventListener('click', (e) => {
     const btnPill = e.target.closest('[data-action="alterar-cant"]');
     if (btnPill) {
@@ -97,8 +124,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  document.getElementById('select-cliente-pedido')?.addEventListener('change', alCambiarCliente);
-  document.getElementById('select-lista-pedido')?.addEventListener('change', () => inicializarPOS());
+  // Como usamos Select2, conectamos el evento con jQuery para que detecte el cambio de cliente
+  $('#select-cliente-pedido').on('change', alCambiarCliente);
+  
+  // SOLUCIÓN PUNTO 8: Al cambiar de lista manualmente, SOLO refrescamos los precios de la grilla (no todo el POS)
+  document.getElementById('select-lista-pedido')?.addEventListener('change', () => cargarPOS());
 
   document.querySelector('.pos-actions-container')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
