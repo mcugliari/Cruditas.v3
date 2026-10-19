@@ -10,7 +10,7 @@ import {
 import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc } from './utils.js';
 
 // Nuevas variables de estado para el POS
-let categoriaSeleccionadaId = null;
+let grupoSeleccionado = null;   // clave (en minúsculas) del grupo/solapa activa
 let filtroBusqueda = '';
 
 export function setFiltroBusquedaPOS(texto) {
@@ -19,7 +19,7 @@ export function setFiltroBusquedaPOS(texto) {
 }
 
 export function setCategoriaActivaPOS(id) {
-  categoriaSeleccionadaId = Number(id);
+  grupoSeleccionado = String(id);   // ahora "id" es la clave del grupo, no un número
   filtroBusqueda = ''; // Limpiamos la búsqueda si cambia de solapa
   const inputSearch = document.getElementById('input-busqueda-pos');
   if (inputSearch) inputSearch.value = '';
@@ -146,6 +146,24 @@ export async function cargarPOS() {
   renderizarGrillaPOS();
 }
 
+// Nombre del grupo (solapa) al que pertenece una categoría. Si la categoría no
+// tiene grupo cargado, usa su propio nombre: queda como solapa propia.
+function grupoDeCategoria(cat) {
+  return String(cat.grupo || '').trim() || String(cat.nombre || '').trim();
+}
+
+// El grupo "sistema" (bonificaciones) no se muestra como solapa.
+// Se mantiene también la comprobación del id 99 como seguridad extra.
+function esCategoriaSistema(cat) {
+  return Number(cat.id) === 99 || grupoDeCategoria(cat).toUpperCase() === 'SISTEMA';
+}
+
+// Texto de la solapa: 'PIZZAS' -> 'Pizzas'
+function titularGrupo(texto) {
+  const t = String(texto).trim();
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
 // Devuelve la clase del ícono de Font Awesome según el nombre de la categoría.
 // Está en una función aparte porque lo usan las solapas Y las etiquetas de las
 // tarjetas cuando se busca: así los dos lugares siempre muestran el mismo ícono.
@@ -175,21 +193,25 @@ export function renderizarGrillaPOS() {
 
   // 1. RENDERIZAR SOLAPAS (TABS)
   if (contenedorTabs) {
-    let tabsHtml = '';
+    // Armamos la lista de grupos SIN repetir, en el orden en que aparecen las
+    // categorías. Un Map guarda pares "clave -> texto a mostrar".
+    // La clave va en minúsculas para que 'Pizzas' y 'PIZZAS' cuenten como el mismo grupo.
+    const grupos = new Map();
     cacheCategorias.forEach(cat => {
-      if (Number(cat.id) === 99) return; // Omitir sistema/bonificaciones
-      
-      // Si no hay categoría seleccionada, marcamos la primera por defecto
-      if (!categoriaSeleccionadaId) categoriaSeleccionadaId = Number(cat.id);
-      
-      const isActive = (!buscando && categoriaSeleccionadaId === Number(cat.id)) ? 'is-active' : '';
-      
-      // Asignar un icono según el nombre de la categoría (puedes personalizarlos)
-      const iconClass = iconoCategoria(cat.nombre);
+      if (esCategoriaSistema(cat)) return;
+      const clave = grupoDeCategoria(cat).toLowerCase();
+      if (!grupos.has(clave)) grupos.set(clave, titularGrupo(grupoDeCategoria(cat)));
+    });
 
+    // Si todavía no hay solapa elegida (o la elegida ya no existe), usamos la primera.
+    if (!grupos.has(grupoSeleccionado)) grupoSeleccionado = grupos.keys().next().value ?? null;
+
+    let tabsHtml = '';
+    grupos.forEach((texto, clave) => {
+      const isActive = clave === grupoSeleccionado ? 'is-active' : '';
       tabsHtml += `
-        <button class="pos-category-tab ${isActive}" data-id="${cat.id}">
-          <i class="fas ${iconClass} pos-category-icon"></i> ${esc(cat.nombre)}
+        <button class="pos-category-tab ${isActive}" data-id="${esc(clave)}">
+          <i class="fas ${iconoCategoria(texto)} pos-category-icon"></i> ${esc(texto)}
         </button>
       `;
     });
@@ -198,13 +220,24 @@ export function renderizarGrillaPOS() {
 
   // 2. FILTRAR PRODUCTOS (Por búsqueda o por categoría activa)
   let prodsMostrar = cacheProductos.filter(p => Number(p.id) !== 999);
+  
+  // Categorías que pertenecen a la solapa activa (ej.: las 3 de pizzas) y sus ids.
+  const categoriasDelGrupo = cacheCategorias.filter(
+    cat => !esCategoriaSistema(cat) && grupoDeCategoria(cat).toLowerCase() === grupoSeleccionado
+  );
+  const idsCategoriasDelGrupo = new Set(categoriasDelGrupo.map(cat => Number(cat.id)));
+
 
   if (filtroBusqueda.trim() !== '') {
     // Si hay texto en el buscador, ignoramos la solapa y buscamos en todo
     prodsMostrar = prodsMostrar.filter(p => p.nombre.toLowerCase().includes(filtroBusqueda));
   } else {
-    // Si no busca nada, mostramos solo los de la solapa activa
-    prodsMostrar = prodsMostrar.filter(p => Number(p.id_categoria || p.idCategoria) === categoriaSeleccionadaId);
+    // Productos de TODAS las categorías del grupo, ordenados por categoría
+    // (sort es estable: dentro de cada categoría conservan el orden que ya tenían).
+    const posCategoria = p => cacheCategorias.findIndex(c => Number(c.id) === Number(p.id_categoria || p.idCategoria));
+    prodsMostrar = prodsMostrar
+      .filter(p => idsCategoriasDelGrupo.has(Number(p.id_categoria || p.idCategoria)))
+      .sort((a, b) => posCategoria(a) - posCategoria(b));
   }
 
   // 3. RENDERIZAR GRILLA
@@ -226,7 +259,7 @@ export function renderizarGrillaPOS() {
     // Etiqueta de categoría: solo mientras se busca. Dentro de una solapa ya se
     // sabe a qué categoría pertenece cada tarjeta, así que sería redundante.
     let etiquetaCategoria = '';
-    if (buscando) {
+    if (buscando || categoriasDelGrupo.length > 1) {
       // .find() devuelve la primera categoría cuyo id coincide (o undefined)
       const cat = cacheCategorias.find(c => Number(c.id) === Number(idCatProd));
       if (cat) {
