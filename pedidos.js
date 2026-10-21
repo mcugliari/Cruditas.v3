@@ -1,7 +1,7 @@
 import { supabaseAdmin } from './config.js';
 import { setPedidoEditandoId, setCarrito } from './state.js';
-import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, formatearMoneda } from './utils.js';
-import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo } from './pos.js';
+import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, formatearMoneda, llenarSelectCuentas } from './utils.js';
+import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarCuentaPOS } from './pos.js';
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
 
@@ -34,7 +34,7 @@ export async function cargarTablaPedidos() {
 
   let query = supabaseAdmin
     .from('TB_TPEDIDOS')
-    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre)')
+    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre)')
     .gte('fecha', fechaDesde)
     .lte('fecha', fechaHasta)
     .order('id', { ascending: false });
@@ -91,7 +91,11 @@ export async function cargarTablaPedidos() {
 
   tbody.innerHTML = pedidosFiltrados.map(p => {
     const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
-    const medioPago = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Efectivo';
+    const medioBase = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Efectivo';
+    const cuentaPago = p.TB_BCUENTAS?.nombre;
+    // La cuenta se agrega solo si aporta algo (para efectivo, medio y cuenta se llaman igual)
+    const medioPago = (cuentaPago && cuentaPago.toLowerCase() !== medioBase.toLowerCase())
+      ? `${medioBase} · ${cuentaPago}` : medioBase;
     // Marca del canal de venta (solo se muestra si no es MOSTRADOR, para no saturar la tabla)
     const badgeCanal = (p.canal && p.canal !== 'MOSTRADOR')
       ? ` <span class="badge badge-dark ml-1">${esc(p.canal)}</span>`
@@ -226,21 +230,25 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
 // Id del pedido que se está cobrando. Vive afuera de las funciones para que
 // la ventana (abrir) y el envío del formulario (confirmar) compartan el dato.
 let pedidoCobroId = null;
+// Medios y cuentas de la ventana de cobro (para decidir si hay que pedir la cuenta)
+let mediosCobro = [];
+let cuentasCobro = [];
 
 // Arma la ventana: trae el pedido y la lista de medios de pago, y propone el
 // medio con el que se cargó el pedido.
 async function abrirModalCobro(idPedido) {
   // Promise.all lanza las dos consultas AL MISMO TIEMPO y espera a que terminen
   // ambas (más rápido que pedirlas una después de la otra).
-  const [resPedido, resMedios] = await Promise.all([
+  const [resPedido, resMedios, resCuentas] = await Promise.all([
     supabaseAdmin.from('TB_TPEDIDOS')
-      .select('id, importe_total, id_medio_pago, nombre_referencia, TB_BCLIENTES(nombre)')
+      .select('id, importe_total, id_medio_pago, id_cuenta, nombre_referencia, TB_BCLIENTES(nombre)')
       .eq('id', idPedido)
       .single(),
-    supabaseAdmin.from('TB_BMEDIO_PAGO').select('id, nombre').order('id')
+    supabaseAdmin.from('TB_BMEDIO_PAGO').select('id, nombre, es_efectivo').order('id'),
+    supabaseAdmin.from('TB_BCUENTAS').select('id, nombre, tipo').eq('activo', true).order('id')
   ]);
 
-  if (resPedido.error || !resPedido.data || resMedios.error) {
+  if (resPedido.error || !resPedido.data || resMedios.error || resCuentas.error) {
     mostrarNotificacion('No se pudo cargar el pedido para cobrarlo.', 'danger');
     return;
   }
@@ -261,8 +269,29 @@ async function abrirModalCobro(idPedido) {
     .join('');
   // Proponemos el medio original del pedido (si todavía existe en la lista).
   if (pedido.id_medio_pago) select.value = pedido.id_medio_pago;
+  
+  // Guardamos medios y cuentas para decidir si hay que pedir la cuenta
+  mediosCobro = resMedios.data;
+  cuentasCobro = resCuentas.data;
+  actualizarCuentaCobro(pedido.id_cuenta);
 
   $('#modal-cobro-pedido').modal('show');
+}
+
+// Muestra u oculta "¿A qué cuenta entra?" según el medio elegido en la ventana.
+// Se llama al abrirla (con la cuenta del pedido) y cada vez que cambia el medio.
+export function actualizarCuentaCobro(idCuentaPreseleccion = null) {
+  const grupo = document.getElementById('cobro-grupo-cuenta');
+  const selectCuenta = document.getElementById('cobro-cuenta');
+  const idMedio = document.getElementById('cobro-medio-pago')?.value;
+  if (!grupo || !selectCuenta) return;
+
+  const medio = mediosCobro.find(m => Number(m.id) === Number(idMedio));
+  const pideCuenta = Boolean(medio) && !medio.es_efectivo;
+
+  grupo.style.display = pideCuenta ? '' : 'none';
+  if (pideCuenta) llenarSelectCuentas(selectCuenta, cuentasCobro, idCuentaPreseleccion);
+  else selectCuenta.innerHTML = '';
 }
 
 // Se ejecuta al enviar el formulario de la ventana (botón "Confirmar cobro").
@@ -276,6 +305,17 @@ export async function confirmarCobroPedido(e) {
     return;
   }
 
+  // Cuenta: la elige quien cobra si el medio no es efectivo (cobrar siempre
+  // la exige, porque la plata entra en ese momento).
+  const medioCobro = mediosCobro.find(m => Number(m.id) === idMedio);
+  const pideCuenta = Boolean(medioCobro) && !medioCobro.es_efectivo;
+  const valorCuenta = document.getElementById('cobro-cuenta')?.value;
+  const idCuenta = (pideCuenta && valorCuenta) ? Number(valorCuenta) : null;
+  if (pideCuenta && !idCuenta) {
+    mostrarNotificacion('Elegí a qué cuenta entra el cobro.', 'warning');
+    return;
+  }
+
   // Desactivamos el botón para evitar un doble clic que cobre dos veces.
   const btn = document.getElementById('btn-confirmar-cobro');
   btn.disabled = true;
@@ -286,7 +326,7 @@ export async function confirmarCobroPedido(e) {
     // Estado y medio van en la MISMA actualización: se guardan juntos o no se guarda nada.
     const { error } = await supabaseAdmin
       .from('TB_TPEDIDOS')
-      .update({ estado: 'COMPLETADO', id_medio_pago: idMedio })
+      .update({ estado: 'COMPLETADO', id_medio_pago: idMedio, id_cuenta: idCuenta })
       .eq('id', pedidoCobroId);
 
     if (error) {
@@ -350,6 +390,8 @@ export async function editarPedido(idPedido) {
 
     const selectMedio = document.getElementById('select-medio-pago');
     if (selectMedio && pedido.id_medio_pago) selectMedio.value = pedido.id_medio_pago;
+    // Muestra el desplegable de cuenta si corresponde y deja elegida la del pedido
+    actualizarCuentaPOS(pedido.id_cuenta);
 
     // Recarga los precios con la lista del pedido
     await cargarPOS();
@@ -375,7 +417,7 @@ export async function verDetallePedido(idPedido) {
   try {
     const { data: pedido, error } = await supabaseAdmin
       .from('TB_TPEDIDOS')
-      .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_DPEDIDOS(cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(nombre, TB_BCATEGORIAS(nombre)))')
+      .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre), TB_DPEDIDOS(cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(nombre, TB_BCATEGORIAS(nombre)))')
       .eq('id', idPedido)
       .single();
 
@@ -389,7 +431,11 @@ export async function verDetallePedido(idPedido) {
     });
 
     document.getElementById('detalle-id-pedido').innerText = pedido.id;
-    document.getElementById('detalle-medio-pago').innerText = pedido.TB_BMEDIO_PAGO?.nombre || 'Sin especificar';
+    const medioDetalle = pedido.TB_BMEDIO_PAGO?.nombre || 'Sin especificar';
+    const cuentaDetalle = pedido.TB_BCUENTAS?.nombre;
+    document.getElementById('detalle-medio-pago').innerText =
+      (cuentaDetalle && cuentaDetalle.toLowerCase() !== medioDetalle.toLowerCase())
+        ? `${medioDetalle} · ${cuentaDetalle}` : medioDetalle;
     document.getElementById('detalle-monto-total').innerText = `$${formatearMoneda(pedido.importe_total)}`;
 
     const clienteNombre = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';

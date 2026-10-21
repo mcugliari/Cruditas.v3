@@ -182,7 +182,10 @@ const MENSAJES_FUNCIONES = {
   motivo_requerido:     'Tenés que indicar un motivo.',
   egreso_inexistente:   'El movimiento no existe.',
   egreso_ya_anulado:    'El movimiento ya estaba anulado.',
-  egreso_cerrado:       'El movimiento pertenece a un día con la caja cerrada: no se puede anular.'
+  egreso_cerrado:       'El movimiento pertenece a un día con la caja cerrada: no se puede anular.',
+  cuenta_invalida:      'La cuenta no existe o está inactiva.',
+  cuenta_incompatible:  'La cuenta no corresponde al medio de pago (el efectivo va a la cuenta Efectivo; la transferencia, a una cuenta bancaria o billetera).',
+  cuenta_requerida:     'Elegí a qué cuenta corresponde el movimiento.'
 };
 
 export function mensajeErrorFuncion(error, entidad = 'registro') {
@@ -191,4 +194,27 @@ export function mensajeErrorFuncion(error, entidad = 'registro') {
   // aparece dentro del texto del error (o undefined si ninguno).
   const codigo = Object.keys(MENSAJES_FUNCIONES).find(c => texto.includes(c));
   return codigo ? MENSAJES_FUNCIONES[codigo] : mensajeErrorBD(error, entidad);
+}
+
+// -----------------------------------------------------------------------------
+// llenarSelectCuentas: arma las opciones de un desplegable de cuentas.
+// Solo muestra cuentas que NO son de efectivo: el efectivo no se elige, va solo
+// a la cuenta Efectivo. Si hay una sola, queda elegida; si hay varias, queda el
+// texto "Elegí la cuenta" para obligar a decidir.
+//   select           -> el elemento <select> a llenar
+//   cuentas          -> lista de cuentas [{ id, nombre, tipo }]
+//   idPreseleccion   -> (opcional) cuenta que debe quedar elegida
+// -----------------------------------------------------------------------------
+export function llenarSelectCuentas(select, cuentas, idPreseleccion = null) {
+  const lista = cuentas.filter(c => c.tipo !== 'EFECTIVO');
+  select.innerHTML =
+    '<option value="">— Elegí la cuenta —</option>' +
+    lista.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+
+  // .some() responde si ALGÚN elemento cumple la condición
+  if (idPreseleccion && lista.some(c => Number(c.id) === Number(idPreseleccion))) {
+    select.value = idPreseleccion;
+  } else if (lista.length === 1) {
+    select.value = lista[0].id;
+  }
 }

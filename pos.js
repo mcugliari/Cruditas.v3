@@ -7,7 +7,7 @@ import {
   pedidoEditandoId, setPedidoEditandoId 
 } from './state.js';
 
-import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc } from './utils.js';
+import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, llenarSelectCuentas } from './utils.js';
 
 // Nuevas variables de estado para el POS
 let grupoSeleccionado = null;   // clave (en minúsculas) del grupo/solapa activa
@@ -31,6 +31,10 @@ export function setCategoriaActivaPOS(id) {
 // que termine. Así, otros módulos (pedidos.js) pueden esperar a que el POS
 // tenga sus selects listos antes de tocarlos.
 let promesaInicioPOS = null;
+// Medios de pago y cuentas cargados de la base. Se guardan acá para decidir, sin
+// volver a consultar, si el medio elegido necesita que se elija una cuenta.
+let mediosPOS = [];
+let cuentasPOS = [];
 
 export function inicializarPOS() {
   // cargarSelectsPOS ya termina llamando a alCambiarCliente(), que a su vez
@@ -49,7 +53,10 @@ export function esperarPOSListo() {
 export async function cargarSelectsPOS() {
   const { data: clientes } = await supabaseAdmin.from('TB_BCLIENTES').select('*').order('nombre');
   const { data: listas } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*');
-  const { data: medios } = await supabaseAdmin.from('TB_BMEDIO_PAGO').select('*');
+  const { data: medios } = await supabaseAdmin.from('TB_BMEDIO_PAGO').select('*').order('id');
+  const { data: cuentas } = await supabaseAdmin.from('TB_BCUENTAS').select('id, nombre, tipo').eq('activo', true).order('id');
+  mediosPOS = medios || [];
+  cuentasPOS = cuentas || [];
 
   const selectCli = document.getElementById('select-cliente-pedido');
   if (selectCli && clientes) {
@@ -66,19 +73,36 @@ export async function cargarSelectsPOS() {
   const selectLis = document.getElementById('select-lista-pedido');
   if (selectLis && listas) selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
 
- // 3. Cargar Medios de Pago
+   // 3. Cargar Medios de Pago
   const selectMed = document.getElementById('select-medio-pago');
   if (selectMed && medios) {
     selectMed.innerHTML = medios.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('');
     
-    // NUEVO: Buscar "Efectivo" inteligentemente y dejarlo seleccionado por defecto
-    const optEfectivo = Array.from(selectMed.options).find(opt => opt.text.toLowerCase().includes('efectivo'));
-    if (optEfectivo) {
-      selectMed.value = optEfectivo.value;
-    }
+   // El efectivo se identifica por el atributo es_efectivo (no por el texto del nombre)
+    const medioEfectivo = mediosPOS.find(m => m.es_efectivo);
+    if (medioEfectivo) selectMed.value = medioEfectivo.id;
+    actualizarCuentaPOS();
   }
 
   await alCambiarCliente();
+}
+
+// Muestra u oculta el desplegable "Cuenta" según el medio elegido:
+//  - efectivo: se oculta (la cuenta es siempre Efectivo y la completa la base)
+//  - otro medio (transferencia): se muestra con las cuentas disponibles
+// idCuentaPreseleccion: se usa al editar un pedido para dejar elegida su cuenta.
+export function actualizarCuentaPOS(idCuentaPreseleccion = null) {
+  const selectMedio = document.getElementById('select-medio-pago');
+  const grupo = document.getElementById('grupo-cuenta-pedido');
+  const selectCuenta = document.getElementById('select-cuenta-pedido');
+  if (!selectMedio || !grupo || !selectCuenta) return;
+
+  const medio = mediosPOS.find(m => Number(m.id) === Number(selectMedio.value));
+  const pideCuenta = Boolean(medio) && !medio.es_efectivo;
+
+  grupo.style.display = pideCuenta ? '' : 'none';
+  if (pideCuenta) llenarSelectCuentas(selectCuenta, cuentasPOS, idCuentaPreseleccion);
+  else selectCuenta.innerHTML = '';
 }
 
 export async function alCambiarCliente() {
@@ -472,13 +496,11 @@ export async function resetearPedido() {
   // 1. Resetear selector de Medio de Pago
   const selectMedio = document.getElementById('select-medio-pago');
   if (selectMedio) {
-    // Buscar inteligentemente "Efectivo" para volver a ponerlo por defecto
-    const optEfectivo = Array.from(selectMedio.options).find(opt => opt.text.toLowerCase().includes('efectivo'));
-    if (optEfectivo) {
-      selectMedio.value = optEfectivo.value;
-    } else {
-      selectMedio.selectedIndex = 0; // Respaldo por si algun dia borran "Efectivo"
-    }
+    // Vuelve al efectivo, identificado por es_efectivo; si no existiera, el primero
+    const medioEfectivo = mediosPOS.find(m => m.es_efectivo);
+    if (medioEfectivo) selectMedio.value = medioEfectivo.id;
+    else selectMedio.selectedIndex = 0;
+    actualizarCuentaPOS();
   }
 
   // 2. Resetear selector de Cliente a Consumidor Final (ID 1)
@@ -510,6 +532,19 @@ export async function guardarPedido(estadoInicial) {
   const idLista = document.getElementById('select-lista-pedido').value;
   const selectMedio = document.getElementById('select-medio-pago');
   const idMedio = selectMedio ? selectMedio.value : null;
+  
+  // Cuenta: solo se elige si el medio NO es efectivo (el efectivo va solo a la
+  // cuenta Efectivo: se manda null y la base la completa).
+  const medioElegido = mediosPOS.find(m => Number(m.id) === Number(idMedio));
+  const pideCuenta = Boolean(medioElegido) && !medioElegido.es_efectivo;
+  const selectCuenta = document.getElementById('select-cuenta-pedido');
+  const idCuenta = (pideCuenta && selectCuenta && selectCuenta.value) ? selectCuenta.value : null;
+  // Al cobrar en el momento hay que saber a qué cuenta entró la plata.
+  if (pideCuenta && !idCuenta && estadoInicial === 'COMPLETADO') {
+    mostrarNotificacion('Elegí a qué cuenta entra el cobro.', 'warning');
+    if (selectCuenta) selectCuenta.focus();
+    return;
+  }
 
   const inputRef = document.getElementById('input-ref-cliente');
   const nombreReferencia = inputRef ? inputRef.value.trim() : null;
@@ -594,6 +629,7 @@ export async function guardarPedido(estadoInicial) {
         nombre_referencia: nombreReferencia,
         id_lista_precio: idLista,
         id_medio_pago: idMedio,
+        id_cuenta: idCuenta,
         estado: estadoInicial,
         importe_total: montoTotal
       })
@@ -615,6 +651,7 @@ export async function guardarPedido(estadoInicial) {
         nombre_referencia: nombreReferencia,
         id_lista_precio: idLista,
         id_medio_pago: idMedio,
+        id_cuenta: idCuenta,
         estado: estadoInicial,
         importe_total: montoTotal
       }])

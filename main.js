@@ -2,8 +2,8 @@ import { asegurarSesion } from './auth.js';
 import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente, eliminarCliente, inicializarCrudClienteLista, guardarAsociacionClienteLista, editarAsociacion, eliminarAsociacion } from './clientes.js';
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial } from './listas.js';
-import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito} from './pos.js';
-import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido, confirmarCobroPedido } from './pedidos.js';
+import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito, actualizarCuentaPOS } from './pos.js';
+import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido, confirmarCobroPedido, actualizarCuentaCobro  } from './pedidos.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
 import { cargarCompras, verDetalleCompra, anularCompraAbierta, pagarCompraAbierta, anularPagoDeCompra } from './compras.js';
 import { guardarPago } from './pagos.js';
@@ -129,6 +129,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // SOLUCIÓN PUNTO 8: Al cambiar de lista manualmente, SOLO refrescamos los precios de la grilla (no todo el POS)
   document.getElementById('select-lista-pedido')?.addEventListener('change', () => cargarPOS());
+  // Al cambiar el medio de pago (POS o ventana de cobro) se muestra u oculta la cuenta.
+  // Se usa "() =>" para no pasarle el evento a la función como si fuera una cuenta.
+  document.getElementById('select-medio-pago')?.addEventListener('change', () => actualizarCuentaPOS());
+  document.getElementById('cobro-medio-pago')?.addEventListener('change', () => actualizarCuentaCobro());
 
   document.querySelector('.pos-actions-container')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
