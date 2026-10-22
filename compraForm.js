@@ -29,9 +29,25 @@
 import { supabaseAdmin } from './config.js';
 import {
   mostrarNotificacion, esc, mensajeErrorBD, mensajeErrorFuncion,
-  formatearMoneda, obtenerFechaActualISO
+  formatearMoneda, obtenerFechaActualISO, llenarSelectCuentas
 } from './utils.js';
 import { cargarCompras } from './compras.js';
+
+// Medios y cuentas cargados al abrir el formulario (mismo patrón que pagos.js).
+let mediosCompra = [];
+let cuentasCompra = [];
+
+// -----------------------------------------------------------------------------
+// actualizarCuentaCompra  (interna)
+//   Dentro del bloque "Registrar un pago ahora": muestra la cuenta solo si el
+//   medio elegido no es efectivo.
+// -----------------------------------------------------------------------------
+function actualizarCuentaCompra() {
+  const idMedio = document.getElementById('compra-pago-medio').value;
+  const medio = mediosCompra.find(m => String(m.id) === idMedio);
+  const pideCuenta = !!medio && !medio.es_efectivo;
+  document.getElementById('compra-grupo-cuenta').classList.toggle('d-none', !pideCuenta);
+}
 
 
 // Insumos activos (para los desplegables de las líneas).
@@ -193,13 +209,14 @@ export function alCambiarPagarAhora() {
 // -----------------------------------------------------------------------------
 export async function abrirModalNuevaCompra() {
   // Tres consultas en paralelo. Solo proveedores e insumos ACTIVOS (.eq('activo', true)).
-  const [resProv, resIns, resMedios] = await Promise.all([
+  const [resProv, resIns, resMedios, resCuentas] = await Promise.all([
     supabaseAdmin.from('TB_BPROVEEDORES').select('id, nombre').eq('activo', true).order('nombre', { ascending: true }),
     supabaseAdmin.from('TB_BINSUMOS').select('id, nombre, unidad_medida').eq('activo', true).order('nombre', { ascending: true }),
-    supabaseAdmin.from('TB_BMEDIO_PAGO').select('id, nombre').order('id', { ascending: true })
+    supabaseAdmin.from('TB_BMEDIO_PAGO').select('id, nombre, es_efectivo').order('id', { ascending: true }),
+    supabaseAdmin.from('TB_BCUENTAS').select('id, nombre, tipo').eq('activo', true).order('nombre', { ascending: true })
   ]);
 
-  const errorCarga = resProv.error || resIns.error || resMedios.error;
+  const errorCarga = resProv.error || resIns.error || resMedios.error || resCuentas.error;
   if (errorCarga) {
     mostrarNotificacion(mensajeErrorBD(errorCarga), 'danger');
     return;
@@ -208,6 +225,8 @@ export async function abrirModalNuevaCompra() {
   const proveedores = resProv.data || [];
   insumosActivos = resIns.data || [];
   const medios = resMedios.data || [];
+  mediosCompra = medios;
+  cuentasCompra = resCuentas.data || [];
 
   // Sin proveedores o sin insumos no se puede cargar una compra: avisamos qué falta.
   if (proveedores.length === 0) {
@@ -229,6 +248,11 @@ export async function abrirModalNuevaCompra() {
   document.getElementById('compra-pago-medio').innerHTML =
     '<option value="">-- Seleccionar medio --</option>' +
     medios.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('');
+
+  // Cuenta: se llena una vez; se muestra solo si el medio elegido no es efectivo.
+  llenarSelectCuentas(document.getElementById('compra-pago-cuenta'), cuentasCompra, null);
+  document.getElementById('compra-pago-medio').onchange = () => actualizarCuentaCompra();
+  actualizarCuentaCompra();
 
   // La fecha propone hoy y no deja elegir una fecha futura (atributo "max").
   const hoy = obtenerFechaActualISO();
@@ -301,6 +325,17 @@ export async function guardarCompra(event) {
       return;
     }
     pago = { id_medio_pago: Number(medio) };
+
+    // Cuenta: solo si el medio no es efectivo (en efectivo la base usa la cuenta Efectivo sola).
+    const medioElegido = mediosCompra.find(m => String(m.id) === medio);
+    if (medioElegido && !medioElegido.es_efectivo) {
+      const cuenta = document.getElementById('compra-pago-cuenta').value;
+      if (cuenta === '') {
+        mostrarNotificacion('Elegí la cuenta desde la que se paga.', 'warning');
+        return;
+      }
+      pago.id_cuenta = Number(cuenta);   // clave "id_cuenta" dentro del JSON p_pago
+    }
 
     // Si el monto se deja vacío, no se envía y la función paga el total.
     const monto = document.getElementById('compra-pago-monto').value;

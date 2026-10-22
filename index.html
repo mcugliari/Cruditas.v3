@@ -1022,6 +1022,11 @@
                 <label for="egreso-monto">Monto *</label>
                 <input type="number" class="form-control" id="egreso-monto" min="0.01" step="0.01" required>
               </div>
+              <!-- Cuenta: solo aparece si el medio NO es efectivo (lo controla egresos.js) -->
+              <div class="form-group col-md-12 d-none" id="egreso-grupo-cuenta">
+                <label for="egreso-cuenta">Cuenta *</label>
+                <select class="form-control" id="egreso-cuenta"></select>
+              </div>
             </div>
             <div class="form-group">
               <label for="egreso-fecha">Fecha *</label>
@@ -1084,6 +1089,11 @@
             <div class="form-group">
               <label for="pago-medio">Medio de pago *</label>
               <select class="form-control" id="pago-medio" required></select>
+            </div>
+            <!-- Cuenta: solo aparece si el medio NO es efectivo (lo controla pagos.js) -->
+            <div class="form-group d-none" id="pago-grupo-cuenta">
+              <label for="pago-cuenta">Cuenta *</label>
+              <select class="form-control" id="pago-cuenta"></select>
             </div>
             <div class="form-group">
               <label for="pago-monto">Monto a pagar *</label>
@@ -1166,6 +1176,11 @@
                 <div class="form-group col-md-6 mb-2">
                   <label for="compra-pago-monto">Monto a pagar</label>
                   <input type="number" class="form-control" id="compra-pago-monto" min="0.01" step="0.01">
+                </div>
+                <!-- Cuenta: solo aparece si el medio NO es efectivo (lo controla compraForm.js) -->
+                <div class="form-group col-md-12 mb-2 d-none" id="compra-grupo-cuenta">
+                  <label for="compra-pago-cuenta">Cuenta</label>
+                  <select class="form-control" id="compra-pago-cuenta"></select>
                 </div>
               </div>
               <small class="text-muted">El pago se registra con la fecha de hoy. Si no se paga el total, el resto queda como deuda con el proveedor. Si no marcás esta opción, la compra queda a crédito.</small>

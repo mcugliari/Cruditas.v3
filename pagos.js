@@ -30,7 +30,7 @@
 
 import { supabaseAdmin } from './config.js';
 import {
-  mostrarNotificacion, esc, mensajeErrorBD, mensajeErrorFuncion, formatearMoneda
+  mostrarNotificacion, esc, mensajeErrorBD, mensajeErrorFuncion, formatearMoneda, llenarSelectCuentas
 } from './utils.js';
 
 
@@ -45,6 +45,25 @@ let contexto = null;
 
 // ¿El pago se guardó? alCerrar recibe este dato para saber si hay que refrescar.
 let guardado = false;
+
+// Medios y cuentas cargados al abrir la ventana. Los guardamos para saber, al elegir
+// un medio, si es efectivo (es_efectivo) y entonces no hace falta pedir cuenta.
+let mediosPago = [];
+let cuentasPago = [];
+
+// -----------------------------------------------------------------------------
+// actualizarCuentaPago  (interna)
+//   Muestra el desplegable de cuenta SOLO si el medio elegido no es efectivo.
+//   (En efectivo la plata sale de la cuenta Efectivo; la base la pone sola.)
+// -----------------------------------------------------------------------------
+function actualizarCuentaPago() {
+  const idMedio = document.getElementById('pago-medio').value;
+  // .find() devuelve el primer elemento que cumple la condición (o undefined).
+  const medio = mediosPago.find(m => String(m.id) === idMedio);
+  // "!!" convierte a true/false: hay medio elegido Y no es efectivo.
+  const pideCuenta = !!medio && !medio.es_efectivo;
+  document.getElementById('pago-grupo-cuenta').classList.toggle('d-none', !pideCuenta);
+}
 
 
 // -----------------------------------------------------------------------------
@@ -77,13 +96,28 @@ export async function abrirModalPago(ctx) {
   // Medios de pago para el desplegable.
   const { data: medios, error } = await supabaseAdmin
     .from('TB_BMEDIO_PAGO')
-    .select('id, nombre')
+    .select('id, nombre, es_efectivo')
     .order('id', { ascending: true });
 
   if (error) {
     mostrarNotificacion(mensajeErrorBD(error), 'danger');
     return;
   }
+
+  // Cuentas activas (dónde está la plata) para los pagos que no son en efectivo.
+  const { data: cuentas, error: errorCuentas } = await supabaseAdmin
+    .from('TB_BCUENTAS')
+    .select('id, nombre, tipo')
+    .eq('activo', true)
+    .order('nombre', { ascending: true });
+
+  if (errorCuentas) {
+    mostrarNotificacion(mensajeErrorBD(errorCuentas), 'danger');
+    return;
+  }
+
+  mediosPago = medios || [];
+  cuentasPago = cuentas || [];
 
   contexto = ctx;
   guardado = false;
@@ -94,6 +128,13 @@ export async function abrirModalPago(ctx) {
   document.getElementById('pago-medio').innerHTML =
     '<option value="">-- Seleccionar medio --</option>' +
     (medios || []).map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('');
+
+  // Cuenta: se llena una vez por apertura; el grupo queda oculto hasta elegir un medio no efectivo.
+  llenarSelectCuentas(document.getElementById('pago-cuenta'), cuentasPago, null);
+  // Usamos "onchange =" (propiedad) y no addEventListener: asignarla de nuevo en cada
+  // apertura REEMPLAZA a la anterior, así los avisos no se acumulan.
+  document.getElementById('pago-medio').onchange = () => actualizarCuentaPago();
+  actualizarCuentaPago();
 
   // El monto propone pagar todo el saldo; el usuario puede bajarlo para un pago parcial.
   const inputMonto = document.getElementById('pago-monto');
@@ -128,11 +169,22 @@ export async function guardarPago(event) {
   const idMedio = document.getElementById('pago-medio').value;
   const monto = parseFloat(document.getElementById('pago-monto').value);
   const observaciones = document.getElementById('pago-observaciones').value.trim();
+  const idCuentaElegida = document.getElementById('pago-cuenta').value;
 
   if (idMedio === '') {
     mostrarNotificacion('Elegí el medio de pago.', 'warning');
     return;
   }
+  // Si el medio NO es efectivo, la cuenta es obligatoria en pantalla.
+  const medioElegido = mediosPago.find(m => String(m.id) === idMedio);
+  const esEfectivo = !!medioElegido?.es_efectivo;
+  if (!esEfectivo && idCuentaElegida === '') {
+    mostrarNotificacion('Elegí la cuenta desde la que se paga.', 'warning');
+    return;
+  }
+  // En efectivo mandamos null: la base usa la cuenta Efectivo sola.
+  const idCuenta = esEfectivo ? null : Number(idCuentaElegida);
+
   if (isNaN(monto) || monto <= 0) {
     mostrarNotificacion('El monto debe ser mayor a cero.', 'warning');
     return;
@@ -151,6 +203,7 @@ export async function guardarPago(event) {
     if (contexto.modo === 'compra') {
       respuesta = await supabaseAdmin.rpc('registrar_pago_compra', {
         p_id_compra: contexto.id,
+        p_id_cuenta: idCuenta,       // los parámetros van por nombre: el orden no importa
         p_id_medio_pago: Number(idMedio),
         p_monto: monto,
         p_observaciones: observaciones || null
@@ -158,6 +211,7 @@ export async function guardarPago(event) {
     } else {
       respuesta = await supabaseAdmin.rpc('registrar_pago_proveedor', {
         p_id_proveedor: contexto.id,
+        p_id_cuenta: idCuenta,
         p_id_medio_pago: Number(idMedio),
         p_monto: monto,
         p_observaciones: observaciones || null

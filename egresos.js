@@ -31,13 +31,30 @@
 import { supabaseAdmin } from './config.js';
 import {
   mostrarNotificacion, esc, mensajeErrorBD, mensajeErrorFuncion,
-  formatearMoneda, formatearFechaAR, obtenerFechaActualISO
+  formatearMoneda, formatearFechaAR, obtenerFechaActualISO, llenarSelectCuentas
 } from './utils.js';
 import { anularPago } from './pagos.js';
 
 
 // Copia en memoria de la lista que se muestra (ver proveedores.js).
 let egresosCache = [];
+
+// Medios y cuentas cargados al abrir la ventana (ver pagos.js, mismo patrón).
+let mediosEgreso = [];
+let cuentasEgreso = [];
+
+// -----------------------------------------------------------------------------
+// actualizarCuentaEgreso  (interna)
+//   Muestra la cuenta solo en un GASTO con medio NO efectivo. Un retiro es siempre
+//   en efectivo, así que nunca la pide.
+// -----------------------------------------------------------------------------
+function actualizarCuentaEgreso() {
+  const idMedio = document.getElementById('egreso-medio').value;
+  const medio = mediosEgreso.find(m => String(m.id) === idMedio);
+  const esRetiro = document.getElementById('egreso-tipo').value === 'RETIRO';
+  const pideCuenta = !esRetiro && !!medio && !medio.es_efectivo;
+  document.getElementById('egreso-grupo-cuenta').classList.toggle('d-none', !pideCuenta);
+}
 
 
 // Nombres y colores de cada tipo de movimiento. Es un "diccionario": se busca
@@ -80,6 +97,7 @@ export async function cargarEgresos() {
     .select(`
       id, fecha, tipo, concepto, monto, observaciones, estado, motivo_anulacion, id_cierre, id_compra,
       TB_BMEDIO_PAGO ( nombre, es_efectivo ),
+      TB_BCUENTAS ( nombre ),
       TB_BCATEGORIAS_EGRESO ( nombre ),
       TB_TCOMPRAS ( id, TB_BPROVEEDORES ( nombre ) )
     `)
@@ -153,6 +171,11 @@ function renderizarEgresos() {
     const tipo = TIPOS[e.tipo] || { texto: e.tipo, clase: 'badge-light' };
     const anulado = e.estado === 'ANULADO';
 
+    // Cuenta: solo se muestra si el medio no es efectivo (en efectivo siempre es la
+    // cuenta Efectivo y sería repetir lo mismo).
+    const cuenta = (e.TB_BCUENTAS?.nombre && !e.TB_BMEDIO_PAGO?.es_efectivo)
+      ? `<div class="small text-muted">${esc(e.TB_BCUENTAS.nombre)}</div>` : '';
+
     // El "detalle" depende del tipo: un pago a proveedor muestra su compra y su
     // proveedor (dos niveles de "?." porque el dato está anidado); un gasto o
     // retiro muestra su concepto.
@@ -184,7 +207,7 @@ function renderizarEgresos() {
         <td><span class="badge ${tipo.clase}">${esc(tipo.texto)}</span></td>
         <td>${detalle}${observaciones}${motivo}</td>
         <td>${esc(e.TB_BCATEGORIAS_EGRESO?.nombre) || '-'}</td>
-        <td>${esc(e.TB_BMEDIO_PAGO?.nombre)}</td>
+        <td>${esc(e.TB_BMEDIO_PAGO?.nombre)}${cuenta}</td>
         <td class="text-right font-weight-bold">$${formatearMoneda(e.monto)}</td>
         <td class="text-center">${anulado
           ? '<span class="badge badge-secondary">Anulado</span>'
@@ -202,12 +225,13 @@ function renderizarEgresos() {
 //   Recibe: tipo -> 'GASTO' o 'RETIRO'.
 // -----------------------------------------------------------------------------
 export async function abrirModalEgreso(tipo) {
-  const [resMedios, resCategorias] = await Promise.all([
+  const [resMedios, resCategorias, resCuentas] = await Promise.all([
     supabaseAdmin.from('TB_BMEDIO_PAGO').select('id, nombre, es_efectivo').order('id', { ascending: true }),
-    supabaseAdmin.from('TB_BCATEGORIAS_EGRESO').select('id, nombre').eq('activo', true).order('nombre', { ascending: true })
+    supabaseAdmin.from('TB_BCATEGORIAS_EGRESO').select('id, nombre').eq('activo', true).order('nombre', { ascending: true }),
+    supabaseAdmin.from('TB_BCUENTAS').select('id, nombre, tipo').eq('activo', true).order('nombre', { ascending: true })
   ]);
 
-  const errorCarga = resMedios.error || resCategorias.error;
+  const errorCarga = resMedios.error || resCategorias.error || resCuentas.error;
   if (errorCarga) {
     mostrarNotificacion(mensajeErrorBD(errorCarga), 'danger');
     return;
@@ -225,6 +249,10 @@ export async function abrirModalEgreso(tipo) {
     return;
   }
 
+  // Guardamos medios y cuentas para saber después si el medio elegido es efectivo.
+  mediosEgreso = medios;
+  cuentasEgreso = resCuentas.data || [];
+
   document.getElementById('form-egreso').reset();
   document.getElementById('egreso-tipo').value = tipo;
   document.getElementById('modal-egreso-title').innerText = esRetiro ? 'Nuevo Retiro de Efectivo' : 'Nuevo Gasto';
@@ -233,6 +261,11 @@ export async function abrirModalEgreso(tipo) {
   document.getElementById('egreso-medio').innerHTML =
     (medios.length > 1 ? '<option value="">-- Seleccionar medio --</option>' : '') +
     medios.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('');
+
+  // Cuenta: se llena una vez; el grupo se muestra solo si el medio elegido no es efectivo.
+  llenarSelectCuentas(document.getElementById('egreso-cuenta'), cuentasEgreso, null);
+  document.getElementById('egreso-medio').onchange = () => actualizarCuentaEgreso();
+  actualizarCuentaEgreso();
 
   // Categoría: solo para gastos. En un retiro se oculta todo el grupo.
   document.getElementById('egreso-categoria').innerHTML =
@@ -269,6 +302,7 @@ export async function guardarEgreso(event) {
   const monto = parseFloat(document.getElementById('egreso-monto').value);
   const fecha = document.getElementById('egreso-fecha').value;
   const observaciones = document.getElementById('egreso-observaciones').value.trim();
+  const idCuentaElegida = document.getElementById('egreso-cuenta').value;
 
   // Controles rápidos para avisar claro; la base vuelve a validar todo.
   if (concepto.length < 3) {
@@ -279,6 +313,15 @@ export async function guardarEgreso(event) {
     mostrarNotificacion('Elegí el medio de pago.', 'warning');
     return;
   }
+  // La cuenta se pide solo en un GASTO con medio no efectivo. El retiro la ignora.
+  const medioElegido = mediosEgreso.find(m => String(m.id) === idMedio);
+  const pideCuenta = tipo === 'GASTO' && !!medioElegido && !medioElegido.es_efectivo;
+  if (pideCuenta && idCuentaElegida === '') {
+    mostrarNotificacion('Elegí la cuenta desde la que se paga.', 'warning');
+    return;
+  }
+  const idCuenta = pideCuenta ? Number(idCuentaElegida) : null;
+
   if (isNaN(monto) || monto <= 0) {
     mostrarNotificacion('El monto debe ser mayor a cero.', 'warning');
     return;
@@ -293,6 +336,7 @@ export async function guardarEgreso(event) {
       p_concepto: concepto,
       p_id_categoria: (tipo === 'GASTO' && idCategoria !== '') ? Number(idCategoria) : null,
       p_id_medio_pago: Number(idMedio),
+      p_id_cuenta: idCuenta,
       p_monto: monto,
       p_fecha: fecha || null,
       p_observaciones: observaciones || null
