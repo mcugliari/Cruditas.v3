@@ -22,7 +22,7 @@
 // =============================================================================
 
 import { supabaseAdmin } from './config.js';
-import { mostrarNotificacion, esc, mensajeErrorBD } from './utils.js';
+import { mostrarNotificacion, esc, mensajeErrorBD, confirmarAccion } from './utils.js';
 
 
 // Lista de unidades de medida. IMPORTANTE: los códigos ('UN', 'KG', ...) tienen
@@ -277,7 +277,12 @@ export async function cambiarEstadoInsumo(id) {
 
   const nuevoEstado = !insumo.activo;
 
-  if (!nuevoEstado && !confirm(`¿Desactivar "${insumo.nombre}"?\nNo podrá elegirse en compras nuevas (el historial se conserva).`)) {
+  if (!nuevoEstado && !(await confirmarAccion({
+    titulo: 'Desactivar insumo',
+    mensaje: `¿Desactivar "${insumo.nombre}"? No podrá elegirse en compras nuevas (el historial se conserva).`,
+    textoConfirmar: 'Sí, desactivar',
+    peligro: true
+  }))) {
     return;
   }
 

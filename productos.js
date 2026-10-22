@@ -1,5 +1,6 @@
 import { supabaseAdmin } from './config.js';
 import { cacheCategorias, setCacheCategorias } from './state.js';
+import { mostrarNotificacion, confirmarAccion } from './utils.js';
 
 export async function cargarCategoriasSelect() {
   if (cacheCategorias && cacheCategorias.length > 0) {
@@ -91,7 +92,7 @@ export async function guardarProducto(event) {
     ? await supabaseAdmin.from('TB_BPRODUCTOS').update(payload).eq('id', id)
     : await supabaseAdmin.from('TB_BPRODUCTOS').insert([payload]);
 
-  if (result.error) alert('Error al guardar producto: ' + result.error.message);
+  if (result.error) mostrarNotificacion('Error al guardar producto: ' + result.error.message, 'danger');
   else {
     $('#modal-producto').modal('hide');
     cargarProductos();
@@ -99,9 +100,15 @@ export async function guardarProducto(event) {
 }
 
 export async function eliminarProducto(id, nombre) {
-  if (confirm(`¿Estás seguro de borrar "${nombre}"?`)) {
+  const ok = await confirmarAccion({
+    titulo: 'Eliminar producto',
+    mensaje: `¿Estás seguro de borrar "${nombre}"?`,
+    textoConfirmar: 'Sí, eliminar',
+    peligro: true
+  });
+  if (ok) {
     const { error } = await supabaseAdmin.from('TB_BPRODUCTOS').delete().eq('id', id);
-    if (error) alert('Error al eliminar: ' + error.message);
+    if (error) mostrarNotificacion('Error al eliminar: ' + error.message, 'danger');
     else cargarProductos();
   }
 }

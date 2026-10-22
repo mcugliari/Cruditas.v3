@@ -197,6 +197,9 @@
           <div class="card card-outline card-primary shadow-sm pos-order-card">
             <div class="card-header bg-white border-bottom-0 pos-order-header">
               <h3 class="card-title font-weight-bold text-dark"><i class="fas fa-shopping-cart mr-2"></i>Pedido Actual</h3>
+              <button type="button" class="btn btn-limpiar-todo float-right" data-action="vaciar-carrito">
+                <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i> Limpiar todo
+              </button>
             </div>
             <div class="card-body pt-0">
               <div class="form-group mb-2">
@@ -212,16 +215,6 @@
               <div class="form-group mb-2">
                 <label class="small font-weight-bold mb-1">Lista de Precios Aplicada:</label>
                 <select class="form-control form-control-sm" id="select-lista-pedido"></select>
-              </div>
-
-              <div class="form-group mb-3">
-                <label class="small font-weight-bold mb-1">Método de Pago:</label>
-                <select class="form-control form-control-sm" id="select-medio-pago"></select>
-              </div>
-
-              <div class="form-group mb-3" id="grupo-cuenta-pedido" style="display:none;">
-                <label class="small font-weight-bold mb-1">Cuenta:</label>
-                <select class="form-control form-control-sm" id="select-cuenta-pedido"></select>
               </div>
 
               <div id="resumen-carrito-items" class="border rounded p-2 mb-3 bg-light pos-cart-items">
@@ -243,12 +236,6 @@
                 <div class="pos-btn-grid">
                   <button type="button" class="btn btn-pos-action btn-pos-preparar" data-action="guardar-pedido" data-estado="PREPARACION">
                     <i class="fas fa-hourglass-half" aria-hidden="true"></i> <span>Solo Preparar</span>
-                  </button>
-                  <button type="button" class="btn btn-pos-action btn-pos-impago" data-action="guardar-pedido" data-estado="ENTREGADO_IMPAGO">
-                    <i class="fas fa-box-open" aria-hidden="true"></i> <span>Entregar Impago</span>
-                  </button>
-                  <button type="button" class="btn btn-pos-action btn-pos-limpiar" data-action="vaciar-carrito">
-                    <i class="fas fa-trash-alt" aria-hidden="true"></i> <span>Limpiar</span>
                   </button>
                 </div>
                 <button type="button" class="btn btn-pos-cobrar" data-action="guardar-pedido" data-estado="COMPLETADO">
@@ -1343,28 +1330,43 @@
     </div>
   </div>  
 
-  <!-- MODAL: elegir el medio de pago al cobrar un pedido ya cargado -->
+    <!-- MODAL: ventana de cobro. La usan el POS ("Cobrar y Entregar") y el listado de pedidos; la maneja cobro.js -->
   <div class="modal fade" id="modal-cobro-pedido" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
-        <div class="modal-header bg-success text-white">
-          <h5 class="modal-title font-weight-bold"><i class="fas fa-cash-register mr-2"></i> Registrar cobro · Pedido #<span id="cobro-id-pedido"></span></h5>
-          <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title font-weight-bold"><i class="fas fa-credit-card mr-2"></i><span id="cobro-titulo">Cobrar y Entregar</span></h5>
+            <small class="text-primary" id="cobro-subtitulo"></small>
+          </div>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
         </div>
         <form id="form-cobro-pedido">
           <div class="modal-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <span class="text-muted" id="cobro-cliente"></span>
-              <strong class="h4 mb-0 text-success">$<span id="cobro-total"></span></strong>
+            <!-- Total y unidades -->
+            <div class="border rounded p-3 mb-3 bg-light d-flex justify-content-between align-items-end">
+              <div>
+                <div class="text-muted">Total a cobrar</div>
+                <div class="h2 font-weight-bold text-success mb-0">$<span id="cobro-total"></span></div>
+              </div>
+              <span class="text-muted font-weight-bold" id="cobro-unidades"></span>
             </div>
-            <div class="form-group mb-0">
-              <label for="cobro-medio-pago" class="font-weight-bold">Medio de pago con el que se cobra</label>
-              <select class="form-control" id="cobro-medio-pago" required></select>
-              <small class="form-text text-muted">Se propone el medio con el que se cargó el pedido; cambialo si el cliente pagó de otra forma.</small>
-            </div>
-            <div class="form-group mb-0 mt-3" id="cobro-grupo-cuenta" style="display:none;">
-              <label for="cobro-cuenta" class="font-weight-bold">¿A qué cuenta entra?</label>
+
+            <!-- Medios de pago: los botones los arma cobro.js -->
+            <label class="font-weight-bold mb-2">Medio de pago</label>
+            <div class="cobro-medios" id="cobro-medios"></div>
+
+            <!-- Cuenta: solo si el medio NO es efectivo -->
+            <div class="form-group mt-2 d-none" id="cobro-grupo-cuenta">
+              <label for="cobro-cuenta" class="font-weight-bold">Cuenta</label>
               <select class="form-control" id="cobro-cuenta"></select>
+            </div>
+
+            <!-- Paga con $: solo en efectivo; calcula el vuelto en pantalla y NO se guarda -->
+            <div class="form-group mt-2 mb-0" id="cobro-grupo-efectivo">
+              <label for="cobro-paga-con" class="font-weight-bold">Paga con $ <span class="text-muted font-weight-normal">(opcional, para calcular el vuelto)</span></label>
+              <input type="number" class="form-control" id="cobro-paga-con" min="0" step="0.01" placeholder="Ej: 10000">
+              <div class="small mt-1" id="cobro-vuelto"></div>
             </div>
           </div>
           <div class="modal-footer">

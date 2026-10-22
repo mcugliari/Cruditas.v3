@@ -185,7 +185,8 @@ const MENSAJES_FUNCIONES = {
   egreso_cerrado:       'El movimiento pertenece a un día con la caja cerrada: no se puede anular.',
   cuenta_invalida:      'La cuenta no existe o está inactiva.',
   cuenta_incompatible:  'La cuenta no corresponde al medio de pago (el efectivo va a la cuenta Efectivo; la transferencia, a una cuenta bancaria o billetera).',
-  cuenta_requerida:     'Elegí a qué cuenta corresponde el movimiento.'
+  cuenta_requerida:     'Elegí a qué cuenta corresponde el movimiento.',
+  medio_requerido:      'Para cobrar hay que elegir el medio de pago.'
 };
 
 export function mensajeErrorFuncion(error, entidad = 'registro') {
@@ -217,4 +218,108 @@ export function llenarSelectCuentas(select, cuentas, idPreseleccion = null) {
   } else if (lista.length === 1) {
     select.value = lista[0].id;
   }
+}
+
+
+// =============================================================================
+// confirmarAccion: ventana propia de confirmación (reemplaza a confirm() y prompt())
+// =============================================================================
+// ¿Por qué? Las ventanas del navegador (confirm, prompt, alert) no se pueden
+// estilar: se ven distintas en cada navegador y no combinan con el sistema.
+// Esta función arma una ventana de Bootstrap con el estilo del sistema.
+//
+// Recibe un objeto con opciones (todas son opcionales):
+//   titulo          encabezado (por defecto 'Confirmar')
+//   mensaje         texto principal
+//   textoConfirmar  texto del botón principal (por defecto 'Aceptar')
+//   textoCancelar   texto del botón secundario (por defecto 'Cancelar')
+//   peligro         true = botón rojo e ícono de advertencia (acciones que borran o anulan)
+//   pedirMotivo     true = agrega un cuadro de texto OBLIGATORIO
+//
+// Devuelve una PROMESA (un valor que llega más tarde; se espera con "await"):
+//   sin pedirMotivo -> true si aceptó, false si canceló
+//   con pedirMotivo -> el texto escrito, o null si canceló
+//
+// Ejemplo:  if (!(await confirmarAccion({ mensaje: '¿Seguro?' }))) return;
+// =============================================================================
+export function confirmarAccion({
+  titulo = 'Confirmar', mensaje = '', textoConfirmar = 'Aceptar', textoCancelar = 'Cancelar',
+  peligro = false, pedirMotivo = false
+} = {}) {
+  // new Promise((resolve) => ...): "resolve" es la función que entrega la respuesta
+  // cuando la ventana se cierra. Quien llamó con "await" queda esperando hasta entonces.
+  return new Promise((resolve) => {
+    // Por si quedó una ventana de una vez anterior.
+    document.getElementById('modal-confirmar')?.remove();
+
+    // Si se cierra sin aceptar (Cancelar o la tecla Esc), se devuelve este valor.
+    let resultado = pedirMotivo ? null : false;
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-confirmar';
+    modal.className = 'modal fade';
+    modal.tabIndex = -1;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('data-backdrop', 'static');   // no se cierra al tocar afuera
+    // Por encima de cualquier otra ventana que esté abierta (por ejemplo, el detalle de una compra).
+    modal.style.zIndex = 1070;
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 420px;">
+        <div class="modal-content">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title font-weight-bold">
+              <i class="fas ${peligro ? 'fa-exclamation-triangle text-danger' : 'fa-question-circle text-warning'} mr-2"></i>${esc(titulo)}
+            </h5>
+          </div>
+          <div class="modal-body">
+            <p class="mb-0">${esc(mensaje)}</p>
+            ${pedirMotivo ? `
+            <div class="form-group mt-3 mb-0">
+              <textarea class="form-control" id="confirmar-motivo" rows="2" maxlength="300" placeholder="Escribí el motivo..."></textarea>
+              <div class="invalid-feedback">El motivo es obligatorio.</div>
+            </div>` : ''}
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-light" data-dismiss="modal">${esc(textoCancelar)}</button>
+            <button type="button" class="btn ${peligro ? 'btn-danger' : 'btn-success'} font-weight-bold" id="confirmar-aceptar">${esc(textoConfirmar)}</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    document.getElementById('confirmar-aceptar').addEventListener('click', () => {
+      if (pedirMotivo) {
+        const caja = document.getElementById('confirmar-motivo');
+        const motivo = caja.value.trim();
+        if (!motivo) {                      // sin motivo no se puede continuar
+          caja.classList.add('is-invalid');
+          caja.focus();
+          return;
+        }
+        resultado = motivo;
+      } else {
+        resultado = true;
+      }
+      $(modal).modal('hide');
+    });
+
+    // Al empezar a escribir, se saca el aviso de error.
+    document.getElementById('confirmar-motivo')?.addEventListener('input', (e) => e.target.classList.remove('is-invalid'));
+
+    $(modal).on('shown.bs.modal', () => {
+      // Bootstrap 4 pone el fondo oscuro de la segunda ventana debajo de la primera: lo subimos.
+      $('.modal-backdrop').last().css('z-index', 1065);
+      // El foco va al cuadro de texto (si hay) o al botón principal (Enter confirma).
+      (document.getElementById('confirmar-motivo') || document.getElementById('confirmar-aceptar')).focus();
+    });
+
+    $(modal).on('hidden.bs.modal', () => {
+      modal.remove();
+      // Si había otra ventana abierta debajo, Bootstrap le sacó el bloqueo de scroll: se lo devolvemos.
+      if (document.querySelector('.modal.show')) document.body.classList.add('modal-open');
+      resolve(resultado);
+    });
+
+    $(modal).modal('show');
+  });
 }

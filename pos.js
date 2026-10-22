@@ -7,7 +7,8 @@ import {
   pedidoEditandoId, setPedidoEditandoId 
 } from './state.js';
 
-import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, llenarSelectCuentas } from './utils.js';
+import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion } from './utils.js';
+import { abrirModalCobro } from './cobro.js';
 
 // Nuevas variables de estado para el POS
 let grupoSeleccionado = null;   // clave (en minúsculas) del grupo/solapa activa
@@ -31,10 +32,10 @@ export function setCategoriaActivaPOS(id) {
 // que termine. Así, otros módulos (pedidos.js) pueden esperar a que el POS
 // tenga sus selects listos antes de tocarlos.
 let promesaInicioPOS = null;
-// Medios de pago y cuentas cargados de la base. Se guardan acá para decidir, sin
-// volver a consultar, si el medio elegido necesita que se elija una cuenta.
-let mediosPOS = [];
-let cuentasPOS = [];
+// Total y unidades del carrito, calculados en actualizarResumenCarrito. Se guardan acá
+// para mostrarlos en la ventana de cobro sin volver a calcular.
+let totalCarritoActual = 0;
+let unidadesCarritoActual = 0;
 
 export function inicializarPOS() {
   // cargarSelectsPOS ya termina llamando a alCambiarCliente(), que a su vez
@@ -53,10 +54,6 @@ export function esperarPOSListo() {
 export async function cargarSelectsPOS() {
   const { data: clientes } = await supabaseAdmin.from('TB_BCLIENTES').select('*').order('nombre');
   const { data: listas } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*');
-  const { data: medios } = await supabaseAdmin.from('TB_BMEDIO_PAGO').select('*').order('id');
-  const { data: cuentas } = await supabaseAdmin.from('TB_BCUENTAS').select('id, nombre, tipo').eq('activo', true).order('id');
-  mediosPOS = medios || [];
-  cuentasPOS = cuentas || [];
 
   const selectCli = document.getElementById('select-cliente-pedido');
   if (selectCli && clientes) {
@@ -73,36 +70,8 @@ export async function cargarSelectsPOS() {
   const selectLis = document.getElementById('select-lista-pedido');
   if (selectLis && listas) selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
 
-   // 3. Cargar Medios de Pago
-  const selectMed = document.getElementById('select-medio-pago');
-  if (selectMed && medios) {
-    selectMed.innerHTML = medios.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('');
-    
-   // El efectivo se identifica por el atributo es_efectivo (no por el texto del nombre)
-    const medioEfectivo = mediosPOS.find(m => m.es_efectivo);
-    if (medioEfectivo) selectMed.value = medioEfectivo.id;
-    actualizarCuentaPOS();
-  }
 
   await alCambiarCliente();
-}
-
-// Muestra u oculta el desplegable "Cuenta" según el medio elegido:
-//  - efectivo: se oculta (la cuenta es siempre Efectivo y la completa la base)
-//  - otro medio (transferencia): se muestra con las cuentas disponibles
-// idCuentaPreseleccion: se usa al editar un pedido para dejar elegida su cuenta.
-export function actualizarCuentaPOS(idCuentaPreseleccion = null) {
-  const selectMedio = document.getElementById('select-medio-pago');
-  const grupo = document.getElementById('grupo-cuenta-pedido');
-  const selectCuenta = document.getElementById('select-cuenta-pedido');
-  if (!selectMedio || !grupo || !selectCuenta) return;
-
-  const medio = mediosPOS.find(m => Number(m.id) === Number(selectMedio.value));
-  const pideCuenta = Boolean(medio) && !medio.es_efectivo;
-
-  grupo.style.display = pideCuenta ? '' : 'none';
-  if (pideCuenta) llenarSelectCuentas(selectCuenta, cuentasPOS, idCuentaPreseleccion);
-  else selectCuenta.innerHTML = '';
 }
 
 export async function alCambiarCliente() {
@@ -398,6 +367,8 @@ export function actualizarResumenCarrito() {
     if (contenedorItems) contenedorItems.innerHTML = `<p class="text-center text-muted small my-3">El carrito está vacío</p>`;
     document.getElementById('cant-total-items').innerText = '0';
     document.getElementById('monto-total-pedido').innerText = '$0';
+    totalCarritoActual = 0;
+    unidadesCarritoActual = 0;
     return;
   }
 
@@ -487,21 +458,15 @@ export function actualizarResumenCarrito() {
 
   document.getElementById('cant-total-items').innerText = totalItems;
   document.getElementById('monto-total-pedido').innerText = `$${montoTotalFinal.toLocaleString('es-AR')}`;
+  // Los guardamos para mostrarlos en la ventana de cobro.
+  totalCarritoActual = montoTotalFinal;
+  unidadesCarritoActual = totalItems;
 }
 
 export async function resetearPedido() {
   const inputRef = document.getElementById('input-ref-cliente');
   if (inputRef) inputRef.value = '';
 
-  // 1. Resetear selector de Medio de Pago
-  const selectMedio = document.getElementById('select-medio-pago');
-  if (selectMedio) {
-    // Vuelve al efectivo, identificado por es_efectivo; si no existiera, el primero
-    const medioEfectivo = mediosPOS.find(m => m.es_efectivo);
-    if (medioEfectivo) selectMedio.value = medioEfectivo.id;
-    else selectMedio.selectedIndex = 0;
-    actualizarCuentaPOS();
-  }
 
   // 2. Resetear selector de Cliente a Consumidor Final (ID 1)
   // Como ahora usamos Select2, lo actualizamos con jQuery
@@ -517,11 +482,23 @@ export async function resetearPedido() {
   await cargarPOS();        
 }
 
-export function vaciarCarrito() {
+export async function vaciarCarrito() {
+  // Si hay productos cargados pedimos confirmar: un clic accidental borraría todo el pedido.
+  // confirmarAccion (utils.js) es nuestra ventana propia; con "await" se espera la respuesta.
+  if (Object.keys(carrito).length > 0) {
+    const ok = await confirmarAccion({
+      titulo: 'Vaciar pedido',
+      mensaje: 'Se van a quitar todos los productos del pedido actual. ¿Querés continuar?',
+      textoConfirmar: 'Sí, vaciar',
+      peligro: true
+    });
+    if (!ok) return;   // canceló: no se toca nada
+  }
   resetearPedido();
 }
 
-export async function guardarPedido(estadoInicial) {
+// cobro: null, o { idMedio, idCuenta } cuando viene de la ventana de cobro (solo al cobrar y entregar).
+export async function guardarPedido(estadoInicial, cobro = null) {
   const keys = Object.keys(carrito);
   if (keys.length === 0) {
     mostrarNotificacion('Agregá al menos un producto al carrito.', 'warning');
@@ -530,21 +507,14 @@ export async function guardarPedido(estadoInicial) {
 
   const idCliente = document.getElementById('select-cliente-pedido').value;
   const idLista = document.getElementById('select-lista-pedido').value;
-  const selectMedio = document.getElementById('select-medio-pago');
-  const idMedio = selectMedio ? selectMedio.value : null;
-  
-  // Cuenta: solo se elige si el medio NO es efectivo (el efectivo va solo a la
-  // cuenta Efectivo: se manda null y la base la completa).
-  const medioElegido = mediosPOS.find(m => Number(m.id) === Number(idMedio));
-  const pideCuenta = Boolean(medioElegido) && !medioElegido.es_efectivo;
-  const selectCuenta = document.getElementById('select-cuenta-pedido');
-  const idCuenta = (pideCuenta && selectCuenta && selectCuenta.value) ? selectCuenta.value : null;
-  // Al cobrar en el momento hay que saber a qué cuenta entró la plata.
-  if (pideCuenta && !idCuenta && estadoInicial === 'COMPLETADO') {
-    mostrarNotificacion('Elegí a qué cuenta entra el cobro.', 'warning');
-    if (selectCuenta) selectCuenta.focus();
+  // Medio y cuenta llegan de la ventana de cobro (cobro.js) y SOLO al cobrar y entregar.
+  // Un pedido que todavía no se cobró queda con medio y cuenta en NULL.
+  if (estadoInicial === 'COMPLETADO' && !cobro) {
+    mostrarNotificacion('Para cobrar, usá la ventana de cobro.', 'warning');
     return;
   }
+  const idMedio = cobro ? cobro.idMedio : null;
+  const idCuenta = cobro ? cobro.idCuenta : null;
 
   const inputRef = document.getElementById('input-ref-cliente');
   const nombreReferencia = inputRef ? inputRef.value.trim() : null;
@@ -680,6 +650,35 @@ export async function guardarPedido(estadoInicial) {
 
   setPedidoEditandoId(null);
   resetearPedido();
+}
+
+// -----------------------------------------------------------------------------
+// iniciarCobroPOS
+//   Se ejecuta al apretar "Cobrar y Entregar". En vez de guardar directo, abre la
+//   ventana de cobro (cobro.js); el pedido se guarda recién cuando se confirma ahí.
+// -----------------------------------------------------------------------------
+export async function iniciarCobroPOS() {
+  if (Object.keys(carrito).length === 0) {
+    mostrarNotificacion('Agregá al menos un producto al carrito.', 'warning');
+    return;
+  }
+
+  await abrirModalCobro({
+    titulo: 'Cobrar y Entregar',
+    subtitulo: pedidoEditandoId
+      ? `Pedido #${pedidoEditandoId}: completá los datos de pago para finalizarlo.`
+      : 'Completá los datos de pago para finalizar el pedido.',
+    total: totalCarritoActual,
+    unidades: unidadesCarritoActual,
+    // Callback: la ventana lo llama al confirmar. Devuelve true si se guardó (la ventana
+    // se cierra) o false si falló (queda abierta para corregir).
+    alConfirmar: async (idMedio, idCuenta) => {
+      await guardarPedido('COMPLETADO', { idMedio, idCuenta });
+      // Si guardó bien, guardarPedido vació el carrito (resetearPedido). Si falló, el
+      // carrito sigue lleno.
+      return Object.keys(carrito).length === 0;
+    }
+  });
 }
 
 export function eliminarItemCarrito(idProducto) {

@@ -28,7 +28,7 @@
 import { supabaseAdmin } from './config.js';
 import {
   mostrarNotificacion, esc, mensajeErrorFuncion, mensajeErrorBD,
-  formatearMoneda, formatearFechaAR, obtenerFechaActualISO
+  formatearMoneda, formatearFechaAR, obtenerFechaActualISO, confirmarAccion
 } from './utils.js';
 
 
@@ -238,14 +238,16 @@ function actualizarDiferenciaEfectivo() {
 //   La base se ocupa de liberar los egresos y de reabrir los cobros del día.
 // -----------------------------------------------------------------------------
 export async function anularCierreCaja(idCierre) {
-  if (!confirm('¿Estás seguro de anular el cierre actual? Quedará registrado en el historial como ANULADO y podrás efectuar un nuevo cierre.')) return;
-
-  // prompt() abre un cuadro para escribir; devuelve null si se cancela.
-  const motivo = prompt('Motivo de la anulación del cierre (obligatorio):')?.trim();
-  if (!motivo) {
-    mostrarNotificacion('Se necesita un motivo para anular el cierre.', 'warning');
-    return;
-  }
+  // Una sola ventana: avisa qué pasa al anular y pide el motivo (obligatorio).
+  // confirmarAccion (utils.js) devuelve el texto escrito, o null si se cancela.
+  const motivo = await confirmarAccion({
+    titulo: 'Anular cierre de caja',
+    mensaje: '¿Estás seguro de anular el cierre actual? Quedará registrado en el historial como ANULADO y podrás efectuar un nuevo cierre.',
+    pedirMotivo: true,
+    textoConfirmar: 'Anular cierre',
+    peligro: true
+  });
+  if (!motivo) return;   // canceló: no se anula nada
 
   const { error } = await supabaseAdmin.rpc('anular_cierre', { p_id: idCierre, p_motivo: motivo });
 
@@ -287,7 +289,13 @@ export function inicializarCierreCaja() {
       inputEf?.focus();
       return;
     }
-    if (!confirm('¿Estás seguro de confirmar y cerrar la caja diaria?')) return;
+    // Ventana propia de confirmación (se abre encima de la ventana de cierre).
+    const ok = await confirmarAccion({
+      titulo: 'Cerrar caja',
+      mensaje: '¿Estás seguro de confirmar y cerrar la caja diaria?',
+      textoConfirmar: 'Sí, cerrar caja'
+    });
+    if (!ok) return;
 
     const btn = document.getElementById('btn-confirmar-cierre');
     btn.disabled = true;

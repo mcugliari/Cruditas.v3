@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './config.js';
+import { mostrarNotificacion, confirmarAccion } from './utils.js';
 
 export async function inicializarModuloListas() {
   const select = document.getElementById('select-lista-activa');
@@ -83,7 +84,7 @@ export async function guardarPrecioCategoria(id_categoria, idDetalle) {
     ? await supabaseAdmin.from('TB_DLISTA_PRECIOS').update(payload).eq('id', idDetalle)
     : await supabaseAdmin.from('TB_DLISTA_PRECIOS').insert([payload]);
 
-  if (res.error) alert('Error: ' + res.error.message);
+  if (res.error) mostrarNotificacion('Error: ' + res.error.message, 'danger');
   else cargarMatrizPrecios();
 }
 
@@ -108,7 +109,7 @@ export async function guardarPrecioEspecial(e) {
   const payload = { id_lista_precio: idLista, id_categoria: null, id_producto, precio_unidad, precio_docena };
 
   const { error } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').insert([payload]);
-  if (error) alert('Error: ' + error.message);
+  if (error) mostrarNotificacion('Error: ' + error.message, 'danger');
   else {
     $('#modal-precio-especial').modal('hide');
     cargarMatrizPrecios();
@@ -116,7 +117,13 @@ export async function guardarPrecioEspecial(e) {
 }
 
 export async function eliminarPrecioEspecial(idDetalle) {
-  if (confirm('¿Eliminar precio especial? El producto volverá a tomar el precio base de su categoría.')) {
+  const ok = await confirmarAccion({
+    titulo: 'Eliminar precio especial',
+    mensaje: '¿Eliminar precio especial? El producto volverá a tomar el precio base de su categoría.',
+    textoConfirmar: 'Sí, eliminar',
+    peligro: true
+  });
+  if (ok) {
     await supabaseAdmin.from('TB_DLISTA_PRECIOS').delete().eq('id', idDetalle);
     cargarMatrizPrecios();
   }

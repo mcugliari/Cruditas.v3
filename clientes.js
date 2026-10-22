@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './config.js';
+import { mostrarNotificacion, confirmarAccion } from './utils.js';
 
 export async function cargarClientes() {
   const tbody = document.getElementById('tabla-clientes-body');
@@ -41,7 +42,7 @@ export async function guardarCliente(event) {
   const direccion = document.getElementById('cli-direccion').value;
 
   const { error } = await supabaseAdmin.from('TB_BCLIENTES').insert([{ nombre, telefono, direccion }]);
-  if (error) alert('Error al guardar: ' + error.message);
+  if (error) mostrarNotificacion('Error al guardar: ' + error.message, 'danger');
   else {
     document.getElementById('form-cliente').reset();
     cargarClientes();
@@ -64,7 +65,7 @@ export async function guardarEdicionCliente(event) {
   const direccion = document.getElementById('edit-cli-direccion').value;
 
   const { error } = await supabaseAdmin.from('TB_BCLIENTES').update({ nombre, telefono, direccion }).eq('id', id);
-  if (error) alert('Error al actualizar cliente: ' + error.message);
+  if (error) mostrarNotificacion('Error al actualizar cliente: ' + error.message, 'danger');
   else {
     $('#modal-editar-cliente').modal('hide');
     cargarClientes();
@@ -72,9 +73,15 @@ export async function guardarEdicionCliente(event) {
 }
 
 export async function eliminarCliente(id, nombre) {
-  if (confirm(`¿Estás seguro de que querés eliminar a ${nombre}?`)) {
+  const ok = await confirmarAccion({
+    titulo: 'Eliminar cliente',
+    mensaje: `¿Estás seguro de que querés eliminar a ${nombre}?`,
+    textoConfirmar: 'Sí, eliminar',
+    peligro: true
+  });
+  if (ok) {
     const { error } = await supabaseAdmin.from('TB_BCLIENTES').delete().eq('id', id);
-    if (error) alert('Error al eliminar: ' + error.message);
+    if (error) mostrarNotificacion('Error al eliminar: ' + error.message, 'danger');
     else cargarClientes();
   }
 }
@@ -137,7 +144,7 @@ export async function guardarAsociacionClienteLista(event) {
     ? await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').update(payload).eq('id', id)
     : await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').insert([payload]);
 
-  if (res.error) alert('Error al guardar: ' + res.error.message);
+  if (res.error) mostrarNotificacion('Error al guardar: ' + res.error.message, 'danger');
   else {
     resetearFormAsociacion();
     await listarAsociacionesClienteLista();
@@ -152,9 +159,15 @@ export function editarAsociacion(id, idCliente, idLista, esPredeterminada) {
 }
 
 export async function eliminarAsociacion(id) {
-  if (!confirm('¿Eliminar esta asociación?')) return;
+  const ok = await confirmarAccion({
+    titulo: 'Eliminar asociación',
+    mensaje: '¿Eliminar esta asociación?',
+    textoConfirmar: 'Sí, eliminar',
+    peligro: true
+  });
+  if (!ok) return;
   const { error } = await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').delete().eq('id', id);
-  if (error) alert('Error al eliminar: ' + error.message);
+  if (error) mostrarNotificacion('Error al eliminar: ' + error.message, 'danger');
   else await listarAsociacionesClienteLista();
 }
 

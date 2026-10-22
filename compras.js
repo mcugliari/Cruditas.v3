@@ -26,7 +26,7 @@
 import { supabaseAdmin } from './config.js';
 import {
   mostrarNotificacion, esc, mensajeErrorBD, mensajeErrorFuncion,
-  formatearMoneda, formatearFechaAR, obtenerFechaActualISO, sumarDiasISO
+  formatearMoneda, formatearFechaAR, obtenerFechaActualISO, sumarDiasISO, confirmarAccion
 } from './utils.js';
 import { abrirModalPago, anularPago } from './pagos.js';
 
@@ -209,7 +209,7 @@ export async function verDetalleCompra(idCompra) {
   //     lista en memoria) para que, después de registrar un pago, el detalle
   //     muestre el saldo actualizado.
   //  2) líneas de la compra, con el nombre y la unidad de cada insumo
-  //  3) pagos de la compra, con el nombre del medio de pago
+  //  3) pagos de la compra, con el medio de pago y la cuenta (nombre)
   //  4) datos extra que la vista no trae (observaciones, motivo de anulación)
   // "TB_BINSUMOS ( nombre, unidad_medida )" y "TB_BMEDIO_PAGO ( nombre )" traen
   // datos de tablas relacionadas, igual que en productos.js.
@@ -223,7 +223,7 @@ export async function verDetalleCompra(idCompra) {
       .eq('id_compra', idCompra)
       .order('id', { ascending: true }),
     supabaseAdmin.from('TB_TEGRESOS')
-      .select('id, fecha, monto, estado, motivo_anulacion, TB_BMEDIO_PAGO ( nombre )')
+      .select('id, fecha, monto, estado, motivo_anulacion, TB_BMEDIO_PAGO ( nombre, es_efectivo ), TB_BCUENTAS ( nombre )')
       .eq('id_compra', idCompra)
       .order('id', { ascending: true }),
     supabaseAdmin.from('TB_TCOMPRAS')
@@ -282,7 +282,8 @@ export async function verDetalleCompra(idCompra) {
     : pagos.map(p => `
         <tr class="${p.estado === 'ANULADO' ? 'text-muted' : ''}">
           <td>${formatearFechaAR(p.fecha)}</td>
-          <td>${esc(p.TB_BMEDIO_PAGO?.nombre)}</td>
+          <td>${esc(p.TB_BMEDIO_PAGO?.nombre)}${(p.TB_BCUENTAS?.nombre && !p.TB_BMEDIO_PAGO?.es_efectivo)
+            ? `<div class="small text-muted">${esc(p.TB_BCUENTAS.nombre)}</div>` : ''}</td>
           <td class="text-right font-weight-bold">$${formatearMoneda(p.monto)}</td>
           <td class="text-center">${p.estado === 'ANULADO'
             ? `<span class="badge badge-secondary" title="${esc(p.motivo_anulacion)}">Anulado</span>`
@@ -316,11 +317,17 @@ export async function verDetalleCompra(idCompra) {
 export async function anularCompraAbierta() {
   if (compraDetalleId === null) return;
 
-  // prompt() abre un cuadro para escribir un texto. Devuelve null si el usuario
-  // cancela. ".trim()" saca espacios; el "?." evita error si fuera null.
-  const motivo = prompt('Motivo de la anulación (obligatorio):')?.trim();
+  // confirmarAccion (utils.js) es nuestra ventana propia: pide el motivo y devuelve el texto
+  // escrito, o null si el usuario cancela.
+  const motivo = await confirmarAccion({
+    titulo: 'Anular compra',
+    mensaje: `Vas a anular la compra #${compraDetalleId}. Indicá el motivo (obligatorio).`,
+    pedirMotivo: true,
+    textoConfirmar: 'Anular compra',
+    peligro: true
+  });
   if (!motivo) {
-    mostrarNotificacion('Se necesita un motivo para anular la compra.', 'warning');
+    // Canceló: no se anula nada y no hace falta avisar.
     return;
   }
 

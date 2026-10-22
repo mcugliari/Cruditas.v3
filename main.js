@@ -2,8 +2,9 @@ import { asegurarSesion } from './auth.js';
 import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente, eliminarCliente, inicializarCrudClienteLista, guardarAsociacionClienteLista, editarAsociacion, eliminarAsociacion } from './clientes.js';
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial } from './listas.js';
-import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito, actualizarCuentaPOS } from './pos.js';
-import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido, confirmarCobroPedido, actualizarCuentaCobro  } from './pedidos.js';
+import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito, iniciarCobroPOS } from './pos.js';
+import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
+import { confirmarCobro, elegirMedioCobro, actualizarVueltoCobro } from './cobro.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
 import { cargarCompras, verDetalleCompra, anularCompraAbierta, pagarCompraAbierta, anularPagoDeCompra } from './compras.js';
 import { guardarPago } from './pagos.js';
@@ -129,19 +130,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // SOLUCIÓN PUNTO 8: Al cambiar de lista manualmente, SOLO refrescamos los precios de la grilla (no todo el POS)
   document.getElementById('select-lista-pedido')?.addEventListener('change', () => cargarPOS());
-  // Al cambiar el medio de pago (POS o ventana de cobro) se muestra u oculta la cuenta.
-  // Se usa "() =>" para no pasarle el evento a la función como si fuera una cuenta.
-  document.getElementById('select-medio-pago')?.addEventListener('change', () => actualizarCuentaPOS());
-  document.getElementById('cobro-medio-pago')?.addEventListener('change', () => actualizarCuentaCobro());
+  // Ventana de cobro (cobro.js): elegir el medio con los botones y calcular el vuelto.
+  document.getElementById('cobro-medios')?.addEventListener('click', elegirMedioCobro);
+  document.getElementById('cobro-paga-con')?.addEventListener('input', actualizarVueltoCobro);
 
-  document.querySelector('.pos-actions-container')?.addEventListener('click', (e) => {
+  // Escuchamos en toda la tarjeta del pedido (no solo en los botones de abajo) porque
+  // "Limpiar todo" ahora está en el encabezado de la tarjeta.
+  document.querySelector('.pos-order-card')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
 
     const action = btn.dataset.action;
     if (action === 'guardar-pedido') {
       const estado = btn.dataset.estado;
-      guardarPedido(estado);
+      // "Cobrar y Entregar" abre primero la ventana de cobro; el guardado lo hace la ventana al confirmar.
+      if (estado === 'COMPLETADO') iniciarCobroPOS();
+      else guardarPedido(estado);
     } else if (action === 'vaciar-carrito') {
       vaciarCarrito();
     }
@@ -153,7 +157,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('filtro-fecha-hasta')?.addEventListener('change', cargarTablaPedidos);
   document.getElementById('filtro-estado-pedido')?.addEventListener('change', cargarTablaPedidos);
   document.getElementById('filtro-buscar-pedido')?.addEventListener('keyup', cargarTablaPedidos);
-  document.getElementById('form-cobro-pedido')?.addEventListener('submit', confirmarCobroPedido);
+  document.getElementById('form-cobro-pedido')?.addEventListener('submit', confirmarCobro);
 
   document.getElementById('tabla-pedidos-body')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');

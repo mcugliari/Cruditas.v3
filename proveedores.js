@@ -24,7 +24,7 @@
 // =============================================================================
 
 import { supabaseAdmin } from './config.js';
-import { mostrarNotificacion, esc, mensajeErrorBD } from './utils.js';
+import { mostrarNotificacion, esc, mensajeErrorBD, confirmarAccion } from './utils.js';
 
 
 // "Caché" = una copia en memoria de la lista que acabamos de traer de la base.
@@ -214,10 +214,15 @@ export async function cambiarEstadoProveedor(id) {
   // "!" invierte: si estaba activo (true) pasa a false, y viceversa.
   const nuevoEstado = !prov.activo;
 
-  // Al DESACTIVAR pedimos confirmación. confirm() abre un cuadro Aceptar/Cancelar
-  // y devuelve true o false. "&&" significa "y": solo preguntamos si se está
+  // Al DESACTIVAR pedimos confirmación con nuestra ventana propia (confirmarAccion, utils.js):
+  // "await" espera la respuesta (true o false). "&&" significa "y": solo preguntamos si se está
   // desactivando; y si el usuario cancela, salimos sin cambiar nada.
-  if (!nuevoEstado && !confirm(`¿Desactivar a "${prov.nombre}"?\nNo podrá elegirse en compras nuevas (el historial se conserva).`)) {
+  if (!nuevoEstado && !(await confirmarAccion({
+    titulo: 'Desactivar proveedor',
+    mensaje: `¿Desactivar a "${prov.nombre}"? No podrá elegirse en compras nuevas (el historial se conserva).`,
+    textoConfirmar: 'Sí, desactivar',
+    peligro: true
+  }))) {
     return;
   }
 

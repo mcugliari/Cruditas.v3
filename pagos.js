@@ -30,7 +30,7 @@
 
 import { supabaseAdmin } from './config.js';
 import {
-  mostrarNotificacion, esc, mensajeErrorBD, mensajeErrorFuncion, formatearMoneda, llenarSelectCuentas
+  mostrarNotificacion, esc, mensajeErrorBD, mensajeErrorFuncion, formatearMoneda, llenarSelectCuentas, confirmarAccion
 } from './utils.js';
 
 
@@ -261,11 +261,18 @@ export async function guardarPago(event) {
 // "textos = {}" es un PARÁMETRO CON VALOR POR DEFECTO: si quien llama no pasa nada,
 // textos vale {} (un objeto vacío) y se usan los textos de abajo.
 export async function anularPago(idEgreso, alTerminar, textos = {}) {
-  // prompt() pide un texto; devuelve null si el usuario cancela.
+  // confirmarAccion (utils.js) es nuestra ventana propia: pide el motivo y devuelve el texto
+  // escrito, o null si el usuario cancela.
   // "textos.motivo || '...'" usa el texto recibido o, si no vino, el de siempre.
-  const motivo = prompt(textos.motivo || 'Motivo de la anulación del pago (obligatorio):')?.trim();
+  const motivo = await confirmarAccion({
+    titulo: 'Anular',
+    mensaje: textos.motivo || 'Motivo de la anulación del pago (obligatorio):',
+    pedirMotivo: true,
+    textoConfirmar: 'Anular',
+    peligro: true
+  });
   if (!motivo) {
-    mostrarNotificacion('Se necesita un motivo para anular el pago.', 'warning');
+    // Canceló: no se anula nada y no hace falta avisar.
     return;
   }
 

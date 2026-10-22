@@ -219,30 +219,6 @@ body {
   color: #856404;
 }
 
-/* Variación: Entregar Impago */
-.btn-pos-impago {
-  background-color: #d1ecf1;
-  border-color: #bee5eb;
-  color: #0c5460;
-}
-
-.btn-pos-impago:hover {
-  background-color: #abdde5;
-  color: #0c5460;
-}
-
-/* Variación: Limpiar Carrito */
-.btn-pos-limpiar {
-  background-color: #f8d7da;
-  border-color: #f5c6cb;
-  color: #721c24;
-}
-
-.btn-pos-limpiar:hover {
-  background-color: #f1b0b7;
-  color: #721c24;
-}
-
 /* Botón Principal: Cobrar y Entregar */
 .btn-pos-cobrar {
   width: 100%;
@@ -431,8 +407,6 @@ body { background: var(--cruditas-bg); color: #172334; touch-action: manipulatio
 .btn-pos-action { min-height: 58px; padding: 8px 5px; border: 1px solid transparent; border-radius: 10px; font-size: 1.05rem; transition: filter .15s ease, transform .15s ease; }
 .btn-pos-action span { display: block; margin-top: 4px; font-size: .72rem; font-weight: 750; line-height: 1.15; }
 .btn-pos-preparar { background: #fff3cf; border-color: #f5df9e; color: #79580a; }
-.btn-pos-impago { background: #e0f3f7; border-color: #bde4eb; color: #155c6b; }
-.btn-pos-limpiar { background: #fff0f0; border-color: #f3cccc; color: #9b3030; }
 .btn-pos-action:hover { filter: brightness(.97); transform: translateY(-1px); }
 .btn-pos-cobrar { width: 100%; min-height: 54px; padding: 12px; border: 0; border-radius: 10px; background: var(--cruditas-green); color: #fff; font-size: .96rem; font-weight: 800; letter-spacing: .025em; box-shadow: 0 4px 9px rgba(22,134,71,.18); transition: background .15s ease, transform .15s ease; }
 .btn-pos-cobrar:hover { background: #11743c; color: #fff; transform: translateY(-1px); }
@@ -580,28 +554,6 @@ body { background: var(--cruditas-bg); color: #202b3a; }
   color: #203f6c !important;
   box-shadow: 0 4px 10px rgba(41, 79, 133, .13);
 }
-.btn-pos-impago {
-  /* Coral suave: pedido entregado que todavía no fue cobrado */
-  background: #fff0e8 !important;
-  border-color: #f0cbbb !important;
-  color: #914d2d !important;
-}
-.btn-pos-impago:hover {
-  background: #ffe3d5 !important;
-  border-color: #e8b49b !important;
-  color: #793c22 !important;
-  box-shadow: 0 4px 10px rgba(145, 77, 45, .12);
-}
-.btn-pos-limpiar {
-  background: #f7eeee !important;
-  border-color: #ead8d8 !important;
-  color: #8a4d4d !important;
-}
-.btn-pos-limpiar:hover {
-  background: #f1e1e1 !important;
-  border-color: #e2c8c8 !important;
-  color: #743d3d !important;
-}
 .btn-pos-action:focus-visible { outline: 3px solid rgba(79, 132, 190, .35); outline-offset: 2px; }
 @media (max-width: 575.98px) {
   .btn-pos-action { min-height: 54px; }
@@ -700,3 +652,80 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   line-height: 1;
 }
 .pos-prod-cat i { font-size: .7rem; opacity: .8; }
+
+/* =============================================================================
+   POS: "Solo Preparar" y "Cobrar y Entregar" en una misma fila
+   (el contenedor venía en columna: acá lo pasamos a fila)
+   ============================================================================= */
+.pos-actions-container { flex-direction: row; align-items: stretch; gap: 8px; }
+/* Solo Preparar: 1 parte del ancho */
+.pos-actions-container .pos-btn-grid { display: flex; flex: 1 1 0; min-width: 0; }
+.pos-actions-container .pos-btn-grid .btn-pos-action { flex: 1; width: 100%; }
+/* Cobrar y Entregar: 2 partes del ancho; si el texto no entra, baja de línea centrado */
+.pos-actions-container .btn-pos-cobrar {
+  flex: 2 1 0; width: auto; min-width: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; line-height: 1.15;
+}
+
+
+/* =============================================================================
+   VENTANA DE COBRO: botones de medio de pago (los arma cobro.js)
+   ============================================================================= */
+/* Grilla: tantas columnas como entren, mínimo 100px cada una */
+.cobro-medios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: .6rem;
+}
+
+.cobro-medio-btn {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .35rem;
+  min-height: 78px; padding: .75rem .4rem;
+  font-family: var(--cruditas-font, inherit); font-size: .85rem; font-weight: 600; color: #3b4658;
+  background: linear-gradient(180deg, #ffffff 0%, #eef1f6 100%);
+  border: 1.5px solid #dbe2ec; border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(20, 30, 50, .06);
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  transition: transform .12s, box-shadow .12s, border-color .12s;
+}
+.cobro-medio-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(20, 30, 50, .12); }
+.cobro-medio-btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(233, 184, 63, .35); }
+
+/* Ícono (hijo directo del botón: no toca la tilde) y degradé suave según el tipo de medio */
+.cobro-medio-btn > i { font-size: 1.5rem; }
+.cobro-medio-btn.tipo-efectivo      { background: linear-gradient(180deg, #fffdf6 0%, #fbf1d8 100%); }
+.cobro-medio-btn.tipo-efectivo > i  { color: #b9770e; }
+.cobro-medio-btn.tipo-transferencia      { background: linear-gradient(180deg, #ffffff 0%, #e9eff8 100%); }
+.cobro-medio-btn.tipo-transferencia > i  { color: #3d5a80; }
+.cobro-medio-btn.tipo-qr      { background: linear-gradient(180deg, #ffffff 0%, #e3f0fd 100%); }
+.cobro-medio-btn.tipo-qr > i  { color: #1c7ed6; }
+.cobro-medio-btn.tipo-tarjeta > i,
+.cobro-medio-btn.tipo-otro > i { color: #5f6b7a; }
+
+/* Medio elegido: ámbar con tilde (va DESPUÉS de los tipos para ganarles) */
+.cobro-medio-btn.activo {
+  background: linear-gradient(180deg, #fff8e3 0%, #ffe39a 100%);
+  border-color: var(--cruditas-brand, #ffc43d);
+  color: #6b4a00;
+  box-shadow: 0 0 0 2px rgba(233, 184, 63, .35), 0 4px 10px rgba(233, 184, 63, .25);
+}
+.cobro-medio-check { display: none; position: absolute; top: 6px; right: 8px; font-size: .85rem; color: #e09f00; }
+.cobro-medio-btn.activo .cobro-medio-check { display: block; }
+
+/* =============================================================================
+   POS: botón "Limpiar todo" del encabezado del pedido (coral suave, como el resto)
+   ============================================================================= */
+.btn-limpiar-todo {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid #ead8d8; border-radius: 10px;
+  background: #fbf1f1; color: #8a4d4d;
+  font-size: .8rem; font-weight: 700;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+}
+.btn-limpiar-todo:hover { background: #f5e1e1; border-color: #e2c8c8; color: #743d3d; transform: translateY(-1px); }
+.btn-limpiar-todo:active { transform: none; }
+.btn-limpiar-todo:focus-visible { outline: 3px solid rgba(138, 77, 77, .25); outline-offset: 2px; }

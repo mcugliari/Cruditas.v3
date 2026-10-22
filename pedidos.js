@@ -1,7 +1,8 @@
 import { supabaseAdmin } from './config.js';
 import { setPedidoEditandoId, setCarrito } from './state.js';
-import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, formatearMoneda, llenarSelectCuentas } from './utils.js';
-import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarCuentaPOS } from './pos.js';
+import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion } from './utils.js';
+import { abrirModalCobro } from './cobro.js';
+import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo } from './pos.js';
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
 
@@ -205,7 +206,7 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
   // Cobrar: antes de marcar COMPLETADO preguntamos con qué medio se cobra.
   // La ventana se encarga de guardar el estado y el medio juntos.
   if (nuevoEstado === 'COMPLETADO') {
-    await abrirModalCobro(idPedido);
+    await cobrarPedido(idPedido);
     return;
   }
 
@@ -224,124 +225,56 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
 }
 
 // =============================================================================
-// COBRO DE UN PEDIDO YA CARGADO (elegir el medio de pago en el momento del cobro)
+// COBRO DE UN PEDIDO YA CARGADO
+// La ventana (medio, cuenta, vuelto) vive en cobro.js y es la MISMA que usa el POS.
+// Acá solo preparamos los datos del pedido y le decimos qué hacer al confirmar.
 // =============================================================================
+async function cobrarPedido(idPedido) {
+  // Traemos el pedido con sus renglones (para contar las unidades).
+  const { data: pedido, error } = await supabaseAdmin
+    .from('TB_TPEDIDOS')
+    .select('id, estado, importe_total, nombre_referencia, TB_BCLIENTES(nombre), TB_DPEDIDOS(id_producto, cantidad)')
+    .eq('id', idPedido)
+    .single();
 
-// Id del pedido que se está cobrando. Vive afuera de las funciones para que
-// la ventana (abrir) y el envío del formulario (confirmar) compartan el dato.
-let pedidoCobroId = null;
-// Medios y cuentas de la ventana de cobro (para decidir si hay que pedir la cuenta)
-let mediosCobro = [];
-let cuentasCobro = [];
-
-// Arma la ventana: trae el pedido y la lista de medios de pago, y propone el
-// medio con el que se cargó el pedido.
-async function abrirModalCobro(idPedido) {
-  // Promise.all lanza las dos consultas AL MISMO TIEMPO y espera a que terminen
-  // ambas (más rápido que pedirlas una después de la otra).
-  const [resPedido, resMedios, resCuentas] = await Promise.all([
-    supabaseAdmin.from('TB_TPEDIDOS')
-      .select('id, importe_total, id_medio_pago, id_cuenta, nombre_referencia, TB_BCLIENTES(nombre)')
-      .eq('id', idPedido)
-      .single(),
-    supabaseAdmin.from('TB_BMEDIO_PAGO').select('id, nombre, es_efectivo').order('id'),
-    supabaseAdmin.from('TB_BCUENTAS').select('id, nombre, tipo').eq('activo', true).order('id')
-  ]);
-
-  if (resPedido.error || !resPedido.data || resMedios.error || resCuentas.error) {
+  if (error || !pedido) {
     mostrarNotificacion('No se pudo cargar el pedido para cobrarlo.', 'danger');
     return;
   }
 
-  const pedido = resPedido.data;
-  pedidoCobroId = pedido.id;
+  // Unidades = suma de cantidades SIN el renglón de descuento (producto 999: su
+  // cantidad son docenas, no unidades).
+  const unidades = (pedido.TB_DPEDIDOS || [])
+    .filter(r => Number(r.id_producto) !== 999)
+    .reduce((acc, r) => acc + Number(r.cantidad), 0);
 
-  // textContent escribe texto plano: no hace falta escapar.
-  document.getElementById('cobro-id-pedido').textContent = pedido.id;
-  document.getElementById('cobro-cliente').textContent =
-    pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
-  document.getElementById('cobro-total').textContent = formatearMoneda(pedido.importe_total);
+  const cliente = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
 
-  // Opciones del select. Como van en innerHTML, el nombre pasa por esc().
-  const select = document.getElementById('cobro-medio-pago');
-  select.innerHTML = resMedios.data
-    .map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`)
-    .join('');
-  // Proponemos el medio original del pedido (si todavía existe en la lista).
-  if (pedido.id_medio_pago) select.value = pedido.id_medio_pago;
-  
-  // Guardamos medios y cuentas para decidir si hay que pedir la cuenta
-  mediosCobro = resMedios.data;
-  cuentasCobro = resCuentas.data;
-  actualizarCuentaCobro(pedido.id_cuenta);
+  await abrirModalCobro({
+    // Un pedido ya entregado impago no se "entrega" de nuevo: solo se cobra.
+    titulo: pedido.estado === 'ENTREGADO_IMPAGO' ? 'Registrar cobro' : 'Cobrar y Entregar',
+    subtitulo: `Pedido #${pedido.id} · ${cliente}`,
+    total: pedido.importe_total,
+    unidades,
+    // Callback: la ventana lo llama al confirmar. true = se guardó (la ventana se cierra).
+    alConfirmar: async (idMedio, idCuenta) => {
+      // Estado, medio y cuenta van en la MISMA actualización: se guardan juntos o no se guarda nada.
+      const { error: errorCobro } = await supabaseAdmin
+        .from('TB_TPEDIDOS')
+        .update({ estado: 'COMPLETADO', id_medio_pago: idMedio, id_cuenta: idCuenta })
+        .eq('id', pedido.id);
 
-  $('#modal-cobro-pedido').modal('show');
-}
+      if (errorCobro) {
+        // Por ejemplo, si la caja de ese día ya está cerrada.
+        mostrarNotificacion(mensajeErrorFuncion(errorCobro, 'pedido'), 'danger');
+        return false;
+      }
 
-// Muestra u oculta "¿A qué cuenta entra?" según el medio elegido en la ventana.
-// Se llama al abrirla (con la cuenta del pedido) y cada vez que cambia el medio.
-export function actualizarCuentaCobro(idCuentaPreseleccion = null) {
-  const grupo = document.getElementById('cobro-grupo-cuenta');
-  const selectCuenta = document.getElementById('cobro-cuenta');
-  const idMedio = document.getElementById('cobro-medio-pago')?.value;
-  if (!grupo || !selectCuenta) return;
-
-  const medio = mediosCobro.find(m => Number(m.id) === Number(idMedio));
-  const pideCuenta = Boolean(medio) && !medio.es_efectivo;
-
-  grupo.style.display = pideCuenta ? '' : 'none';
-  if (pideCuenta) llenarSelectCuentas(selectCuenta, cuentasCobro, idCuentaPreseleccion);
-  else selectCuenta.innerHTML = '';
-}
-
-// Se ejecuta al enviar el formulario de la ventana (botón "Confirmar cobro").
-export async function confirmarCobroPedido(e) {
-  e.preventDefault();
-  if (!pedidoCobroId) return;
-
-  const idMedio = Number(document.getElementById('cobro-medio-pago').value);
-  if (!idMedio) {
-    mostrarNotificacion('Elegí un medio de pago.', 'warning');
-    return;
-  }
-
-  // Cuenta: la elige quien cobra si el medio no es efectivo (cobrar siempre
-  // la exige, porque la plata entra en ese momento).
-  const medioCobro = mediosCobro.find(m => Number(m.id) === idMedio);
-  const pideCuenta = Boolean(medioCobro) && !medioCobro.es_efectivo;
-  const valorCuenta = document.getElementById('cobro-cuenta')?.value;
-  const idCuenta = (pideCuenta && valorCuenta) ? Number(valorCuenta) : null;
-  if (pideCuenta && !idCuenta) {
-    mostrarNotificacion('Elegí a qué cuenta entra el cobro.', 'warning');
-    return;
-  }
-
-  // Desactivamos el botón para evitar un doble clic que cobre dos veces.
-  const btn = document.getElementById('btn-confirmar-cobro');
-  btn.disabled = true;
-
-  // try / finally: el bloque "finally" se ejecuta SIEMPRE al salir (haya error
-  // o no), así el botón nunca queda trabado.
-  try {
-    // Estado y medio van en la MISMA actualización: se guardan juntos o no se guarda nada.
-    const { error } = await supabaseAdmin
-      .from('TB_TPEDIDOS')
-      .update({ estado: 'COMPLETADO', id_medio_pago: idMedio, id_cuenta: idCuenta })
-      .eq('id', pedidoCobroId);
-
-    if (error) {
-      // Por ejemplo, si la caja de ese día ya está cerrada.
-      mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
-      return;
+      mostrarNotificacion('Cobro registrado.');
+      cargarTablaPedidos();
+      return true;
     }
-
-    $('#modal-cobro-pedido').modal('hide');
-    pedidoCobroId = null;
-    mostrarNotificacion('Cobro registrado.');
-    cargarTablaPedidos();
-  } finally {
-    btn.disabled = false;
-  }
+  });
 }
 
 export async function editarPedido(idPedido) {
@@ -388,10 +321,6 @@ export async function editarPedido(idPedido) {
     const inputRef = document.getElementById('input-ref-cliente');
     if (inputRef) inputRef.value = pedido.nombre_referencia || '';
 
-    const selectMedio = document.getElementById('select-medio-pago');
-    if (selectMedio && pedido.id_medio_pago) selectMedio.value = pedido.id_medio_pago;
-    // Muestra el desplegable de cuenta si corresponde y deja elegida la del pedido
-    actualizarCuentaPOS(pedido.id_cuenta);
 
     // Recarga los precios con la lista del pedido
     await cargarPOS();
