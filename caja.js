@@ -43,6 +43,42 @@ let resumenCierreActual = null;
 // prolijo que sea una variable de este módulo).
 let cierresCache = [];
 
+// -----------------------------------------------------------------------------
+// htmlMovimientoCuentas  (interna)
+//   Arma las filas de la tabla "Movimiento por cuenta": dónde quedó la plata del día.
+//   Se usa en dos lugares: el cierre del día y el detalle de un cierre del historial.
+//   Recibe: filas -> lista de { nombre, sinCuenta, entra, sale, neto } (importes como número).
+//   Devuelve: el HTML ('' si no hay filas). Son "items" de un list-group: quien la llama
+//   los pone dentro de uno.
+//     entra = ventas cobradas · sale = gastos, pagos a proveedores y retiros · neto = entra - sale
+// -----------------------------------------------------------------------------
+function htmlMovimientoCuentas(filas) {
+  if (filas.length === 0) return '';
+
+  // Misma grilla en el encabezado y en cada fila: el nombre ocupa lo que sobra y los 3 importes
+  // tienen un ancho mínimo, así las columnas quedan alineadas.
+  const grilla = 'display:grid; grid-template-columns: 1fr repeat(3, minmax(84px, auto)); gap: 8px; align-items: center;';
+
+  const encabezado = `
+    <div class="list-group-item bg-light py-1 small font-weight-bold text-uppercase">Movimiento por cuenta</div>
+    <div class="list-group-item py-1 small text-muted" style="${grilla}">
+      <span></span><span class="text-right">Entra</span><span class="text-right">Sale</span><span class="text-right">Neto</span>
+    </div>`;
+
+  const cuerpo = filas.map(f => {
+    const neto = Number(f.neto);
+    return `
+    <div class="list-group-item py-2" style="${grilla}">
+      <span>${esc(f.nombre)}${f.sinCuenta ? '<br><small class="text-muted">cobros o pagos sin cuenta cargada</small>' : ''}</span>
+      <span class="text-right">$${formatearMoneda(f.entra)}</span>
+      <span class="text-right ${Number(f.sale) > 0 ? 'text-danger' : 'text-muted'}">${Number(f.sale) > 0 ? '-$' + formatearMoneda(f.sale) : '-'}</span>
+      <span class="text-right font-weight-bold">${neto < 0 ? '-' : ''}$${formatearMoneda(Math.abs(neto))}</span>
+    </div>`;
+  }).join('');
+
+  return encabezado + cuerpo;
+}
+
 
 // =============================================================================
 // 1. CIERRE DEL DÍA
@@ -153,6 +189,12 @@ export async function cargarResumenVentasDia() {
       html += lineaEgreso('Gastos y pagos por banco / otros medios <small class="text-muted">(no salen de la caja)</small>', resumen.gastos_banco);
       html += lineaEgreso('Retiros de efectivo', resumen.retiros_efectivo);
     }
+
+    // MOVIMIENTO POR CUENTA: dónde quedó la plata del día.
+    // La clave "cuentas" la calcula la base (script 12); si todavía no existe, no se muestra nada.
+    html += htmlMovimientoCuentas((resumen.cuentas || []).map(c => ({
+      nombre: c.nombre, sinCuenta: c.id_cuenta === null, entra: c.entra, sale: c.sale, neto: c.neto
+    })));
 
     // EFECTIVO ESPERADO en la caja física.
     html += `
@@ -392,6 +434,9 @@ export async function cargarTablaHistorialCierres() {
         gastos_efectivo, gastos_banco, total_gastos, retiros_efectivo, observaciones, estado,
         TB_DCIERRE_CAJA (
           monto, egresos, saldo_neto, cantidad_transacciones, TB_BMEDIO_PAGO ( nombre )
+        ),
+        TB_DCIERRE_CUENTA (
+          entra, sale, neto, TB_BCUENTAS ( nombre, tipo )
         )
       `)
       .gte('fecha', desde)
@@ -452,6 +497,22 @@ export function verDetalleCierre(idCierre) {
 
   const dif = Number(cierre.diferencia_efectivo || 0);
 
+  // MOVIMIENTO POR CUENTA del cierre (lo guarda cerrar_caja, script 13). Los cierres hechos antes
+  // no tienen estas filas: en ese caso la sección no se muestra.
+  // Orden: Efectivo primero, "Sin cuenta" al final y el resto por nombre. Los "true/false" se
+  // pueden restar (true = 1, false = 0): sirve para que el sort ponga primero a los que cumplen.
+  const filasCuenta = [...(cierre.TB_DCIERRE_CUENTA || [])]
+    .sort((a, b) =>
+      (b.TB_BCUENTAS?.tipo === 'EFECTIVO') - (a.TB_BCUENTAS?.tipo === 'EFECTIVO')
+      || (!a.TB_BCUENTAS) - (!b.TB_BCUENTAS)
+      || String(a.TB_BCUENTAS?.nombre).localeCompare(String(b.TB_BCUENTAS?.nombre)))
+    .map(d => ({
+      nombre: d.TB_BCUENTAS?.nombre || 'Sin cuenta', sinCuenta: !d.TB_BCUENTAS,
+      entra: d.entra, sale: d.sale, neto: d.neto
+    }));
+  const bloqueCuentas = filasCuenta.length > 0
+    ? `<div class="list-group mb-3">${htmlMovimientoCuentas(filasCuenta)}</div>` : '';
+
   // Una línea por medio de pago: ventas, y si hubo egresos, cuánto salió y el neto.
   let html = '<div class="list-group mb-3">';
   (cierre.TB_DCIERRE_CAJA || []).forEach(d => {
@@ -476,6 +537,8 @@ export function verDetalleCierre(idCierre) {
         <strong class="text-success">$${formatearMoneda(cierre.total_general)}</strong>
       </div>
     </div>
+
+    ${bloqueCuentas}
 
     <div class="p-2 bg-light rounded mb-2 border">
       <small class="d-block"><strong>Gastos y pagos en efectivo:</strong> $${formatearMoneda(cierre.gastos_efectivo)}</small>

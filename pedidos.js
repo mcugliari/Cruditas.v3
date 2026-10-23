@@ -92,11 +92,16 @@ export async function cargarTablaPedidos() {
 
   tbody.innerHTML = pedidosFiltrados.map(p => {
     const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
-    const medioBase = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : 'Efectivo';
+    const medioBase = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : '';   // sin medio = todavía no se cobró
     const cuentaPago = p.TB_BCUENTAS?.nombre;
     // La cuenta se agrega solo si aporta algo (para efectivo, medio y cuenta se llaman igual)
-    const medioPago = (cuentaPago && cuentaPago.toLowerCase() !== medioBase.toLowerCase())
-      ? `${medioBase} · ${cuentaPago}` : medioBase;
+    const mostrarCuenta = cuentaPago && cuentaPago.toLowerCase() !== medioBase.toLowerCase();
+    // Celda armada como HTML (los textos pasan por esc()): el medio en su insignia y, debajo,
+    // la cuenta en letra chica y gris. Sin medio (pedido sin cobrar) se muestra un guion.
+    const medioPago = medioBase
+      ? `<small class="badge badge-light border">${esc(medioBase)}</small>`
+        + (mostrarCuenta ? `<div class="small text-muted">${esc(cuentaPago)}</div>` : '')
+      : '<span class="text-muted">-</span>';
     // Marca del canal de venta (solo se muestra si no es MOSTRADOR, para no saturar la tabla)
     const badgeCanal = (p.canal && p.canal !== 'MOSTRADOR')
       ? ` <span class="badge badge-dark ml-1">${esc(p.canal)}</span>`
@@ -189,7 +194,7 @@ export async function cargarTablaPedidos() {
           <div class="font-weight-bold">${esc(clienteNombre)}${badgeCanal}</div>
           ${htmlObservaciones}
         </td>
-        <td><small class="badge badge-light border">${esc(medioPago)}</small></td>
+        <td>${medioPago}</td>
         <td class="text-right font-weight-bold">$${(p.importe_total || 0).toLocaleString('es-AR')}</td>
         <td class="text-center"><span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span></td>
         <td class="text-center">
@@ -360,11 +365,14 @@ export async function verDetallePedido(idPedido) {
     });
 
     document.getElementById('detalle-id-pedido').innerText = pedido.id;
-    const medioDetalle = pedido.TB_BMEDIO_PAGO?.nombre || 'Sin especificar';
+    const medioDetalle = pedido.TB_BMEDIO_PAGO?.nombre || '';   // sin medio = todavía no se cobró
     const cuentaDetalle = pedido.TB_BCUENTAS?.nombre;
-    document.getElementById('detalle-medio-pago').innerText =
-      (cuentaDetalle && cuentaDetalle.toLowerCase() !== medioDetalle.toLowerCase())
-        ? `${medioDetalle} · ${cuentaDetalle}` : medioDetalle;
+    // Medio arriba y, debajo en letra chica y gris, la cuenta (solo si aporta algo). Sin medio: "Sin especificar".
+    const detalleMostrarCuenta = cuentaDetalle && cuentaDetalle.toLowerCase() !== medioDetalle.toLowerCase();
+    document.getElementById('detalle-medio-pago').innerHTML =
+      medioDetalle
+        ? esc(medioDetalle) + (detalleMostrarCuenta ? `<small class="d-block text-muted font-weight-normal">${esc(cuentaDetalle)}</small>` : '')
+        : '<span class="text-muted font-weight-normal">Sin especificar</span>';
     document.getElementById('detalle-monto-total').innerText = `$${formatearMoneda(pedido.importe_total)}`;
 
     const clienteNombre = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
