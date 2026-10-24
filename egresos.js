@@ -272,6 +272,8 @@ export async function abrirModalEgreso(tipo) {
     '<option value="">-- Sin categoría --</option>' +
     (resCategorias.data || []).map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
   document.getElementById('grupo-egreso-categoria').classList.toggle('d-none', esRetiro);
+  // Aviso solo en los retiros: depositar en el banco se hace con Transferir (Cuentas y Saldos).
+  document.getElementById('egreso-aviso-retiro').classList.toggle('d-none', !esRetiro);
 
   // Fecha: hoy por defecto; no se permiten fechas futuras.
   const hoy = obtenerFechaActualISO();
@@ -280,7 +282,7 @@ export async function abrirModalEgreso(tipo) {
   inputFecha.max = hoy;
 
   document.getElementById('egreso-concepto').placeholder = esRetiro
-    ? 'Ej: Retiro del dueño, depósito en el banco'
+    ? 'Ej: Retiro del dueño'
     : 'Ej: Factura de luz, bolsa de hielo, reparación del horno';
 
   $('#modal-egreso').modal('show');

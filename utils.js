@@ -186,6 +186,15 @@ const MENSAJES_FUNCIONES = {
   cuenta_invalida:      'La cuenta no existe o está inactiva.',
   cuenta_incompatible:  'La cuenta no corresponde al medio de pago (el efectivo va a la cuenta Efectivo; la transferencia, a una cuenta bancaria o billetera).',
   cuenta_requerida:     'Elegí a qué cuenta corresponde el movimiento.',
+  monto_traspaso_invalido: 'El monto debe ser mayor a cero.',
+  cuentas_iguales:         'La cuenta de origen y la de destino no pueden ser la misma.',
+  monto_ajuste_invalido:   'El ajuste no puede ser cero.',
+  fecha_futura:            'La fecha no puede ser futura.',
+  movimiento_inexistente:  'El movimiento no existe.',
+  movimiento_ya_anulado:   'El movimiento ya estaba anulado.',
+  movimiento_cerrado:      'El movimiento pertenece a un día con la caja cerrada: no se puede anular. Anulá primero el cierre de caja de ese día.',
+  ajuste_de_cierre:        'Este ajuste lo generó un cierre de caja (diferencia de arqueo). Para deshacerlo, anulá ese cierre.',
+  cuenta_efectivo_fija: 'La cuenta Efectivo es fija: no se puede desactivar, borrar ni cambiar de tipo.',
   medio_requerido:      'Para cobrar hay que elegir el medio de pago.'
 };
 

@@ -47,31 +47,34 @@ let cierresCache = [];
 // htmlMovimientoCuentas  (interna)
 //   Arma las filas de la tabla "Movimiento por cuenta": dónde quedó la plata del día.
 //   Se usa en dos lugares: el cierre del día y el detalle de un cierre del historial.
-//   Recibe: filas -> lista de { nombre, sinCuenta, entra, sale, neto } (importes como número).
+//   Recibe: filas -> lista de { nombre, sinCuenta, entra, sale, traspasos, neto } (importes como número).
 //   Devuelve: el HTML ('' si no hay filas). Son "items" de un list-group: quien la llama
 //   los pone dentro de uno.
-//     entra = ventas cobradas · sale = gastos, pagos a proveedores y retiros · neto = entra - sale
+//     entra = ventas cobradas · sale = gastos, pagos a proveedores y retiros
+//     traspasos = transferencias y ajustes (+ entra a la cuenta, - sale) · neto = entra - sale + traspasos
 // -----------------------------------------------------------------------------
 function htmlMovimientoCuentas(filas) {
   if (filas.length === 0) return '';
 
-  // Misma grilla en el encabezado y en cada fila: el nombre ocupa lo que sobra y los 3 importes
+  // Misma grilla en el encabezado y en cada fila: el nombre ocupa lo que sobra y los 4 importes
   // tienen un ancho mínimo, así las columnas quedan alineadas.
-  const grilla = 'display:grid; grid-template-columns: 1fr repeat(3, minmax(84px, auto)); gap: 8px; align-items: center;';
+  const grilla = 'display:grid; grid-template-columns: 1fr repeat(4, minmax(78px, auto)); gap: 8px; align-items: center;';
 
   const encabezado = `
     <div class="list-group-item bg-light py-1 small font-weight-bold text-uppercase">Movimiento por cuenta</div>
     <div class="list-group-item py-1 small text-muted" style="${grilla}">
-      <span></span><span class="text-right">Entra</span><span class="text-right">Sale</span><span class="text-right">Neto</span>
+      <span></span><span class="text-right">Entra</span><span class="text-right">Sale</span><span class="text-right">Traspasos</span><span class="text-right">Neto</span>
     </div>`;
 
   const cuerpo = filas.map(f => {
     const neto = Number(f.neto);
+    const traspasos = Number(f.traspasos || 0);
     return `
     <div class="list-group-item py-2" style="${grilla}">
       <span>${esc(f.nombre)}${f.sinCuenta ? '<br><small class="text-muted">cobros o pagos sin cuenta cargada</small>' : ''}</span>
       <span class="text-right">$${formatearMoneda(f.entra)}</span>
       <span class="text-right ${Number(f.sale) > 0 ? 'text-danger' : 'text-muted'}">${Number(f.sale) > 0 ? '-$' + formatearMoneda(f.sale) : '-'}</span>
+      <span class="text-right ${traspasos < 0 ? 'text-danger' : (traspasos > 0 ? 'text-success' : 'text-muted')}">${traspasos === 0 ? '-' : (traspasos > 0 ? '+' : '-') + '$' + formatearMoneda(Math.abs(traspasos))}</span>
       <span class="text-right font-weight-bold">${neto < 0 ? '-' : ''}$${formatearMoneda(Math.abs(neto))}</span>
     </div>`;
   }).join('');
@@ -137,10 +140,11 @@ export async function cargarResumenVentasDia() {
     }
 
     // ---- CASO B: no hay nada para cerrar ----
-    if (Number(resumen.cantidad_pedidos) === 0 && Number(resumen.cantidad_egresos) === 0) {
+    if (Number(resumen.cantidad_pedidos) === 0 && Number(resumen.cantidad_egresos) === 0
+        && Number(resumen.cantidad_traspasos || 0) === 0) {
       contenedor.innerHTML = `
         <div class="alert alert-info text-center my-2">
-          No hay ventas cobradas ni egresos registrados hoy (${fechaTextoAR}).<br>
+          No hay ventas cobradas, egresos ni traspasos registrados hoy (${fechaTextoAR}).<br>
           <small>Las ventas se cuentan el día en que se cobran (pedidos completados).</small>
         </div>
       `;
@@ -193,14 +197,26 @@ export async function cargarResumenVentasDia() {
     // MOVIMIENTO POR CUENTA: dónde quedó la plata del día.
     // La clave "cuentas" la calcula la base (script 12); si todavía no existe, no se muestra nada.
     html += htmlMovimientoCuentas((resumen.cuentas || []).map(c => ({
-      nombre: c.nombre, sinCuenta: c.id_cuenta === null, entra: c.entra, sale: c.sale, neto: c.neto
+      nombre: c.nombre, sinCuenta: c.id_cuenta === null, entra: c.entra, sale: c.sale, traspasos: c.traspasos, neto: c.neto
     })));
+
+    // TRASPASOS DE EFECTIVO: depósitos al banco, extracciones y ajustes en la cuenta Efectivo.
+    // Cambian el efectivo esperado (la plata ya no está en la caja, o volvió), por eso se muestran
+    // en una línea aparte. Se ve solo si hubo alguno (la clave la calcula la base, script 15).
+    const traspasosEfectivo = Number(resumen.traspasos_efectivo || 0);
+    if (traspasosEfectivo !== 0) {
+      html += `
+        <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+          <span>Traspasos y ajustes de efectivo <small class="text-muted">(depósitos, extracciones)</small></span>
+          <span class="font-weight-bold ${traspasosEfectivo < 0 ? 'text-danger' : 'text-success'}">${traspasosEfectivo < 0 ? '-' : '+'}$${formatearMoneda(Math.abs(traspasosEfectivo))}</span>
+        </div>`;
+    }
 
     // EFECTIVO ESPERADO en la caja física.
     html += `
       <div class="list-group-item d-flex justify-content-between align-items-center py-2 border-warning" style="background:#fff8e1;">
         <span><strong>EFECTIVO ESPERADO EN CAJA</strong><br>
-          <small class="text-muted">ventas en efectivo − gastos en efectivo − retiros</small></span>
+          <small class="text-muted">ventas en efectivo − gastos en efectivo − retiros ± traspasos de efectivo</small></span>
         <strong class="h5 mb-0">$${formatearMoneda(resumen.efectivo_esperado)}</strong>
       </div>
     </div>`;
@@ -436,7 +452,7 @@ export async function cargarTablaHistorialCierres() {
           monto, egresos, saldo_neto, cantidad_transacciones, TB_BMEDIO_PAGO ( nombre )
         ),
         TB_DCIERRE_CUENTA (
-          entra, sale, neto, TB_BCUENTAS ( nombre, tipo )
+          entra, sale, traspasos, neto, TB_BCUENTAS ( nombre, tipo )
         )
       `)
       .gte('fecha', desde)
@@ -508,7 +524,7 @@ export function verDetalleCierre(idCierre) {
       || String(a.TB_BCUENTAS?.nombre).localeCompare(String(b.TB_BCUENTAS?.nombre)))
     .map(d => ({
       nombre: d.TB_BCUENTAS?.nombre || 'Sin cuenta', sinCuenta: !d.TB_BCUENTAS,
-      entra: d.entra, sale: d.sale, neto: d.neto
+      entra: d.entra, sale: d.sale, traspasos: d.traspasos, neto: d.neto
     }));
   const bloqueCuentas = filasCuenta.length > 0
     ? `<div class="list-group mb-3">${htmlMovimientoCuentas(filasCuenta)}</div>` : '';

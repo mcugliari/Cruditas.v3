@@ -13,6 +13,11 @@ import { cargarDeuda, renderizarDeuda, verDeudaProveedor, pagarCompraDeLaDeuda, 
 import { abrirModalNuevaCompra, guardarCompra, agregarLinea, quitarLinea, alCambiarLinea, alCambiarPagarAhora } from './compraForm.js';
 import { cargarProveedores, abrirModalNuevoProveedor, abrirModalEditarProveedor, guardarProveedor, cambiarEstadoProveedor } from './proveedores.js';
 import { cargarInsumos, renderizarInsumos, abrirModalNuevoInsumo, abrirModalEditarInsumo, guardarInsumo, cambiarEstadoInsumo } from './insumos.js';
+import {
+  cargarCuentas, abrirModalNuevaCuenta, abrirModalEditarCuenta, guardarCuenta, cambiarEstadoCuenta,
+  abrirModalTransferencia, guardarTransferencia, abrirModalAjuste, guardarAjuste,
+  abrirMovimientosCuenta, anularMovimientoCuenta
+} from './cuentas.js';
 import { inicializarCierreCaja, inicializarHistorialCierres, cargarTablaHistorialCierres, verDetalleCierre, actualizarIndicadorCaja } from './caja.js';
 
 // FUNCION DE NAVEGACIÓN
@@ -64,6 +69,8 @@ export function navegarA(seccionId, elementoMenu) {
     cargarCompras();
   } else if (seccionId === 'proveedores') {
     cargarProveedores();
+  } else if (seccionId === 'cuentas') {
+    cargarCuentas();
   } else if (seccionId === 'insumos') {
     cargarInsumos();
   }
@@ -353,6 +360,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       abrirModalEditarProveedor(id);
     } else if (action === 'cambiar-estado-proveedor') {
       cambiarEstadoProveedor(id);
+    }
+  });
+
+  // 16. Cuentas y saldos
+  document.getElementById('btn-nueva-cuenta')?.addEventListener('click', abrirModalNuevaCuenta);
+  document.getElementById('form-cuenta')?.addEventListener('submit', guardarCuenta);
+  document.getElementById('btn-transferir')?.addEventListener('click', abrirModalTransferencia);
+  document.getElementById('form-transferencia')?.addEventListener('submit', guardarTransferencia);
+  document.getElementById('form-ajuste')?.addEventListener('submit', guardarAjuste);
+
+  // Lista de movimientos de una cuenta: botón "Anular" de las transferencias y ajustes manuales.
+  document.getElementById('mov-cuenta-body')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="anular-movimiento-cuenta"]');
+    if (btn) anularMovimientoCuenta(Number(btn.dataset.id));
+  });
+
+  document.getElementById('tabla-cuentas-body')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    const id = Number(btn.dataset.id);
+
+    if (action === 'editar-cuenta') {
+      abrirModalEditarCuenta(id);
+    } else if (action === 'ver-movimientos-cuenta') {
+      abrirMovimientosCuenta(id);
+    } else if (action === 'ajustar-cuenta') {
+      abrirModalAjuste(id);
+    } else if (action === 'cambiar-estado-cuenta') {
+      cambiarEstadoCuenta(id);
     }
   });
 

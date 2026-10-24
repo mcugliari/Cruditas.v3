@@ -100,6 +100,13 @@
             </a>
           </li>
 
+                    <li class="nav-item">
+            <a href="#" class="nav-link" data-section="cuentas">
+              <i class="nav-icon fas fa-wallet"></i>
+              <p>Cuentas y Saldos</p>
+            </a>
+          </li>
+
           <!-- SECCIÓN COMPRAS -->
           <li class="nav-header">COMPRAS</li>
           <li class="nav-item">
@@ -705,6 +712,75 @@
       </div>
     </section>
 
+    <!-- SECCIÓN: CUENTAS Y SALDOS -->
+    <section id="sec-cuentas" class="modulo-app d-none">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-wallet mr-2 text-warning"></i>Cuentas y Saldos</h1></div>
+            <div class="col-sm-6 text-right">
+              <button class="btn btn-outline-dark font-weight-bold mr-2" id="btn-transferir"><i class="fas fa-exchange-alt mr-1"></i> Transferir</button>
+              <button class="btn btn-warning font-weight-bold" id="btn-nueva-cuenta"><i class="fas fa-plus mr-1"></i> Nueva Cuenta</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Totales (solo de las cuentas activas) -->
+      <div class="row">
+        <div class="col-12 col-md-4">
+          <div class="info-box">
+            <span class="info-box-icon bg-warning"><i class="fas fa-coins"></i></span>
+            <div class="info-box-content"><span class="info-box-text">Saldo total</span><span class="info-box-number" id="cuentas-total">$0,00</span></div>
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="info-box">
+            <span class="info-box-icon bg-success"><i class="fas fa-money-bill-wave"></i></span>
+            <div class="info-box-content"><span class="info-box-text">Efectivo</span><span class="info-box-number" id="cuentas-efectivo">$0,00</span></div>
+          </div>
+        </div>
+        <div class="col-12 col-md-4">
+          <div class="info-box">
+            <span class="info-box-icon bg-info"><i class="fas fa-university"></i></span>
+            <div class="info-box-content"><span class="info-box-text">Bancos y billeteras</span><span class="info-box-number" id="cuentas-otras">$0,00</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aviso: cobros o pagos sin cuenta cargada (lo completa cuentas.js) -->
+      <div class="alert alert-warning d-none" id="cuentas-aviso" role="alert"></div>
+
+      <div class="card card-outline card-warning mt-2">
+        <div class="card-header"><h3 class="card-title font-weight-bold">Cuentas</h3></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th>Cuenta</th>
+                  <th class="text-right">Saldo inicial</th>
+                  <th class="text-right">Ingresos</th>
+                  <th class="text-right">Egresos</th>
+                  <th class="text-right">Traspasos</th>
+                  <th class="text-right">Saldo actual</th>
+                  <th class="text-right" title="Saldo de la cuenta al último cierre de caja">Al último cierre</th>
+                  <th class="text-center">Estado</th>
+                  <th class="text-center" style="width: 215px">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-cuentas-body">
+                <tr><td colspan="9" class="text-center py-4">Cargando cuentas...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <p class="text-muted small mt-2">
+        Saldo actual = saldo inicial + ingresos (cobros) - egresos (gastos, pagos a proveedores y retiros) ± traspasos y ajustes, contando desde la fecha del saldo inicial.
+      </p>
+    </section>
+
     <!-- SECCIÓN: INSUMOS -->
     <section id="sec-insumos" class="modulo-app d-none">
       <div class="content-header">
@@ -992,6 +1068,10 @@
         <form id="form-egreso">
           <div class="modal-body">
             <input type="hidden" id="egreso-tipo">
+            <!-- Solo en los retiros: aclara que depositar en el banco NO es un retiro (lo muestra egresos.js) -->
+            <div class="alert alert-info py-2 small d-none" id="egreso-aviso-retiro">
+              <i class="fas fa-info-circle mr-1"></i> Un retiro es plata que se lleva el dueño. Para <strong>depositar efectivo en el banco</strong> usá <em>Cuentas y Saldos &rarr; Transferir</em>.
+            </div>
             <div class="form-group">
               <label for="egreso-concepto">Concepto *</label>
               <input type="text" class="form-control" id="egreso-concepto" maxlength="150" required>
@@ -1248,6 +1328,172 @@
               <label for="prov-cuit">CUIT</label>
               <input type="text" class="form-control" id="prov-cuit" maxlength="20" placeholder="Ej: 30-12345678-9">
             </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold"><i class="fas fa-save mr-1"></i> Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Movimientos de una cuenta (lo arma cuentas.js con VW_MOVIMIENTOS_CUENTA) -->
+  <div class="modal fade" id="modal-movimientos-cuenta" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-list mr-2"></i><span id="mov-cuenta-titulo">Movimientos</span></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2 text-muted" id="mov-cuenta-resumen"></p>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th style="width: 100px">Fecha</th>
+                  <th style="width: 130px">Tipo</th>
+                  <th>Detalle</th>
+                  <th class="text-right" style="width: 130px">Monto</th>
+                  <th class="text-center" style="width: 60px"></th>
+                </tr>
+              </thead>
+              <tbody id="mov-cuenta-body">
+                <tr><td colspan="5" class="text-center py-3">Cargando movimientos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <small class="text-muted d-block mt-2" id="mov-cuenta-nota"></small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Transferir entre cuentas -->
+  <div class="modal fade" id="modal-transferencia" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-exchange-alt mr-2"></i>Transferir entre cuentas</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-transferencia">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="transf-origen">Desde (sale la plata) *</label>
+              <select class="form-control" id="transf-origen" required></select>
+              <small class="form-text text-muted" id="transf-saldo-origen"></small>
+            </div>
+            <div class="form-group">
+              <label for="transf-destino">Hacia (entra la plata) *</label>
+              <select class="form-control" id="transf-destino" required></select>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label for="transf-monto">Monto ($) *</label>
+                <input type="number" class="form-control" id="transf-monto" min="0.01" step="0.01" required>
+              </div>
+              <div class="form-group col-md-6">
+                <label for="transf-fecha">Fecha *</label>
+                <input type="date" class="form-control" id="transf-fecha" required>
+              </div>
+            </div>
+            <div class="form-group mb-0">
+              <label for="transf-concepto">Concepto (opcional)</label>
+              <input type="text" class="form-control" id="transf-concepto" maxlength="200" placeholder="Ej: Depósito de la recaudación">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold" id="btn-guardar-transferencia"><i class="fas fa-check mr-1"></i> Transferir</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Ajustar saldo de una cuenta -->
+  <div class="modal fade" id="modal-ajuste" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-sliders-h mr-2"></i>Ajustar saldo</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-ajuste">
+          <div class="modal-body">
+            <input type="hidden" id="ajuste-cuenta-id">
+            <p class="mb-3">Cuenta: <strong id="ajuste-cuenta-nombre"></strong><br>
+              <span class="text-muted">Saldo actual: <strong id="ajuste-saldo-actual"></strong></span></p>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label for="ajuste-sentido">Qué hacer *</label>
+                <select class="form-control" id="ajuste-sentido">
+                  <option value="SUMAR">Sumar a la cuenta</option>
+                  <option value="RESTAR">Restar de la cuenta</option>
+                </select>
+              </div>
+              <div class="form-group col-md-6">
+                <label for="ajuste-monto">Monto ($) *</label>
+                <input type="number" class="form-control" id="ajuste-monto" min="0.01" step="0.01" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="ajuste-fecha">Fecha *</label>
+              <input type="date" class="form-control" id="ajuste-fecha" required>
+            </div>
+            <div class="form-group mb-0">
+              <label for="ajuste-motivo">Motivo *</label>
+              <textarea class="form-control" id="ajuste-motivo" rows="2" maxlength="200" placeholder="Ej: Comisión bancaria de octubre" required></textarea>
+              <small class="form-text text-muted">Sirve para corregir diferencias que no vienen de una venta, un gasto ni una transferencia.</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold" id="btn-guardar-ajuste"><i class="fas fa-save mr-1"></i> Registrar ajuste</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Crear/Editar Cuenta -->
+  <div class="modal fade" id="modal-cuenta" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold" id="modal-cuenta-title">Nueva Cuenta</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-cuenta">
+          <div class="modal-body">
+            <input type="hidden" id="cuenta-id">
+            <div class="form-group">
+              <label for="cuenta-nombre">Nombre de la cuenta *</label>
+              <input type="text" class="form-control" id="cuenta-nombre" maxlength="80" placeholder="Ej: Mercado Pago - Marisa" required>
+              <small class="form-text text-muted">Se sugiere el formato "Entidad - Titular".</small>
+            </div>
+            <div class="form-group">
+              <label for="cuenta-tipo">Tipo *</label>
+              <select class="form-control" id="cuenta-tipo" required></select>
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label for="cuenta-saldo">Saldo inicial ($) *</label>
+                <input type="number" class="form-control" id="cuenta-saldo" step="0.01" required>
+              </div>
+              <div class="form-group col-md-6">
+                <label for="cuenta-fecha">Saldo al comenzar el día *</label>
+                <input type="date" class="form-control" id="cuenta-fecha" required>
+              </div>
+            </div>
+            <small class="form-text text-muted mb-0">
+              El saldo se calcula desde esa fecha (inclusive): saldo inicial + cobros - pagos y gastos de la cuenta.
+            </small>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
