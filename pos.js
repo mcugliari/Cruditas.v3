@@ -416,7 +416,8 @@ export function actualizarResumenCarrito() {
     poner('badge-carrito', '0');
     poner('subtotal-pedido', '$0');
     poner('monto-total-pedido', '$0');
-    poner('monto-cobrar-btn', '$0');
+    poner('monto-descuento', '-$0');
+    document.getElementById('pos-desglose')?.classList.add('d-none');
     totalCarritoActual = 0;
     unidadesCarritoActual = 0;
     return;
@@ -495,24 +496,14 @@ export function actualizarResumenCarrito() {
 
   // 2. Calcular si corresponde el Descuento por Docena combinada
   let montoTotalFinal = subtotalSinDescuento;
+  let descuentoTotal = 0;
   const docenasCompletas = Math.floor(totalSueltasDocenables / 12);
 
   if (docenasCompletas > 0 && precioDocenaSugerido > 0) {
     const descuentoUnidadDocena = (precioUnidadDocenable * 12) - precioDocenaSugerido;
-    const descuentoTotal = descuentoUnidadDocena * docenasCompletas;
-
-    if (descuentoTotal > 0) {
+    if (descuentoUnidadDocena > 0) {
+      descuentoTotal = descuentoUnidadDocena * docenasCompletas;
       montoTotalFinal -= descuentoTotal;
-
-      html += `
-        <li class="pos-cart-discount">
-          <div>
-            <strong><i class="fas fa-tag mr-1" aria-hidden="true"></i> Descuento por Docena</strong>
-            <small>${docenasCompletas} doc. promocional(es)</small>
-          </div>
-          <span>-$${descuentoTotal.toLocaleString('es-AR')}</span>
-        </li>
-      `;
     }
   }
 
@@ -522,10 +513,12 @@ export function actualizarResumenCarrito() {
   const textoTotal = `$${montoTotalFinal.toLocaleString('es-AR')}`;
   poner('cant-total-items', totalItems);
   poner('badge-carrito', totalItems);
-  // Subtotal = antes del descuento por docena; el total ya lo descuenta.
+  // Desglose (solo si hay descuento): primero el Subtotal, después el Descuento, y recién abajo el total.
   poner('subtotal-pedido', `$${subtotalSinDescuento.toLocaleString('es-AR')}`);
+  poner('monto-descuento', `-$${descuentoTotal.toLocaleString('es-AR')}`);
+  poner('detalle-descuento', `(${docenasCompletas} doc.)`);
+  document.getElementById('pos-desglose')?.classList.toggle('d-none', descuentoTotal <= 0);
   poner('monto-total-pedido', textoTotal);
-  poner('monto-cobrar-btn', textoTotal);
   // Los guardamos para mostrarlos en la ventana de cobro.
   totalCarritoActual = montoTotalFinal;
   unidadesCarritoActual = totalItems;

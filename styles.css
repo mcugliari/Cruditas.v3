@@ -917,26 +917,23 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 .pos-cart-del:hover { color: #fca5a5; }
 .pos-cart-btn:focus-visible, .pos-cart-del:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: 2px; }
 
-/* Línea del descuento por docena */
-.pos-cart-discount {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 10px 2px; border-bottom: 1px solid #243044;
-  color: #f87171; font-weight: 800;
-}
-.pos-cart-discount strong { display: block; font-size: .92rem; }
-.pos-cart-discount small { color: #9ca3af; font-size: .76rem; font-weight: 600; }
-
 /* Total de unidades y subtotal */
 .pos-totales {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
   padding: 12px 16px; margin-bottom: 10px;
   border: 1px solid #243044; border-radius: 12px; background: #1a2332;
 }
-.pos-tot-unidades, .pos-tot-subtotal { display: flex; flex-direction: column; gap: 2px; }
-.pos-tot-subtotal { align-items: flex-end; }
+.pos-tot-unidades { display: flex; flex-direction: column; gap: 2px; }
+/* Desglose: aparece solo con descuento (lo muestra/oculta pos.js con d-none) */
+.pos-desglose { flex: 1 1 auto; max-width: 62%; margin: 0; min-width: 0; }
+.pos-desglose > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pos-desglose dt { color: #9ca3af; font-size: .82rem; font-weight: 600; }
+.pos-desglose dt small { color: #8391a7; font-size: .74rem; font-weight: 600; }
+.pos-desglose dd { margin: 0; color: #fff; font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pos-desglose-desc dt, .pos-desglose-desc dd { color: #f87171; }
+.pos-desglose-desc dt small { color: #fca5a5; }
 .pos-totales span { color: #9ca3af; font-size: .82rem; font-weight: 600; }
 .pos-order-dark #cant-total-items { color: #fff; font-size: 2rem; font-weight: 800; line-height: 1; }
-.pos-order-dark #subtotal-pedido { color: #fff; font-size: 1.4rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
 
 /* Total a cobrar */
 .pos-total-cobrar {
@@ -974,8 +971,8 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 .pos-order-dark .btn-pos-cobrar:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: 2px; }
 
 .pos-order-dark .btn-pos-cobrar {
-  justify-content: space-between; gap: 10px;
-  padding: 10px 16px;
+  justify-content: center; gap: 10px;
+  padding: 12px 16px;
   border: 1px solid #4ade80;
   border-radius: 12px;
   background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
@@ -983,9 +980,8 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   box-shadow: 0 4px 12px rgba(22, 163, 74, .3);
 }
 .pos-order-dark .btn-pos-cobrar:hover { background: linear-gradient(180deg, #1db954 0%, #16a34a 100%); color: #fff; }
-.pos-cobrar-texto { display: inline-flex; align-items: center; gap: 8px; font-size: .95rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; text-align: left; }
+.pos-cobrar-texto { display: inline-flex; align-items: center; gap: 8px; font-size: 1.05rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; text-align: left; }
 .pos-cobrar-texto > i { font-size: 1.25rem; }
-.pos-cobrar-monto { font-size: 1.3rem; font-weight: 850; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ---------- 3. PANTALLAS CHICAS ---------- */
 /* Panel angosto (tablet): cada ítem pasa a dos filas para que no se apriete */

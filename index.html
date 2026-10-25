@@ -235,16 +235,22 @@
                 <p class="pos-cart-empty">El carrito está vacío</p>
               </div>
 
-              <!-- Unidades y subtotal -->
+              <!-- Unidades y, si hay descuento, el desglose: Subtotal y después Descuento -->
               <div class="pos-totales">
                 <div class="pos-tot-unidades">
                   <span>Total de unidades</span>
                   <strong id="cant-total-items">0</strong>
                 </div>
-                <div class="pos-tot-subtotal">
-                  <span>Subtotal</span>
-                  <strong id="subtotal-pedido">$0</strong>
-                </div>
+                <dl class="pos-desglose d-none" id="pos-desglose">
+                  <div>
+                    <dt>Subtotal</dt>
+                    <dd id="subtotal-pedido">$0</dd>
+                  </div>
+                  <div class="pos-desglose-desc">
+                    <dt>Descuento por docena <small id="detalle-descuento"></small></dt>
+                    <dd id="monto-descuento">-$0</dd>
+                  </div>
+                </dl>
               </div>
 
               <!-- Total a cobrar -->
@@ -264,7 +270,6 @@
                 </div>
                 <button type="button" class="btn btn-pos-cobrar" data-action="guardar-pedido" data-estado="COMPLETADO">
                   <span class="pos-cobrar-texto"><i class="fas fa-check-circle" aria-hidden="true"></i> Cobrar y entregar</span>
-                  <span class="pos-cobrar-monto" id="monto-cobrar-btn">$0</span>
                 </button>
               </div>
 
