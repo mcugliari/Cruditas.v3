@@ -729,3 +729,276 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 .btn-limpiar-todo:hover { background: #f5e1e1; border-color: #e2c8c8; color: #743d3d; transform: translateY(-1px); }
 .btn-limpiar-todo:active { transform: none; }
 .btn-limpiar-todo:focus-visible { outline: 3px solid rgba(138, 77, 77, .25); outline-offset: 2px; }
+
+/* =============================================================================
+   TANDA VISUAL: catálogo con fotos y panel oscuro del pedido
+   Va al FINAL del archivo a propósito: con igual especificidad gana lo último,
+   así pisa las reglas anteriores del POS sin tener que borrarlas.
+   Colores del panel: fondo #111827, superficies #1f2937, líneas #2b3648,
+   texto #f3f4f6, texto suave #9ca3af, dorado #e9b83f, verde #22c55e.
+   ============================================================================= */
+
+/* ---------- 1. TARJETAS DEL CATÁLOGO ---------- */
+.pos-card-producto {
+  min-height: 0;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 10px 11px;
+  text-align: center;
+}
+
+/* Foto: recuadro con ícono de reemplazo debajo; la <img> se apoya encima */
+.pos-prod-img,
+.pos-cart-thumb {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  background: #f1f3f7;
+}
+.pos-prod-img { aspect-ratio: 16 / 10; border-radius: 10px; }
+.pos-prod-ph { color: #c3ccd9; font-size: 1.9rem; }
+.pos-prod-img img,
+.pos-cart-thumb img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
+/* Etiqueta de categoría (solo en búsquedas): centrada y sin el margen negativo viejo */
+.pos-card-producto .pos-prod-cat { margin: 0; justify-content: center; }
+
+/* Nombre del gusto: más grande y en negrita; 2 líneas reservadas para alinear tarjetas */
+.pos-card-producto .pos-prod-title {
+  min-height: 2.6em;
+  display: -webkit-box;
+  color: #1b2a3d;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -.005em;
+}
+.pos-card-producto .pos-prod-price { color: #96680a; font-size: 1.05rem; font-weight: 800; }
+.pos-card-activa .pos-prod-price { color: #7a5408; }
+
+/* Botón "+" dorado, "-" claro */
+.pos-card-producto .pos-qty-pill .btn-pos-add { background: #e9b83f; color: #1b2a3d; }
+.pos-card-producto .pos-qty-pill .btn-pos-add:hover { background: #d9a526; color: #1b2a3d; }
+.pos-card-producto .pos-qty-pill .btn-pos-sq:not(.btn-pos-add):hover { background: #26364a; color: #fff; }
+
+/* Botones +6 / +12 */
+.pos-card-producto .pos-dozen-controls { margin-top: 2px; }
+
+/* "X": reseteo del ítem (aparece solo con cantidad > 0, lo controla pos.js con d-none) */
+.pos-btn-reset {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: rgba(17, 24, 39, .88); color: #fff;
+  font-size: .8rem; line-height: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+}
+.pos-btn-reset:hover { background: #b91c1c; color: #fff; }
+.pos-btn-reset:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: 2px; }
+
+/* Con cantidad: tono claro (menos de 12 u.) */
+.pos-card-producto.pos-card-activa {
+  border: 1.5px solid #e2c15b !important;
+  background: #fffbee !important;
+  box-shadow: 0 3px 9px rgba(150, 112, 18, .08) !important;
+}
+/* Una docena o más (>= 12 u.): tono más oscuro e intenso */
+.pos-card-producto.pos-card-activa.pos-card-docena {
+  border: 2px solid #b8860b !important;
+  background: #f2d98d !important;
+  box-shadow: 0 4px 12px rgba(150, 105, 10, .22) !important;
+}
+.pos-card-docena .pos-prod-title { color: #2a1f05; }
+.pos-card-docena .pos-prod-price { color: #5e4004; }
+.pos-card-docena .pos-qty-pill { background: #fff; border-color: #c99a1e; }
+.pos-card-docena .pos-cant-num { color: #4a3303; }
+.pos-card-docena .pos-prod-img { background: #fbf3dc; }
+
+/* ---------- 2. PANEL DERECHO OSCURO ---------- */
+.pos-order-card.pos-order-dark {
+  background: #111827;
+  border: 1px solid #1f2937 !important;
+  border-radius: 16px;
+  color: #f3f4f6;
+  box-shadow: 0 10px 28px rgba(8, 13, 24, .28) !important;
+}
+.pos-order-dark .pos-order-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 16px 18px 12px;
+  background: transparent;
+}
+.pos-order-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pos-order-title h3 { margin: 0; color: #fff; font-size: 1.3rem; font-weight: 800; }
+.pos-cart-icon { position: relative; display: inline-flex; color: #e9b83f; font-size: 1.55rem; }
+.pos-cart-badge {
+  position: absolute; top: -9px; right: -12px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 999px; background: #e9b83f; color: #111827;
+  font-size: .72rem; font-weight: 800; line-height: 20px; text-align: center;
+}
+
+/* Limpiar todo, versión oscura */
+.pos-order-dark .btn-limpiar-todo {
+  flex: 0 0 auto;
+  padding: .45rem .8rem;
+  border: 1px solid #7f1d1d; border-radius: 9px;
+  background: rgba(239, 68, 68, .12); color: #fca5a5;
+  font-size: .85rem; font-weight: 700;
+}
+.pos-order-dark .btn-limpiar-todo:hover { background: rgba(239, 68, 68, .24); color: #fecaca; }
+
+/* Formulario: etiquetas y campos legibles sobre fondo oscuro */
+.pos-order-dark .card-body { padding: 0 18px 18px; background: transparent; }
+.pos-order-dark label { color: #cbd5e1; }
+.pos-order-dark .form-control {
+  background: #1f2937; border-color: #374151; color: #f3f4f6;
+}
+.pos-order-dark .form-control::placeholder { color: #8391a7; }
+.pos-order-dark .form-control:focus {
+  background: #1f2937; color: #fff;
+  border-color: #e9b83f; box-shadow: 0 0 0 3px rgba(233, 184, 63, .2);
+}
+.pos-order-dark .form-control option { background: #1f2937; color: #f3f4f6; }
+.pos-order-dark .select2-container .select2-selection--single {
+  background-color: #1f2937 !important; border-color: #374151 !important;
+}
+.pos-order-dark .select2-container--default .select2-selection--single .select2-selection__rendered { color: #f3f4f6 !important; }
+.pos-order-dark .select2-container--default .select2-selection--single .select2-selection__arrow b { border-color: #9ca3af transparent transparent transparent; }
+.pos-order-dark .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #8391a7 !important; }
+
+/* Lista de ítems */
+.pos-order-dark .pos-cart-items {
+  max-height: 34vh; min-height: 64px;
+  margin: 4px 0 14px; padding: 0;
+  overflow-y: auto;
+  border: 0 !important; border-top: 1px solid #243044 !important; border-radius: 0 !important;
+  background: transparent !important;
+  scrollbar-width: thin; scrollbar-color: #374151 transparent;
+}
+.pos-cart-empty { margin: 0; padding: 22px 0; color: #8391a7; text-align: center; font-size: .9rem; }
+.pos-cart-list { margin: 0; padding: 0; list-style: none; }
+.pos-cart-line {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto auto 28px;
+  grid-template-areas: "thumb info qty total del";
+  align-items: center; gap: 10px;
+  padding: 10px 2px;
+  border-bottom: 1px solid #243044;
+}
+.pos-cart-thumb { grid-area: thumb; width: 46px; height: 46px; border-radius: 8px; background: #1f2937; }
+.pos-cart-thumb .pos-prod-ph { color: #4b5a72; font-size: 1.2rem; }
+.pos-cart-info { grid-area: info; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pos-cart-name { overflow: hidden; color: #fff; font-size: .95rem; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.pos-cart-sub { display: flex; gap: 8px; overflow: hidden; color: #9ca3af; font-size: .78rem; white-space: nowrap; }
+.pos-cart-cat { overflow: hidden; text-overflow: ellipsis; }
+.pos-cart-qty { grid-area: qty; display: inline-flex; align-items: center; gap: 6px; }
+.pos-cart-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: #2b3648; color: #e5e7eb; font-size: .7rem;
+}
+.pos-cart-btn:hover { background: #3a475c; color: #fff; }
+.pos-cart-btn.pos-cart-btn-add { background: #e9b83f; color: #111827; }
+.pos-cart-btn.pos-cart-btn-add:hover { background: #f3c85c; color: #111827; }
+.pos-cart-n { min-width: 22px; color: #fff; font-size: 1.05rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.pos-cart-total { grid-area: total; min-width: 62px; color: #fff; font-size: .98rem; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.pos-cart-del {
+  grid-area: del;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 32px; padding: 0;
+  border: 0; background: transparent; color: #f87171; font-size: .95rem;
+}
+.pos-cart-del:hover { color: #fca5a5; }
+.pos-cart-btn:focus-visible, .pos-cart-del:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: 2px; }
+
+/* Línea del descuento por docena */
+.pos-cart-discount {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 2px; border-bottom: 1px solid #243044;
+  color: #f87171; font-weight: 800;
+}
+.pos-cart-discount strong { display: block; font-size: .92rem; }
+.pos-cart-discount small { color: #9ca3af; font-size: .76rem; font-weight: 600; }
+
+/* Total de unidades y subtotal */
+.pos-totales {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; margin-bottom: 10px;
+  border: 1px solid #243044; border-radius: 12px; background: #1a2332;
+}
+.pos-tot-unidades, .pos-tot-subtotal { display: flex; flex-direction: column; gap: 2px; }
+.pos-tot-subtotal { align-items: flex-end; }
+.pos-totales span { color: #9ca3af; font-size: .82rem; font-weight: 600; }
+.pos-order-dark #cant-total-items { color: #fff; font-size: 2rem; font-weight: 800; line-height: 1; }
+.pos-order-dark #subtotal-pedido { color: #fff; font-size: 1.4rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+/* Total a cobrar */
+.pos-total-cobrar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 18px; margin-bottom: 12px;
+  border: 1.5px solid #c9a227; border-radius: 12px;
+  background: linear-gradient(135deg, #0d2417 0%, #14391f 100%);
+}
+.pos-total-cobrar > i { color: #4ade80; font-size: 1.9rem; }
+.pos-total-cobrar span { display: block; color: #f3f4f6; font-size: .9rem; font-weight: 700; }
+.pos-order-dark #monto-total-pedido {
+  color: #4ade80 !important;
+  font-size: clamp(2rem, 3vw, 2.7rem);
+  font-weight: 850 !important;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Botones de acción: "Solo Preparar" acompaña el estilo oscuro */
+.pos-order-dark .pos-actions-container { margin-top: 0; }
+.pos-order-dark .btn-pos-preparar {
+  background: transparent !important;
+  border: 1.5px solid #3b4a63 !important;
+  color: #dbe4f3 !important;
+  box-shadow: none;
+}
+.pos-order-dark .btn-pos-preparar:hover {
+  background: #1f2937 !important;
+  border-color: #e9b83f !important;
+  color: #fff !important;
+  box-shadow: none;
+}
+.pos-order-dark .btn-pos-preparar > i { color: #e9b83f; }
+.pos-order-dark .btn-pos-action:focus-visible,
+.pos-order-dark .btn-pos-cobrar:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: 2px; }
+
+.pos-order-dark .btn-pos-cobrar {
+  justify-content: space-between; gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid #4ade80;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, .3);
+}
+.pos-order-dark .btn-pos-cobrar:hover { background: linear-gradient(180deg, #1db954 0%, #16a34a 100%); color: #fff; }
+.pos-cobrar-texto { display: inline-flex; align-items: center; gap: 8px; font-size: .95rem; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; text-align: left; }
+.pos-cobrar-texto > i { font-size: 1.25rem; }
+.pos-cobrar-monto { font-size: 1.3rem; font-weight: 850; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- 3. PANTALLAS CHICAS ---------- */
+/* Panel angosto (tablet): cada ítem pasa a dos filas para que no se apriete */
+@media (max-width: 1199.98px) {
+  .pos-cart-line {
+    grid-template-columns: 46px minmax(0, 1fr) 28px;
+    grid-template-areas: "thumb info del" "thumb qty total";
+    row-gap: 6px;
+  }
+  .pos-cart-qty { justify-self: start; }
+  .pos-cart-total { justify-self: end; }
+}
+@media (max-width: 767.98px) {
+  .pos-order-dark .card-body { padding: 0 12px 14px; }
+  .pos-card-producto .pos-prod-title { font-size: 1rem; }
+}

@@ -201,10 +201,17 @@
         </div>
 
         <div class="col-md-5 col-lg-4 pos-order-column">
-          <div class="card card-outline card-primary shadow-sm pos-order-card">
-            <div class="card-header bg-white border-bottom-0 pos-order-header">
-              <h3 class="card-title font-weight-bold text-dark"><i class="fas fa-shopping-cart mr-2"></i>Pedido Actual</h3>
-              <button type="button" class="btn btn-limpiar-todo float-right" data-action="vaciar-carrito">
+          <!-- Panel oscuro (#111827). Los ids de abajo los actualiza pos.js: no cambiarlos. -->
+          <div class="card pos-order-card pos-order-dark">
+            <div class="pos-order-header">
+              <div class="pos-order-title">
+                <span class="pos-cart-icon" aria-hidden="true">
+                  <i class="fas fa-shopping-cart"></i>
+                  <span class="pos-cart-badge" id="badge-carrito">0</span>
+                </span>
+                <h3>Pedido Actual</h3>
+              </div>
+              <button type="button" class="btn btn-limpiar-todo" data-action="vaciar-carrito">
                 <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i> Limpiar todo
               </button>
             </div>
@@ -224,18 +231,28 @@
                 <select class="form-control form-control-sm" id="select-lista-pedido"></select>
               </div>
 
-              <div id="resumen-carrito-items" class="border rounded p-2 mb-3 bg-light pos-cart-items">
-                <p class="text-center text-muted small my-3">El carrito está vacío</p>
+              <div id="resumen-carrito-items" class="pos-cart-items">
+                <p class="pos-cart-empty">El carrito está vacío</p>
               </div>
 
-              <div class="border-top pt-2">
-                <div class="d-flex justify-content-between text-muted small mb-2">
-                  <span>Total Unidades:</span>
+              <!-- Unidades y subtotal -->
+              <div class="pos-totales">
+                <div class="pos-tot-unidades">
+                  <span>Total de unidades</span>
                   <strong id="cant-total-items">0</strong>
                 </div>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h4 class="font-weight-bold m-0">TOTAL:</h4>
-                  <h3 class="font-weight-bold text-success m-0" id="monto-total-pedido">$0</h3>
+                <div class="pos-tot-subtotal">
+                  <span>Subtotal</span>
+                  <strong id="subtotal-pedido">$0</strong>
+                </div>
+              </div>
+
+              <!-- Total a cobrar -->
+              <div class="pos-total-cobrar">
+                <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
+                <div>
+                  <span>Total a cobrar</span>
+                  <strong id="monto-total-pedido">$0</strong>
                 </div>
               </div>
 
@@ -246,7 +263,8 @@
                   </button>
                 </div>
                 <button type="button" class="btn btn-pos-cobrar" data-action="guardar-pedido" data-estado="COMPLETADO">
-                  ✅ COBRAR Y ENTREGAR
+                  <span class="pos-cobrar-texto"><i class="fas fa-check-circle" aria-hidden="true"></i> Cobrar y entregar</span>
+                  <span class="pos-cobrar-monto" id="monto-cobrar-btn">$0</span>
                 </button>
               </div>
 

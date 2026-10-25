@@ -170,6 +170,17 @@ function iconoCategoria(nombre) {
   return 'fa-utensils'; // respaldo para cualquier categoría nueva
 }
 
+// -----------------------------------------------------------------------------
+// urlImagenSegura
+//   La foto viene de la base (columna imagen_url). Solo dejamos pasar direcciones
+//   que empiecen con http:// o https://; cualquier otra cosa (vacío, "javascript:...")
+//   se trata como "sin foto" y se muestra el ícono de reemplazo.
+// -----------------------------------------------------------------------------
+function urlImagenSegura(url) {
+  const u = String(url || '').trim();
+  return /^https?:\/\//i.test(u) ? u : '';
+}
+
 export function renderizarGrillaPOS() {
   const contenedor = document.getElementById('contenedor-menu-productos');
   const contenedorTabs = document.getElementById('pos-tabs-categorias');
@@ -260,24 +271,45 @@ export function renderizarGrillaPOS() {
       }
     }
 
+    // Botones de acceso rápido: +6 y +12 (solo en productos que permiten docena).
     const botonesDocenaHTML = permiteDocena ? `
-      <div class="d-flex justify-content-between gap-1 mt-2">
-        <button type="button" class="btn btn-docena-pill flex-fill mr-1" data-action="alterar-cant" data-id="${p.id}" data-delta="-12">-12 u.</button>
-        <button type="button" class="btn btn-docena-pill btn-docena-add flex-fill" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12 u.</button>
+      <div class="pos-dozen-controls">
+        <button type="button" class="btn btn-docena-pill" data-action="alterar-cant" data-id="${p.id}" data-delta="6">+6</button>
+        <button type="button" class="btn btn-docena-pill btn-docena-add" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12</button>
       </div>
     ` : '';
 
+    // Foto: el ícono de la categoría queda SIEMPRE debajo como reemplazo. Si hay URL, la
+    // <img> se dibuja encima; si la imagen no carga (onerror), se quita sola y se ve el ícono.
+    const catProd = cacheCategorias.find(c => Number(c.id) === Number(idCatProd));
+    const urlFoto = urlImagenSegura(p.imagen_url);
+    const fotoHTML = `
+      <div class="pos-prod-img">
+        <i class="fas ${iconoCategoria(catProd ? catProd.nombre : '')} pos-prod-ph" aria-hidden="true"></i>
+        ${urlFoto ? `<img src="${esc(urlFoto)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      </div>
+    `;
+
+    // Una docena o más (>= 12 u.) pinta la tarjeta con un tono más intenso.
+    const claseDocena = cant >= 12 ? 'pos-card-docena' : '';
+
     htmlCompleto += `
-      <!-- Eliminamos el borde de color (border-left-...) para dejar el diseño más limpio de la imagen -->
-      <div class="card h-100 pos-card-producto border-0 ${claseActiva}">
+      <div class="card h-100 pos-card-producto border-0 ${claseActiva} ${claseDocena}">
+        <!-- "X": vuelve el ítem a 0 de un toque. Solo se ve con cantidad > 0.
+             Reusa la acción "alterar-cant" con un delta enorme negativo: alterarCantidad
+             nunca baja de 0, así que el resultado es siempre 0. -->
+        <button type="button" class="pos-btn-reset ${cant > 0 ? '' : 'd-none'}" data-action="alterar-cant" data-id="${p.id}" data-delta="-100000" title="Quitar del pedido" aria-label="Quitar ${esc(p.nombre)} del pedido">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+        ${fotoHTML}
         ${etiquetaCategoria}
         <strong class="pos-prod-title" title="${esc(p.nombre)}">${esc(p.nombre)}</strong>
-        <span class="pos-prod-price mb-2">$${precios.unidad.toLocaleString('es-AR')}</span>
-        
+        <span class="pos-prod-price">$${precios.unidad.toLocaleString('es-AR')}</span>
+
         <div class="pos-qty-pill">
           <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="-1">-</button>
           <span class="pos-cant-num" id="cant-prod-${p.id}">${cant}</span>
-          <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="1">+</button>
+          <button type="button" class="btn btn-pos-sq btn-pos-add" data-action="alterar-cant" data-id="${p.id}" data-delta="1">+</button>
         </div>
 
         ${botonesDocenaHTML}
@@ -337,36 +369,54 @@ export function alterarCantidad(idProducto, delta) {
     carrito[idProducto] = nueva;
   }
 
-  // Buscar el elemento contador en el DOM
-  const elCant = document.getElementById(`cant-prod-${idProducto}`);
-  
-  if (elCant) {
-    elCant.innerText = nueva;
-    // Encontrar la tarjeta contenedora
-    const tarjeta = elCant.closest('.pos-card-producto');
-    if (tarjeta) {
-      if (nueva > 0) {
-        tarjeta.classList.add('pos-card-activa');
-      } else {
-        tarjeta.classList.remove('pos-card-activa');
-      }
-    }
-  } else {
-    // Si no está el elemento específico, re-renderizar la grilla completa
+  // Si la tarjeta está en pantalla se actualiza sola; si no (otra solapa), se re-dibuja la grilla.
+  if (!sincronizarTarjeta(idProducto, nueva)) {
     renderizarGrillaPOS();
   }
 
   actualizarResumenCarrito();
 }
 
+// -----------------------------------------------------------------------------
+// sincronizarTarjeta  (interna)
+//   Deja la tarjeta del catálogo al día con la cantidad: número, estado "activa",
+//   tono de "docena" (>= 12 u.) y botón "X". Devuelve false si la tarjeta no está
+//   en pantalla (por ejemplo, está en otra solapa).
+//   La usan alterarCantidad y eliminarItemCarrito, así hay UNA sola lógica.
+// -----------------------------------------------------------------------------
+function sincronizarTarjeta(idProducto, cant) {
+  const elCant = document.getElementById(`cant-prod-${idProducto}`);
+  if (!elCant) return false;
+
+  elCant.innerText = cant;
+  const tarjeta = elCant.closest('.pos-card-producto');
+  if (tarjeta) {
+    // classList.toggle(clase, condicion): agrega la clase si es true, la quita si es false.
+    tarjeta.classList.toggle('pos-card-activa', cant > 0);
+    tarjeta.classList.toggle('pos-card-docena', cant >= 12);
+    const botonX = tarjeta.querySelector('.pos-btn-reset');
+    if (botonX) botonX.classList.toggle('d-none', cant <= 0);
+  }
+  return true;
+}
+
 export function actualizarResumenCarrito() {
   const contenedorItems = document.getElementById('resumen-carrito-items');
   const keys = Object.keys(carrito);
 
+  // Escribe un texto en un elemento solo si existe (así un id faltante no rompe el POS).
+  const poner = (id, texto) => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = texto;
+  };
+
   if (keys.length === 0) {
-    if (contenedorItems) contenedorItems.innerHTML = `<p class="text-center text-muted small my-3">El carrito está vacío</p>`;
-    document.getElementById('cant-total-items').innerText = '0';
-    document.getElementById('monto-total-pedido').innerText = '$0';
+    if (contenedorItems) contenedorItems.innerHTML = `<p class="pos-cart-empty">El carrito está vacío</p>`;
+    poner('cant-total-items', '0');
+    poner('badge-carrito', '0');
+    poner('subtotal-pedido', '$0');
+    poner('monto-total-pedido', '$0');
+    poner('monto-cobrar-btn', '$0');
     totalCarritoActual = 0;
     unidadesCarritoActual = 0;
     return;
@@ -380,14 +430,14 @@ export function actualizarResumenCarrito() {
   let precioDocenaSugerido = 0;
   let precioUnidadDocenable = 0;
 
-  let html = '<ul class="list-group list-group-flush small">';
+  let html = '<ul class="pos-cart-list">';
 
   // 1. Renderizar cada producto a su precio unitario de lista
   keys.forEach(idProd => {
 
     // FILTRO: Omitir el producto bonificación 999 para que no aparezca como ítem normal
     if (Number(idProd) === 999) return;
-    
+
     const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
     if (!p) return;
 
@@ -399,7 +449,6 @@ export function actualizarResumenCarrito() {
     const idCatProd = p.id_categoria || p.idCategoria;
     const cat = cacheCategorias.find(c => Number(idCatProd) === Number(c.id));
     const nombreCat = cat ? cat.nombre : '';
-    const textoProducto = nombreCat ? `${nombreCat} ${p.nombre}` : p.nombre;
 
     const precios = obtenerPrecioProducto(p.id, idCatProd, idLista);
     const precioUnidad = precios.unidad || 0;
@@ -413,19 +462,33 @@ export function actualizarResumenCarrito() {
       if (precioUnidad) precioUnidadDocenable = precioUnidad;
     }
 
+    // Miniatura: igual que en el catálogo (ícono de reemplazo + foto encima si hay URL).
+    const urlFoto = urlImagenSegura(p.imagen_url);
+    const miniatura = `
+      <div class="pos-cart-thumb">
+        <i class="fas ${iconoCategoria(nombreCat)} pos-prod-ph" aria-hidden="true"></i>
+        ${urlFoto ? `<img src="${esc(urlFoto)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      </div>`;
+
     html += `
-      <li class="list-group-item p-2 bg-transparent border-bottom">
-        <div class="d-flex justify-content-between align-items-start mb-1">
-          <strong class="text-dark d-block" style="line-height: 1.2;">${esc(textoProducto)}</strong>
-          <button class="btn btn-sm text-secondary p-0 ml-2" data-action="eliminar-item-carrito" data-id="${idProd}" title="Eliminar ítem">
-            <i class="far fa-trash-alt"></i>
-          </button>
+      <li class="pos-cart-line">
+        ${miniatura}
+        <div class="pos-cart-info">
+          <strong class="pos-cart-name" title="${esc(nombreCat)} ${esc(p.nombre)}">${esc(p.nombre)}</strong>
+          <span class="pos-cart-sub">
+            <span class="pos-cart-cat">${esc(nombreCat)}</span>
+            <span>$${precioUnidad.toLocaleString('es-AR')} c/u</span>
+          </span>
         </div>
-        <div class="d-flex justify-content-between align-items-center">
-          <span class="text-muted small font-weight-bold" style="width: 25%;">${cant} u.</span>
-          <span class="text-muted small text-center" style="width: 40%;">$${precioUnidad.toLocaleString('es-AR')} c/u</span>
-          <strong class="text-dark text-right" style="width: 35%;">$${subTotalProducto.toLocaleString('es-AR')}</strong>
+        <div class="pos-cart-qty">
+          <button type="button" class="pos-cart-btn" data-action="alterar-cant" data-id="${idProd}" data-delta="-1" aria-label="Quitar una unidad de ${esc(p.nombre)}"><i class="fas fa-minus" aria-hidden="true"></i></button>
+          <span class="pos-cart-n">${cant}</span>
+          <button type="button" class="pos-cart-btn pos-cart-btn-add" data-action="alterar-cant" data-id="${idProd}" data-delta="1" aria-label="Agregar una unidad de ${esc(p.nombre)}"><i class="fas fa-plus" aria-hidden="true"></i></button>
         </div>
+        <strong class="pos-cart-total">$${subTotalProducto.toLocaleString('es-AR')}</strong>
+        <button type="button" class="pos-cart-del" data-action="eliminar-item-carrito" data-id="${idProd}" title="Eliminar ítem" aria-label="Eliminar ${esc(p.nombre)} del pedido">
+          <i class="fas fa-trash-alt" aria-hidden="true"></i>
+        </button>
       </li>
     `;
   });
@@ -442,12 +505,12 @@ export function actualizarResumenCarrito() {
       montoTotalFinal -= descuentoTotal;
 
       html += `
-        <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-light text-danger border-bottom">
+        <li class="pos-cart-discount">
           <div>
-            <strong class="d-block text-danger"><i class="fas fa-tag mr-1"></i> Descuento por Docena</strong>
-            <small class="text-muted">${docenasCompletas} doc. promocional(es)</small>
+            <strong><i class="fas fa-tag mr-1" aria-hidden="true"></i> Descuento por Docena</strong>
+            <small>${docenasCompletas} doc. promocional(es)</small>
           </div>
-          <span class="font-weight-bold">-$${descuentoTotal.toLocaleString('es-AR')}</span>
+          <span>-$${descuentoTotal.toLocaleString('es-AR')}</span>
         </li>
       `;
     }
@@ -456,8 +519,13 @@ export function actualizarResumenCarrito() {
   html += '</ul>';
   if (contenedorItems) contenedorItems.innerHTML = html;
 
-  document.getElementById('cant-total-items').innerText = totalItems;
-  document.getElementById('monto-total-pedido').innerText = `$${montoTotalFinal.toLocaleString('es-AR')}`;
+  const textoTotal = `$${montoTotalFinal.toLocaleString('es-AR')}`;
+  poner('cant-total-items', totalItems);
+  poner('badge-carrito', totalItems);
+  // Subtotal = antes del descuento por docena; el total ya lo descuenta.
+  poner('subtotal-pedido', `$${subtotalSinDescuento.toLocaleString('es-AR')}`);
+  poner('monto-total-pedido', textoTotal);
+  poner('monto-cobrar-btn', textoTotal);
   // Los guardamos para mostrarlos en la ventana de cobro.
   totalCarritoActual = montoTotalFinal;
   unidadesCarritoActual = totalItems;
@@ -685,17 +753,9 @@ export function eliminarItemCarrito(idProducto) {
   if (carrito[idProducto]) {
     delete carrito[idProducto]; // Borramos el ítem del estado
     
-    // Si el producto se está viendo ahora mismo en la grilla, reseteamos el contador
-    const elCant = document.getElementById(`cant-prod-${idProducto}`);
-    if (elCant) {
-      elCant.innerText = '0';
-      const tarjeta = elCant.closest('.pos-card-producto');
-      if (tarjeta) tarjeta.classList.remove('pos-card-activa');
-    } else {
-      // Si el producto está en otra solapa oculta, re-renderizamos todo
-      renderizarGrillaPOS();
-    }
-    
+    // Si la tarjeta está en pantalla se actualiza sola; si está en otra solapa, se re-dibuja la grilla.
+    if (!sincronizarTarjeta(idProducto, 0)) renderizarGrillaPOS();
+
     actualizarResumenCarrito();
   }
 }

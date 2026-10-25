@@ -119,6 +119,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnEliminar = e.target.closest('[data-action="eliminar-item-carrito"]');
     if (btnEliminar) {
       eliminarItemCarrito(Number(btnEliminar.dataset.id));
+      return;
+    }
+
+    // Botones "-" y "+" de cada línea del carrito (misma acción que en el catálogo).
+    const btnCant = e.target.closest('[data-action="alterar-cant"]');
+    if (btnCant) {
+      alterarCantidad(Number(btnCant.dataset.id), Number(btnCant.dataset.delta));
     }
   });
 
