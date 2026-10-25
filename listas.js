@@ -1,5 +1,21 @@
 import { supabaseAdmin } from './config.js';
-import { mostrarNotificacion, confirmarAccion } from './utils.js';
+import { mostrarNotificacion, confirmarAccion, esc } from './utils.js';
+
+// -----------------------------------------------------------------------------
+// Categorías de sistema (interna)
+//   La categoría "Bonificación" (la del renglón de descuento por docena, producto 999)
+//   no es algo que se venda, así que no lleva precio: se oculta de las listas.
+//   Se detecta por nombre (sin tildes ni mayúsculas) o por pertenecer al grupo SISTEMA,
+//   el mismo criterio que usa reporteVentas.js.
+// -----------------------------------------------------------------------------
+function sinTildes(texto) {
+  return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function esCategoriaSistema(cat) {
+  return sinTildes(cat?.nombre) === 'bonificacion'
+    || String(cat?.grupo || '').toUpperCase().trim() === 'SISTEMA';
+}
 
 export async function inicializarModuloListas() {
   const select = document.getElementById('select-lista-activa');
@@ -7,7 +23,7 @@ export async function inicializarModuloListas() {
 
   const { data: listas, error } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*').order('id', { ascending: true });
   if (!error && listas && listas.length > 0) {
-    select.innerHTML = listas.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
+    select.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
     cargarMatrizPrecios();
   }
 }
@@ -16,8 +32,11 @@ export async function cargarMatrizPrecios() {
   const idLista = document.getElementById('select-lista-activa').value;
   if (!idLista) return;
 
-  const { data: categorias } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('id', { ascending: true });
+  const { data: categoriasTodas } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('id', { ascending: true });
   const { data: preciosExistentes } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', idLista);
+
+  // Sin la categoría Bonificación (ver esCategoriaSistema).
+  const categorias = (categoriasTodas || []).filter(cat => !esCategoriaSistema(cat));
 
   const tbodyCat = document.getElementById('tabla-precios-categorias-body');
   tbodyCat.innerHTML = categorias.map(cat => {
@@ -27,7 +46,7 @@ export async function cargarMatrizPrecios() {
 
     return `
       <tr>
-        <td class="font-weight-bold">${cat.nombre}</td>
+        <td class="font-weight-bold">${esc(cat.nombre)}</td>
         <td><input type="number" step="0.01" class="form-control form-control-sm text-right" id="cat-un-${cat.id}" value="${un}" placeholder="0.00"></td>
         <td><input type="number" step="0.01" class="form-control form-control-sm text-right" id="cat-doc-${cat.id}" value="${doc}" placeholder="-"></td>
         <td class="text-center">
@@ -48,13 +67,21 @@ export async function cargarMatrizPrecios() {
   }
 
   const idsProds = preciosProd.map(x => x.id_producto);
-  const { data: productos } = await supabaseAdmin.from('TB_BPRODUCTOS').select('id, nombre').in('id', idsProds);
+  // Se trae también la categoría de cada producto para mostrarla debajo del nombre.
+  const { data: productos } = await supabaseAdmin
+    .from('TB_BPRODUCTOS')
+    .select('id, nombre, TB_BCATEGORIAS ( nombre )')
+    .in('id', idsProds);
 
   tbodyProd.innerHTML = preciosProd.map(p => {
-    const prod = productos.find(x => x.id == p.id_producto) || { nombre: 'Producto #' + p.id_producto };
+    const prod = (productos || []).find(x => x.id == p.id_producto) || { nombre: 'Producto #' + p.id_producto };
+    const catNombre = prod.TB_BCATEGORIAS?.nombre;
     return `
       <tr>
-        <td class="font-weight-bold">${prod.nombre}</td>
+        <td class="font-weight-bold">
+          ${esc(prod.nombre)}
+          ${catNombre ? `<br><small class="text-muted font-weight-normal">${esc(catNombre)}</small>` : ''}
+        </td>
         <td class="text-right font-weight-bold text-success">$${p.precio_unidad || 0}</td>
         <td class="text-right">${p.precio_docena ? '$' + p.precio_docena : '-'}</td>
         <td class="text-center">
@@ -89,10 +116,39 @@ export async function guardarPrecioCategoria(id_categoria, idDetalle) {
 }
 
 export async function abrirModalPrecioEspecial() {
-  const { data: prods } = await supabaseAdmin.from('TB_BPRODUCTOS').select('id, nombre').order('nombre');
+  const { data: prods, error } = await supabaseAdmin
+    .from('TB_BPRODUCTOS')
+    .select('id, nombre, orden, TB_BCATEGORIAS ( id, nombre, grupo )');
+
+  if (error) {
+    mostrarNotificacion('Error al cargar los productos: ' + error.message, 'danger');
+    return;
+  }
+
+  // Sin la bonificación (categoría de sistema / producto 999), ordenados como el POS:
+  // categoría → orden (los que no tienen, al final) → nombre.
+  const lista = (prods || [])
+    .filter(p => Number(p.id) !== 999 && !esCategoriaSistema(p.TB_BCATEGORIAS))
+    .sort((a, b) =>
+      (a.TB_BCATEGORIAS?.id ?? Infinity) - (b.TB_BCATEGORIAS?.id ?? Infinity)
+      || (a.orden ?? Infinity) - (b.orden ?? Infinity)
+      || a.nombre.localeCompare(b.nombre));
+
+  // Un <optgroup> por categoría: el nombre de la categoría se ve como título del grupo.
+  const grupos = [];
+  lista.forEach(p => {
+    const nombreCat = p.TB_BCATEGORIAS?.nombre || 'Sin categoría';
+    let g = grupos.find(x => x.nombre === nombreCat);
+    if (!g) { g = { nombre: nombreCat, productos: [] }; grupos.push(g); }
+    g.productos.push(p);
+  });
+
   const select = document.getElementById('modal-especial-producto');
-  select.innerHTML = '<option value="">-- Seleccionar Producto --</option>' + 
-    prods.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+  select.innerHTML = '<option value="">-- Seleccionar Producto --</option>' +
+    grupos.map(g => `
+      <optgroup label="${esc(g.nombre)}">
+        ${g.productos.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('')}
+      </optgroup>`).join('');
 
   document.getElementById('form-precio-especial').reset();
   $('#modal-precio-especial').modal('show');

@@ -25,7 +25,7 @@ export async function cargarSelectClientesFiltro() {
 
   if (clientes) {
     select.innerHTML = '<option value="">-- Todos los Clientes --</option>' + 
-      clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+      clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
   }
 }
 
@@ -39,13 +39,15 @@ export async function generarResumenVentasProductos() {
     return;
   }
 
-  // 1. Consultar pedidos completados
+  // 1. Consultar pedidos cobrados (COMPLETADO) cuyo COBRO cayó dentro del rango.
+  //    Se filtra por fecha de cobro (columna date, día local), no por fecha de emisión.
+  //    Los entregados sin cobrar (ENTREGADO_IMPAGO) no entran hasta que se cobren.
   let queryPedidos = supabaseAdmin
     .from('TB_TPEDIDOS')
     .select('id')
     .eq('estado', 'COMPLETADO')
-    .gte('fecha', fDesde)   // día local, igual que el cierre de caja
-    .lte('fecha', fHasta);
+    .gte('fecha_cobro', fDesde)
+    .lte('fecha_cobro', fHasta);
 
   if (idCliente) {
     queryPedidos = queryPedidos.eq('id_cliente', idCliente);
@@ -57,7 +59,7 @@ export async function generarResumenVentasProductos() {
   const tfoot = document.getElementById('tfoot-resumen-productos');
 
   if (errPed || !pedidos || pedidos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas registradas para los filtros seleccionados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas cobradas para los filtros seleccionados.</td></tr>`;
     if (tfoot) tfoot.style.display = 'none';
     renderizarTarjetasGrupos({});
     mostrarNotaDescuento(0);
@@ -151,7 +153,7 @@ export async function generarResumenVentasProductos() {
 
   // Sin filas que mostrar (por ejemplo, solo había un descuento): mismo aviso que sin ventas.
   if (listaConsolidada.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas registradas para los filtros seleccionados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas cobradas para los filtros seleccionados.</td></tr>`;
     if (tfoot) tfoot.style.display = 'none';
     mostrarNotaDescuento(0);
     return;

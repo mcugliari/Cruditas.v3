@@ -146,16 +146,17 @@ export async function cargarProductos() {
 
   const { data: productos, error } = await supabaseAdmin
     .from('TB_BPRODUCTOS')
-    .select('id, nombre, m_permite_docena, id_categoria, imagen_url, TB_BCATEGORIAS ( nombre )')
+    .select('id, nombre, m_permite_docena, id_categoria, imagen_url, orden, TB_BCATEGORIAS ( nombre )')
     .order('id_categoria', { ascending: true })
+    .order('orden', { ascending: true, nullsFirst: false }) // los que tienen orden primero; sin orden al final
     .order('nombre', { ascending: true });
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">Error: ${esc(error.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">Error: ${esc(error.message)}</td></tr>`;
     return;
   }
   if (!productos || productos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No hay productos registrados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No hay productos registrados.</td></tr>`;
     return;
   }
 
@@ -174,6 +175,7 @@ export async function cargarProductos() {
         </td>
         <td><span class="badge badge-info">${prod.TB_BCATEGORIAS ? esc(prod.TB_BCATEGORIAS.nombre) : 'Sin Cat.'}</span></td>
         <td class="font-weight-bold">${esc(prod.nombre)}</td>
+        <td class="text-center">${prod.orden === null || prod.orden === undefined ? '<span class="text-muted">—</span>' : Number(prod.orden)}</td>
         <td class="text-center">
         ${prod.m_permite_docena 
             ? '<span class="badge badge-success"><i class="fas fa-check mr-1"></i>Sí</span>' 
@@ -205,7 +207,9 @@ export function abrirModalEditarProducto(id, nombre, id_categoria, permiteDocena
   document.getElementById('prod-nombre').value = nombre;
   document.getElementById('prod-categoria').value = id_categoria;
   document.getElementById('prod-permite-docena').checked = permiteDocena;
-  prepararFoto(productosPorId.get(Number(id))?.imagen_url || '');
+  const guardado = productosPorId.get(Number(id));
+  document.getElementById('prod-orden').value = guardado?.orden ?? '';
+  prepararFoto(guardado?.imagen_url || '');
   document.getElementById('modal-producto-title').innerText = 'Editar Producto';
   $('#modal-producto').modal('show');
 }
@@ -223,6 +227,15 @@ export async function guardarProducto(event) {
 
   // try / finally: "finally" corre SIEMPRE al salir, así el botón nunca queda trabado.
   try {
+    // Orden en el catálogo: vacío = sin orden (NULL); si hay número, entero mayor o igual a 0.
+    // Se valida ANTES de subir la foto, para no subir un archivo si el guardado igual va a fallar.
+    const textoOrden = document.getElementById('prod-orden').value.trim();
+    const orden = textoOrden === '' ? null : Number(textoOrden);
+    if (orden !== null && (!Number.isInteger(orden) || orden < 0)) {
+      mostrarNotificacion('El orden tiene que ser un número entero (0 o más), o dejarlo vacío.', 'warning');
+      return;
+    }
+
     // Foto: si se eligió un archivo se sube; si no, se usa la dirección escrita.
     // Sin foto se guarda NULL (no texto vacío: la base lo rechaza).
     let imagen_url = null;
@@ -239,7 +252,7 @@ export async function guardarProducto(event) {
       imagen_url = texto || null;
     }
 
-    const payload = { nombre, id_categoria, m_permite_docena, imagen_url };
+    const payload = { nombre, id_categoria, m_permite_docena, imagen_url, orden };
     let result = id 
       ? await supabaseAdmin.from('TB_BPRODUCTOS').update(payload).eq('id', id)
       : await supabaseAdmin.from('TB_BPRODUCTOS').insert([payload]);

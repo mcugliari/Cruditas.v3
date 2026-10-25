@@ -19,6 +19,7 @@ import {
   abrirMovimientosCuenta, anularMovimientoCuenta
 } from './cuentas.js';
 import { inicializarCierreCaja, inicializarHistorialCierres, cargarTablaHistorialCierres, verDetalleCierre, actualizarIndicadorCaja } from './caja.js';
+import './categorias.js';
 
 // FUNCION DE NAVEGACIÓN
 export function navegarA(seccionId, elementoMenu) {

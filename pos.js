@@ -149,6 +149,40 @@ export async function cargarPOS() {
   setCachePrecios(precios || []);
 
   renderizarGrillaPOS();
+
+  // La etiqueta "Más vendido" es decorativa: se pide en segundo plano (sin await) para no demorar el POS.
+  cargarMasVendidos();
+}
+
+// -----------------------------------------------------------------------------
+// cargarMasVendidos  (interna)
+//   Pide a la base los productos más vendidos de cada categoría (función
+//   productos_mas_vendidos, script 21) y marca esas tarjetas con la etiqueta
+//   "Más vendido". Se calcula UNA vez al abrir el POS: durante el turno la etiqueta no
+//   cambia de lugar (ni se vuelve a consultar después de cada cobro).
+//   Si falla, el POS sigue igual, solo que sin etiquetas.
+// -----------------------------------------------------------------------------
+let idsMasVendidos = new Set();
+let masVendidosCargado = false;
+
+async function cargarMasVendidos() {
+  if (masVendidosCargado) return;
+  try {
+    const { data, error } = await supabaseAdmin.rpc('productos_mas_vendidos', {
+      p_dias: 30,           // últimos 30 días
+      p_por_categoria: 2,   // hasta 2 productos por categoría
+      p_min_productos: 4    // solo en categorías con 4 productos o más
+    });
+    if (error) {
+      console.warn('No se pudo calcular "Más vendido":', error.message);
+      return;
+    }
+    masVendidosCargado = true;
+    idsMasVendidos = new Set((data || []).map(fila => Number(fila.id_producto)));
+    if (idsMasVendidos.size > 0) renderizarGrillaPOS(); // vuelve a dibujar con las etiquetas
+  } catch (e) {
+    console.warn('No se pudo calcular "Más vendido":', e);
+  }
 }
 
 // Nombre del grupo (solapa) al que pertenece una categoría. Si la categoría no
@@ -191,6 +225,31 @@ function iconoCategoria(nombre) {
 function urlImagenSegura(url) {
   const u = String(url || '').trim();
   return /^https?:\/\//i.test(u) ? u : '';
+}
+
+// -----------------------------------------------------------------------------
+// compararProductosCatalogo
+//   Orden de las tarjetas del catálogo, para usar con .sort():
+//     1) por categoría (en el orden en que vienen las categorías);
+//     2) dentro de la categoría, por el atributo "orden" del producto: el menor va
+//        primero y los que no tienen número (NULL) van al final;
+//     3) si empatan (o ninguno tiene orden), por id: el orden de siempre.
+//   Un .sort() usa la función así: devuelve negativo si "a" va antes, positivo si va después.
+// -----------------------------------------------------------------------------
+function compararProductosCatalogo(a, b) {
+  const posCategoria = p => cacheCategorias.findIndex(c => Number(c.id) === Number(p.id_categoria || p.idCategoria));
+  // Sin orden = Infinity (más grande que cualquier número): queda al final.
+  // Ojo: Number(null) daría 0 y pondría los productos sin orden PRIMEROS; por eso se pregunta antes.
+  const ordenDe = p => (p.orden === null || p.orden === undefined || p.orden === '') ? Infinity : Number(p.orden);
+
+  const porCategoria = posCategoria(a) - posCategoria(b);
+  if (porCategoria !== 0) return porCategoria;
+
+  const oa = ordenDe(a);
+  const ob = ordenDe(b);
+  if (oa !== ob) return oa < ob ? -1 : 1; // (no se resta: Infinity - Infinity daría NaN)
+
+  return Number(a.id) - Number(b.id);
 }
 
 export function renderizarGrillaPOS() {
@@ -246,14 +305,15 @@ export function renderizarGrillaPOS() {
 
   if (filtroBusqueda.trim() !== '') {
     // Si hay texto en el buscador, ignoramos la solapa y buscamos en todo
-    prodsMostrar = prodsMostrar.filter(p => normalizarTexto(p.nombre).includes(filtroBusqueda));
+    prodsMostrar = prodsMostrar
+      .filter(p => normalizarTexto(p.nombre).includes(filtroBusqueda))
+      .sort(compararProductosCatalogo);
   } else {
-    // Productos de TODAS las categorías del grupo, ordenados por categoría
-    // (sort es estable: dentro de cada categoría conservan el orden que ya tenían).
-    const posCategoria = p => cacheCategorias.findIndex(c => Number(c.id) === Number(p.id_categoria || p.idCategoria));
+    // Productos de TODAS las categorías del grupo, en el orden del catálogo
+    // (ver compararProductosCatalogo).
     prodsMostrar = prodsMostrar
       .filter(p => idsCategoriasDelGrupo.has(Number(p.id_categoria || p.idCategoria)))
-      .sort((a, b) => posCategoria(a) - posCategoria(b));
+      .sort(compararProductosCatalogo);
   }
 
   // 3. RENDERIZAR GRILLA
@@ -313,6 +373,7 @@ export function renderizarGrillaPOS() {
         <button type="button" class="pos-btn-reset ${cant > 0 ? '' : 'd-none'}" data-action="alterar-cant" data-id="${p.id}" data-delta="-100000" title="Quitar del pedido" aria-label="Quitar ${esc(p.nombre)} del pedido">
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
+        ${idsMasVendidos.has(Number(p.id)) ? '<span class="pos-badge-top"><i class="fas fa-medal" aria-hidden="true"></i> Más vendido</span>' : ''}
         ${fotoHTML}
         ${etiquetaCategoria}
         <strong class="pos-prod-title" title="${esc(p.nombre)}">${esc(p.nombre)}</strong>
