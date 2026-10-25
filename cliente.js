@@ -196,13 +196,39 @@ function cambiarCantidad(idProd, cambio) {
   renderizarMenuPorCategorias();
 }
 
+// -----------------------------------------------------------------------------
+// calcularDescuentoDocena
+//   Descuento por docenas combinadas cuando hay precios distintos por gusto.
+//   Recibe SOLO los productos que permiten docena: [{ cantidad, precioUnidad, precioDocena }].
+//   Regla (la misma que usa el servidor en crear_pedido_cliente):
+//     descuento = (unidades en docenas completas / unidades docenables)
+//                 x suma de [ cantidad x (precio unitario - precio docena / 12) ]
+//   O sea: cada gusto ahorra lo que le corresponde según SU precio, y se descuenta solo
+//   la parte que entra en docenas completas (las unidades sueltas no se descuentan).
+//   Con un precio único da lo mismo que la fórmula vieja: 1500 / 17000 -> $1.000 por docena.
+//   Devuelve { docenasCompletas, descuentoTotal } (redondeado a centavos, nunca negativo).
+//   OJO: esta función está repetida en cliente.js; si se cambia una, cambiar la otra.
+// -----------------------------------------------------------------------------
+function calcularDescuentoDocena(lineas) {
+  const unidades = lineas.reduce((suma, l) => suma + l.cantidad, 0);
+  const docenasCompletas = Math.floor(unidades / 12);
+  if (docenasCompletas === 0) return { docenasCompletas: 0, descuentoTotal: 0 };
+
+  // Ahorro de cada línea. Sin precio de docena (0) no ahorra, pero sus unidades igual cuentan.
+  const ahorroTotal = lineas.reduce((suma, l) => (
+    l.precioDocena > 0 ? suma + l.cantidad * (l.precioUnidad - l.precioDocena / 12) : suma
+  ), 0);
+
+  const descuento = ((docenasCompletas * 12) / unidades) * ahorroTotal;
+  // Math.round(x * 100) / 100: redondea a 2 decimales (evita restos como 999,9999999).
+  return { docenasCompletas, descuentoTotal: Math.max(0, Math.round(descuento * 100) / 100) };
+}
+
 // Cálculo centralizado para el cliente
 function obtenerResumenCarritoCliente() {
   let totalUnidades = 0;
   let subtotalSinDescuento = 0;
-  let totalSueltasDocenables = 0;
-  let precioDocenaSugerido = 0;
-  let precioUnidadDocenable = 0;
+  const lineasDocena = []; // productos que permiten docena (para el descuento)
 
   const listaItems = [];
 
@@ -227,9 +253,7 @@ function obtenerResumenCarritoCliente() {
     subtotalSinDescuento += subTotal;
 
     if (p.m_permite_docena) {
-      totalSueltasDocenables += cantidad;
-      if (precios.docena) precioDocenaSugerido = precios.docena;
-      if (precioUnidad) precioUnidadDocenable = precioUnidad;
+      lineasDocena.push({ cantidad, precioUnidad, precioDocena: precios.docena || 0 });
     }
 
     listaItems.push({
@@ -241,13 +265,7 @@ function obtenerResumenCarritoCliente() {
     });
   });
 
-  let descuentoTotal = 0;
-  const docenasCompletas = Math.floor(totalSueltasDocenables / 12);
-
-  if (docenasCompletas > 0 && precioDocenaSugerido > 0) {
-    const descuentoPorDocena = (precioUnidadDocenable * 12) - precioDocenaSugerido;
-    descuentoTotal = descuentoPorDocena * docenasCompletas;
-  }
+  const { docenasCompletas, descuentoTotal } = calcularDescuentoDocena(lineasDocena);
 
   const totalFinal = Math.max(0, subtotalSinDescuento - descuentoTotal);
 

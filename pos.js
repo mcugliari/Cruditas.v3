@@ -412,6 +412,34 @@ function sincronizarTarjeta(idProducto, cant) {
   return true;
 }
 
+// -----------------------------------------------------------------------------
+// calcularDescuentoDocena
+//   Descuento por docenas combinadas cuando hay precios distintos por gusto.
+//   Recibe SOLO los productos que permiten docena: [{ cantidad, precioUnidad, precioDocena }].
+//   Regla (la misma que usa el servidor en crear_pedido_cliente):
+//     descuento = (unidades en docenas completas / unidades docenables)
+//                 x suma de [ cantidad x (precio unitario - precio docena / 12) ]
+//   O sea: cada gusto ahorra lo que le corresponde según SU precio, y se descuenta solo
+//   la parte que entra en docenas completas (las unidades sueltas no se descuentan).
+//   Con un precio único da lo mismo que la fórmula vieja: 1500 / 17000 -> $1.000 por docena.
+//   Devuelve { docenasCompletas, descuentoTotal } (redondeado a centavos, nunca negativo).
+//   OJO: esta función está repetida en cliente.js; si se cambia una, cambiar la otra.
+// -----------------------------------------------------------------------------
+function calcularDescuentoDocena(lineas) {
+  const unidades = lineas.reduce((suma, l) => suma + l.cantidad, 0);
+  const docenasCompletas = Math.floor(unidades / 12);
+  if (docenasCompletas === 0) return { docenasCompletas: 0, descuentoTotal: 0 };
+
+  // Ahorro de cada línea. Sin precio de docena (0) no ahorra, pero sus unidades igual cuentan.
+  const ahorroTotal = lineas.reduce((suma, l) => (
+    l.precioDocena > 0 ? suma + l.cantidad * (l.precioUnidad - l.precioDocena / 12) : suma
+  ), 0);
+
+  const descuento = ((docenasCompletas * 12) / unidades) * ahorroTotal;
+  // Math.round(x * 100) / 100: redondea a 2 decimales (evita restos como 999,9999999).
+  return { docenasCompletas, descuentoTotal: Math.max(0, Math.round(descuento * 100) / 100) };
+}
+
 export function actualizarResumenCarrito() {
   const contenedorItems = document.getElementById('resumen-carrito-items');
   const keys = Object.keys(carrito);
@@ -439,9 +467,7 @@ export function actualizarResumenCarrito() {
 
   let totalItems = 0;
   let subtotalSinDescuento = 0;
-  let totalSueltasDocenables = 0;
-  let precioDocenaSugerido = 0;
-  let precioUnidadDocenable = 0;
+  const lineasDocena = []; // productos que permiten docena (para el descuento)
 
   let html = '<ul class="pos-cart-list">';
 
@@ -470,9 +496,7 @@ export function actualizarResumenCarrito() {
     subtotalSinDescuento += subTotalProducto;
 
     if (p.m_permite_docena) {
-      totalSueltasDocenables += cant;
-      if (precios.docena) precioDocenaSugerido = precios.docena;
-      if (precioUnidad) precioUnidadDocenable = precioUnidad;
+      lineasDocena.push({ cantidad: cant, precioUnidad, precioDocena: precios.docena || 0 });
     }
 
     // Miniatura: igual que en el catálogo (ícono de reemplazo + foto encima si hay URL).
@@ -507,17 +531,8 @@ export function actualizarResumenCarrito() {
   });
 
   // 2. Calcular si corresponde el Descuento por Docena combinada
-  let montoTotalFinal = subtotalSinDescuento;
-  let descuentoTotal = 0;
-  const docenasCompletas = Math.floor(totalSueltasDocenables / 12);
-
-  if (docenasCompletas > 0 && precioDocenaSugerido > 0) {
-    const descuentoUnidadDocena = (precioUnidadDocenable * 12) - precioDocenaSugerido;
-    if (descuentoUnidadDocena > 0) {
-      descuentoTotal = descuentoUnidadDocena * docenasCompletas;
-      montoTotalFinal -= descuentoTotal;
-    }
-  }
+  const { docenasCompletas, descuentoTotal } = calcularDescuentoDocena(lineasDocena);
+  const montoTotalFinal = subtotalSinDescuento - descuentoTotal;
 
   html += '</ul>';
   if (contenedorItems) contenedorItems.innerHTML = html;
@@ -607,9 +622,7 @@ export async function guardarPedido(estadoInicial, cobro = null) {
   let montoTotal = 0;
   const detalles = [];
 
-  let totalSueltasDocenables = 0;
-  let precioDocenaSugerido = 0;
-  let precioUnidadDocenable = 0;
+  const lineasDocena = []; // productos que permiten docena (para el descuento)
 
   const fechaISO = obtenerFechaActualISO();
 
@@ -625,9 +638,7 @@ export async function guardarPedido(estadoInicial, cobro = null) {
     const precioUnidad = precios.unidad || 0;
 
     if (p.m_permite_docena) {
-      totalSueltasDocenables += cantidadTotal;
-      if (precios.docena) precioDocenaSugerido = precios.docena;
-      if (precioUnidad) precioUnidadDocenable = precioUnidad;
+      lineasDocena.push({ cantidad: cantidadTotal, precioUnidad, precioDocena: precios.docena || 0 });
     }
 
     const subTotalItem = cantidadTotal * precioUnidad;
@@ -644,22 +655,19 @@ export async function guardarPedido(estadoInicial, cobro = null) {
   });
 
   // 2. Si completa docenas combinadas, agregar renglón de bonificación (Producto 999)
-  const docenasCompletas = Math.floor(totalSueltasDocenables / 12);
-  if (docenasCompletas > 0 && precioDocenaSugerido > 0) {
-    const descuentoPorDocena = (precioUnidadDocenable * 12) - precioDocenaSugerido;
-    const descuentoTotal = descuentoPorDocena * docenasCompletas;
+  const { docenasCompletas, descuentoTotal } = calcularDescuentoDocena(lineasDocena);
+  if (descuentoTotal > 0) {
+    // Descuento promedio por docena (con precios mezclados no es un número redondo).
+    const descuentoPorDocena = Math.round((descuentoTotal / docenasCompletas) * 100) / 100;
+    detalles.push({
+      id_pedido: null,
+      id_producto: 999, // Producto 'Descuento por Docena'
+      cantidad: docenasCompletas,
+      precioUnitario: -descuentoPorDocena,
+      subTotal: -descuentoTotal
+    });
 
-    if (descuentoTotal > 0) {
-      detalles.push({
-        id_pedido: null,
-        id_producto: 999, // Producto 'Descuento por Docena'
-        cantidad: docenasCompletas,
-        precioUnitario: -descuentoPorDocena,
-        subTotal: -descuentoTotal
-      });
-
-      montoTotal -= descuentoTotal;
-    }
+    montoTotal -= descuentoTotal;
   }
 
   let idPedidoFinal = pedidoEditandoId;
