@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './config.js';
-import { mostrarNotificacion, obtenerFechaActualISO } from './utils.js';
+import { mostrarNotificacion, obtenerFechaActualISO, esc } from './utils.js';
 
 export async function inicializarReporteVentas() {
   await cargarSelectClientesFiltro();
@@ -60,6 +60,7 @@ export async function generarResumenVentasProductos() {
     tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas registradas para los filtros seleccionados.</td></tr>`;
     if (tfoot) tfoot.style.display = 'none';
     renderizarTarjetasGrupos({});
+    mostrarNotaDescuento(0);
     return;
   }
 
@@ -88,6 +89,8 @@ export async function generarResumenVentasProductos() {
   // 3. Agrupar por Grupo y por Producto
   const gruposAcumulados = {};
   const productosAgrupados = {};
+  // Suma (negativa) de los descuentos por docena: no se muestra como fila, pero se resta de los totales.
+  let descuentoTotal = 0;
 
   detalles.forEach(item => {
     const prod = item.TB_BPRODUCTOS;
@@ -116,6 +119,12 @@ export async function generarResumenVentasProductos() {
     gruposAcumulados[grupoNombre].unidades += cant;
     gruposAcumulados[grupoNombre].monto += monto;
 
+    // La bonificación (producto 999) no se muestra como producto: solo se acumula su monto.
+    if (esDescuento) {
+      descuentoTotal += monto;
+      return;
+    }
+
     // Acumulador por producto individual
     const keyProd = prod.id;
     if (!productosAgrupados[keyProd]) {
@@ -124,7 +133,6 @@ export async function generarResumenVentasProductos() {
         categoria: catNombre,
         producto: prod.nombre,
         permiteDocena: Boolean(prod.m_permite_docena),
-        esDescuento,
         unidades: 0,
         montoTotal: 0
       };
@@ -141,8 +149,18 @@ export async function generarResumenVentasProductos() {
     a.grupo.localeCompare(b.grupo) || a.categoria.localeCompare(b.categoria) || a.producto.localeCompare(b.producto)
   );
 
+  // Sin filas que mostrar (por ejemplo, solo había un descuento): mismo aviso que sin ventas.
+  if (listaConsolidada.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas registradas para los filtros seleccionados.</td></tr>`;
+    if (tfoot) tfoot.style.display = 'none';
+    mostrarNotaDescuento(0);
+    return;
+  }
+
   let totalUnidadesGral = 0;
-  let totalMontoGral = 0;
+  // El total arranca en el descuento (negativo): así sigue siendo lo realmente vendido
+  // aunque la fila del descuento ya no se vea.
+  let totalMontoGral = descuentoTotal;
 
   tbody.innerHTML = listaConsolidada.map(row => {
     totalUnidadesGral += row.unidades;
@@ -154,14 +172,9 @@ export async function generarResumenVentasProductos() {
 
     return `
       <tr>
-        <td>
-          <span class="badge ${row.grupo === 'EMPANADAS' ? 'badge-warning' : (row.grupo === 'PIZZAS' ? 'badge-danger' : 'badge-secondary')}">
-            ${row.grupo}
-          </span>
-          <small class="text-muted ml-1">(${row.categoria})</small>
-        </td>
-        <td class="font-weight-bold">${row.producto}</td>
-        <td class="text-center">${row.esDescuento ? '-' : row.unidades + ' u.'}</td>
+        <td>${esc(row.categoria)}</td>
+        <td class="font-weight-bold">${esc(row.producto)}</td>
+        <td class="text-center">${row.unidades} u.</td>
         <td class="text-center text-muted">${textoDocenas}</td>
         <td class="text-right font-weight-bold">$${row.montoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
       </tr>
@@ -177,6 +190,24 @@ export async function generarResumenVentasProductos() {
     document.getElementById('total-resumen-docenas').innerText = `${(unidadesEmpanadas / 12).toFixed(1)} doc.`;
     
     document.getElementById('total-resumen-monto').innerText = `$${totalMontoGral.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+  }
+
+  mostrarNotaDescuento(descuentoTotal);
+}
+
+// -----------------------------------------------------------------------------
+// mostrarNotaDescuento  (interna)
+//   Como la bonificación no es una fila, los totales ya la traen restada. Esta nota lo
+//   aclara debajo de la tabla. Con 0 se oculta.
+// -----------------------------------------------------------------------------
+function mostrarNotaDescuento(descuento) {
+  const nota = document.getElementById('nota-resumen-descuento');
+  if (!nota) return;
+  const hay = Number(descuento) !== 0;
+  nota.classList.toggle('d-none', !hay);
+  if (hay) {
+    const monto = Math.abs(descuento).toLocaleString('es-AR', { minimumFractionDigits: 2 });
+    nota.innerText = `Los totales incluyen descuentos por docena por -$${monto}.`;
   }
 }
 
