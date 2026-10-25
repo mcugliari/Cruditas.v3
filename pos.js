@@ -14,8 +14,20 @@ import { abrirModalCobro } from './cobro.js';
 let grupoSeleccionado = null;   // clave (en minúsculas) del grupo/solapa activa
 let filtroBusqueda = '';
 
+// -----------------------------------------------------------------------------
+// normalizarTexto
+//   Deja un texto en minúsculas y SIN tildes, para comparar sin importar cómo se escribió
+//   ("Jamón" y "jamon" quedan iguales). normalize('NFD') separa cada letra de su tilde
+//   ("ó" -> "o" + tilde) y el replace borra solo las tildes (rango \u0300-\u036f).
+//   Ojo: la "ñ" también pierde su virgulilla y pasa a "n".
+// -----------------------------------------------------------------------------
+function normalizarTexto(texto) {
+  return String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 export function setFiltroBusquedaPOS(texto) {
-  filtroBusqueda = texto.toLowerCase();
+  // trim(): los espacios sueltos al principio o al final no cuentan.
+  filtroBusqueda = normalizarTexto(texto).trim();
   renderizarGrillaPOS();
 }
 
@@ -234,7 +246,7 @@ export function renderizarGrillaPOS() {
 
   if (filtroBusqueda.trim() !== '') {
     // Si hay texto en el buscador, ignoramos la solapa y buscamos en todo
-    prodsMostrar = prodsMostrar.filter(p => p.nombre.toLowerCase().includes(filtroBusqueda));
+    prodsMostrar = prodsMostrar.filter(p => normalizarTexto(p.nombre).includes(filtroBusqueda));
   } else {
     // Productos de TODAS las categorías del grupo, ordenados por categoría
     // (sort es estable: dentro de cada categoría conservan el orden que ya tenían).
