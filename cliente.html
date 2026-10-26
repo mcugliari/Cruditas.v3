@@ -6,68 +6,310 @@
   <title>Hacer Pedido | Cruditas</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Tipografías: Nunito (texto) y Caveat (subtítulo manuscrito). Si no cargan, se usan las del sistema. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
   <style>
-    body { background-color: #f8f9fa; padding-bottom: 90px; }
-    .header-app { background: #111; color: #fff; padding: 15px; border-bottom: 3px solid #ffc107; }
-    .card-prod { border: none; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 10px; }
-    .btn-qty { width: 32px; height: 32px; padding: 0; border-radius: 50%; font-weight: bold; }
-    .sticky-cart-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 12px 16px; box-shadow: 0 -3px 10px rgba(0,0,0,0.1); z-index: 1000; }
+    :root {
+      --amarillo: #ffc107;
+      --amarillo-oscuro: #e0a800;
+      --ambar: #e08e00;      /* precio por unidad */
+      --tinta: #1f2937;      /* texto principal */
+    }
+
+    body {
+      background-color: #f4f5f7;
+      color: var(--tinta);
+      font-family: 'Nunito', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      padding-bottom: 120px; /* lugar para la barra fija de abajo */
+    }
+
+    /* ---------- Cabecera ---------- */
+    .header-app {
+      background: linear-gradient(180deg, #141414 0%, #262626 100%);
+      padding: 22px 16px 28px;
+      text-align: center;
+      border-radius: 0 0 28px 28px;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    }
+    .header-marca { display: inline-flex; align-items: center; gap: 10px; }
+    .header-nombre {
+      margin: 0;
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      line-height: 1;
+      color: var(--amarillo);
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+    }
+    .header-icono { font-size: 1.6rem; line-height: 1; }
+    .header-sub {
+      position: relative;
+      display: inline-block;
+      margin-top: 10px;
+      padding-bottom: 6px;
+      font-family: 'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
+      font-size: 1.45rem;
+      color: #f8f9fa;
+    }
+    /* Trazo amarillo bajo el subtítulo */
+    .header-sub::after {
+      content: '';
+      position: absolute;
+      left: 6%; right: 6%; bottom: 0;
+      height: 3px;
+      border-radius: 3px;
+      background: var(--amarillo);
+      transform: rotate(-1.2deg);
+    }
+
+    /* ---------- Menú ---------- */
+    .menu-cliente { max-width: 640px; margin: 0 auto; padding: 18px 14px 8px; }
+
+    .grupo-cat { margin-bottom: 16px; }
+    .cat-header {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 800;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      text-align: left;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.14);
+      cursor: pointer;
+    }
+    .cat-header:focus { outline: none; }
+    .cat-header:focus-visible { box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.6); }
+    .cat-der { display: flex; align-items: center; gap: 10px; }
+    /* Globito con las unidades elegidas en la categoría (se ve aunque esté cerrada) */
+    .cat-badge {
+      background: #fff;
+      color: #111;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .cat-chevron { transition: transform 0.2s ease; }
+    .cat-header:not(.collapsed) .cat-chevron { transform: rotate(180deg); }
+    .cat-lista { padding-top: 10px; }
+
+    /* ---------- Tarjeta de producto ---------- */
+    .prod-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: #fff;
+      border: 2px solid transparent;
+      border-radius: 16px;
+      padding: 14px 14px 14px 16px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 10px rgba(17, 24, 39, 0.06);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .prod-card.en-carrito {
+      border-color: rgba(255, 193, 7, 0.75);
+      box-shadow: 0 3px 12px rgba(255, 193, 7, 0.25);
+    }
+    .prod-nombre { font-size: 1.1rem; font-weight: 800; line-height: 1.2; color: var(--tinta); }
+    .prod-precio { margin-top: 3px; font-size: 1.05rem; font-weight: 800; color: var(--ambar); }
+    .prod-unidad { font-size: 0.8rem; font-weight: 600; color: #9ca3af; }
+    .prod-docena {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 1px 9px;
+      border-radius: 999px;
+      background: #f1f3f5;
+      color: #6b7280;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    /* ---------- Controles de cantidad ---------- */
+    .qty { display: flex; align-items: center; flex-shrink: 0; }
+    .qty-btn {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: 50%;
+      border: 2px solid;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+      font-weight: 800;
+      line-height: 1;
+      touch-action: manipulation;
+      transition: transform 0.08s ease, opacity 0.15s ease;
+    }
+    .qty-btn:focus { outline: none; }
+    .qty-btn:focus-visible { box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.5); }
+    .qty-btn:active:not(:disabled) { transform: scale(0.92); }
+    .qty-menos { background: #fff; border-color: #d1d5db; color: #6b7280; }   /* discreto */
+    .qty-menos:disabled { opacity: 0.4; }
+    .qty-mas { background: var(--amarillo); border-color: var(--amarillo); color: #111; }  /* protagonista */
+    .qty-num { min-width: 38px; text-align: center; font-size: 1.15rem; font-weight: 700; color: #9ca3af; }
+    .prod-card.en-carrito .qty-num { color: #111; font-size: 1.3rem; font-weight: 800; }
+
+    /* ---------- Barra fija inferior ---------- */
+    .barra-carrito {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 1000;
+      background: #fff;
+      border-radius: 20px 20px 0 0;
+      box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.12);
+      padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+    .barra-inner { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
+    .barra-resumen {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fff6dd;
+      border-radius: 14px;
+      padding: 8px 14px;
+    }
+    .barra-resumen .fa-basket-shopping { font-size: 1.4rem; color: #6b4f00; }
+    .barra-textos {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+      padding-left: 10px;
+      border-left: 1px solid rgba(0, 0, 0, 0.12);
+    }
+    .barra-cant { font-size: 0.95rem; font-weight: 800; }
+    .barra-total { font-size: 0.82rem; color: #4b5563; }
+    .barra-total strong { font-size: 1.05rem; font-weight: 800; color: #111; }
+    .btn-enviar {
+      flex: 1 1 auto;
+      min-width: 0;
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: var(--amarillo);
+      color: #111;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      box-shadow: 0 3px 0 var(--amarillo-oscuro);
+      touch-action: manipulation;
+    }
+    .btn-enviar:focus { outline: none; }
+    .btn-enviar:focus-visible { box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.6); }
+    .btn-enviar:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--amarillo-oscuro); }
+    .btn-enviar:disabled { background: #e5e7eb; color: #9ca3af; box-shadow: none; cursor: not-allowed; }
+    /* Pantallas muy angostas: se sacan los íconos para que entre todo */
+    @media (max-width: 360px) {
+      .barra-resumen .fa-basket-shopping, .btn-enviar .fa-paper-plane { display: none; }
+      .barra-resumen { padding: 8px 10px; }
+      .barra-textos { border-left: 0; padding-left: 0; }
+    }
+
+    /* ---------- Modal de confirmación ---------- */
+    .aviso-verificacion { background: #fff8e1; border-radius: 10px; padding: 10px 12px; font-size: 0.85rem; color: #6b5b00; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-  <div class="header-app text-center">
-    <h5 class="m-0 font-weight-bold text-warning">🍕 CRUDITAS 🥟</h5>
-    <small class="text-light">Menú de Autogestión</small>
-  </div>
+  <header class="header-app">
+    <div class="header-marca">
+      <span class="header-icono" aria-hidden="true">🍕</span>
+      <h1 class="header-nombre">CRUDITAS</h1>
+      <span class="header-icono" aria-hidden="true">🥟</span>
+    </div>
+    <div class="header-sub">Menú de Autogestión</div>
+  </header>
 
-  <div class="container py-3" id="contenedor-productos-cliente">
+  <!-- Menú: lo dibuja cliente.js (categorías desplegables con sus productos) -->
+  <main class="menu-cliente" id="contenedor-productos-cliente">
     <p class="text-center text-muted">Cargando menú...</p>
-  </div>
+  </main>
 
-  <!-- Barra flotante de carrito -->
-  <div class="sticky-cart-bar">
-    <button class="btn btn-warning btn-block btn-lg font-weight-bold d-flex justify-content-between align-items-center" id="btn-confirmar-pedido" disabled>
-      <span class="badge badge-dark px-2 py-1" id="cant-items-carrito">0 u.</span>
-      <span>ENVIAR PEDIDO</span>
-      <span id="monto-total-carrito">$0</span>
-    </button>
-  </div>
-
-  <!-- Modal Datos del Cliente -->
-  <div class="modal fade" id="modalConfirmarCliente" tabindex="-1" role="dialog" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" role="document">
-    <div class="modal-content">
-      <div class="modal-header bg-warning">
-        <h5 class="modal-title font-weight-bold">Datos para el Pedido</h5>
-        <button type="button" class="close" data-dismiss="modal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="font-weight-bold small">Tu Nombre / Referencia *</label>
-          <input type="text" class="form-control" id="cliente-nombre" placeholder="Ej: Juan Pérez" required>
-        </div>
-        <div class="form-group">
-          <label class="font-weight-bold small">Teléfono / WhatsApp *</label>
-          <input type="text" class="form-control" id="cliente-telefono" placeholder="Ej: 1122334455" required>
-        </div>
-        <div class="form-group">
-          <label class="font-weight-bold small">Modalidad</label>
-          <input type="text" class="form-control bg-light" id="cliente-modalidad" value="Retiro por el local" readonly>
-        </div>
-        <div class="form-group">
-          <label class="font-weight-bold small">Observaciones / Aclaraciones</label>
-          <textarea class="form-control" id="cliente-observaciones" rows="2" placeholder="Ej: Empanadas bien doradas, sin cebolla, etc."></textarea>
+  <!-- Barra fija: a la izquierda cuánto llevás, a la derecha la acción -->
+  <div class="barra-carrito">
+    <div class="barra-inner">
+      <div class="barra-resumen">
+        <i class="fas fa-basket-shopping" aria-hidden="true"></i>
+        <div class="barra-textos">
+          <span class="barra-cant" id="cant-items-carrito">0 u.</span>
+          <span class="barra-total">Total: <strong id="monto-total-carrito">$0</strong></span>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-success btn-block font-weight-bold" id="btn-finalizar-pedido">
-          ✅ CONFIRMAR Y GUARDAR
-        </button>
-      </div>
+      <button type="button" class="btn-enviar" id="btn-confirmar-pedido" disabled>
+        <i class="fas fa-paper-plane" aria-hidden="true"></i>
+        <span>ENVIAR PEDIDO</span>
+        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+      </button>
     </div>
   </div>
+
+  <!-- Modal: revisar y confirmar el pedido -->
+  <div class="modal fade" id="modalConfirmarCliente" tabindex="-1" role="dialog" aria-labelledby="titulo-modal-cliente" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document">
+      <div class="modal-content">
+
+        <!-- Paso 1: revisar el pedido y completar los datos -->
+        <div id="cliente-paso-datos">
+          <div class="modal-header bg-warning">
+            <h5 class="modal-title font-weight-bold" id="titulo-modal-cliente">Confirmá tu pedido</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">&times;</button>
+          </div>
+          <div class="modal-body">
+            <!-- Lo completa cliente.js: productos, descuento y total -->
+            <div id="resumen-pedido-modal-cliente"></div>
+
+            <div class="form-group">
+              <label class="font-weight-bold small" for="cliente-nombre">Tu Nombre / Referencia *</label>
+              <input type="text" class="form-control" id="cliente-nombre" placeholder="Ej: Juan Pérez" autocomplete="name" required>
+            </div>
+            <div class="form-group">
+              <label class="font-weight-bold small" for="cliente-telefono">Teléfono / WhatsApp *</label>
+              <input type="tel" inputmode="tel" class="form-control" id="cliente-telefono" placeholder="Ej: 1122334455" autocomplete="tel" required>
+            </div>
+            <div class="form-group">
+              <label class="font-weight-bold small" for="cliente-modalidad">Modalidad</label>
+              <input type="text" class="form-control bg-light" id="cliente-modalidad" value="Retiro por el local" readonly>
+            </div>
+            <div class="form-group">
+              <label class="font-weight-bold small" for="cliente-observaciones">Observaciones / Aclaraciones</label>
+              <textarea class="form-control" id="cliente-observaciones" rows="2" placeholder="Ej: Empanadas bien doradas, sin cebolla, etc."></textarea>
+            </div>
+
+            <p class="aviso-verificacion mb-2">
+              <i class="fas fa-circle-info mr-1" aria-hidden="true"></i>
+              Al confirmar, tu pedido llega al local y lo verificamos antes de empezar a prepararlo.
+            </p>
+            <!-- Errores y avisos (reemplaza a los alert del navegador) -->
+            <div class="alert alert-danger py-2 small mb-0 d-none" id="cliente-error" role="alert"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-success btn-block font-weight-bold" id="btn-finalizar-pedido">
+              CONFIRMAR PEDIDO
+            </button>
+          </div>
+        </div>
+
+        <!-- Paso 2: pedido recibido (lo completa cliente.js) -->
+        <div id="cliente-paso-exito" class="d-none"></div>
+
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
