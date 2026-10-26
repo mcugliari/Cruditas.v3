@@ -19,6 +19,7 @@ import {
   abrirMovimientosCuenta, anularMovimientoCuenta
 } from './cuentas.js';
 import { inicializarCierreCaja, inicializarHistorialCierres, cargarTablaHistorialCierres, verDetalleCierre, actualizarIndicadorCaja } from './caja.js';
+import { inicializarReporteCompras } from './reporteCompras.js';
 import './categorias.js';
 
 // FUNCION DE NAVEGACIÓN
@@ -74,6 +75,8 @@ export function navegarA(seccionId, elementoMenu) {
     cargarCuentas();
   } else if (seccionId === 'insumos') {
     cargarInsumos();
+  } else if (seccionId === 'reportes-compras') {
+    inicializarReporteCompras();
   }
 }
 

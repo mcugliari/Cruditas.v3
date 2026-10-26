@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './config.js';
-import { mostrarNotificacion, confirmarAccion } from './utils.js';
+import { mostrarNotificacion, confirmarAccion, esc } from './utils.js';
 
 export async function cargarClientes() {
   const tbody = document.getElementById('tabla-clientes-body');
@@ -9,7 +9,7 @@ export async function cargarClientes() {
     .order('id', { ascending: false });
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">Error: ${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">Error: ${esc(error.message)}</td></tr>`;
     return;
   }
   if (!clientes || clientes.length === 0) {
@@ -20,14 +20,14 @@ export async function cargarClientes() {
     tbody.innerHTML = clientes.map(cli => `
     <tr>
         <td><span class="badge badge-secondary">#${cli.id}</span></td>
-        <td class="font-weight-bold">${cli.nombre}</td>
-        <td>${cli.telefono || '-'}</td>
-        <td>${cli.direccion || '-'}</td>
+        <td class="font-weight-bold">${esc(cli.nombre)}</td>
+        <td>${esc(cli.telefono || '-')}</td>
+        <td>${esc(cli.direccion || '-')}</td>
         <td class="text-center">
-        <button class="btn btn-sm btn-warning mr-1" data-action="editar-cliente" data-id="${cli.id}" data-nombre="${cli.nombre}" data-telefono="${cli.telefono || ''}" data-direccion="${cli.direccion || ''}">
+        <button class="btn btn-sm btn-warning mr-1" data-action="editar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}" data-telefono="${esc(cli.telefono || '')}" data-direccion="${esc(cli.direccion || '')}">
             <i class="fas fa-edit"></i>
         </button>
-        <button class="btn btn-sm btn-danger" data-action="eliminar-cliente" data-id="${cli.id}" data-nombre="${cli.nombre}">
+        <button class="btn btn-sm btn-danger" data-action="eliminar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}">
             <i class="fas fa-trash-alt"></i>
         </button>
         </td>
@@ -98,8 +98,8 @@ async function cargarSelectsAsociacion() {
   const selectCli = document.getElementById('asoc-select-cliente');
   const selectLis = document.getElementById('asoc-select-lista');
 
-  if (selectCli && clientes) selectCli.innerHTML = clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
-  if (selectLis && listas) selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
+  if (selectCli && clientes) selectCli.innerHTML = clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+  if (selectLis && listas) selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
 }
 
 export async function listarAsociacionesClienteLista() {
@@ -115,8 +115,8 @@ export async function listarAsociacionesClienteLista() {
 
     tbody.innerHTML = data.map(item => `
     <tr>
-      <td class="font-weight-bold">${item.TB_BCLIENTES?.nombre || 'N/A'}</td>
-      <td>${item.TB_TLISTA_PRECIOS?.nombre || 'N/A'}</td>
+      <td class="font-weight-bold">${esc(item.TB_BCLIENTES?.nombre || 'N/A')}</td>
+      <td>${esc(item.TB_TLISTA_PRECIOS?.nombre || 'N/A')}</td>
       <td class="text-center">
         ${item.m_predeterminada ? '<span class="badge badge-success px-2 py-1">Sí</span>' : '<span class="badge badge-secondary px-2 py-1">No</span>'}
       </td>

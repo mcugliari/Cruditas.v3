@@ -39,6 +39,10 @@ export async function generarResumenVentasProductos() {
     return;
   }
 
+  // Aviso aparte de los pedidos entregados y todavía sin cobrar (no suman a los totales).
+  // No se espera: se completa solo cuando llega la respuesta.
+  mostrarNotaImpagos(fDesde, fHasta, idCliente);
+
   // 1. Consultar pedidos cobrados (COMPLETADO) cuyo COBRO cayó dentro del rango.
   //    Se filtra por fecha de cobro (columna date, día local), no por fecha de emisión.
   //    Los entregados sin cobrar (ENTREGADO_IMPAGO) no entran hasta que se cobren.
@@ -196,6 +200,41 @@ export async function generarResumenVentasProductos() {
 
   mostrarNotaDescuento(descuentoTotal);
 }
+
+// -----------------------------------------------------------------------------
+// mostrarNotaImpagos  (interna)
+//   Avisa cuántos pedidos están entregados pero sin cobrar (ENTREGADO_IMPAGO) y por cuánto.
+//   Como todavía no tienen fecha de cobro, se buscan por su FECHA DE PEDIDO dentro del
+//   rango (y del cliente, si hay uno elegido). NO se suman a los totales de la tabla:
+//   recién entran al reporte el día que se cobran. Si no hay ninguno, la nota se oculta.
+// -----------------------------------------------------------------------------
+async function mostrarNotaImpagos(fDesde, fHasta, idCliente) {
+  const nota = document.getElementById('nota-resumen-impagos');
+  if (!nota) return;
+
+  let query = supabaseAdmin
+    .from('TB_TPEDIDOS')
+    .select('id, importe_total')
+    .eq('estado', 'ENTREGADO_IMPAGO')
+    .gte('fecha', fDesde)
+    .lte('fecha', fHasta);
+  if (idCliente) query = query.eq('id_cliente', idCliente);
+
+  const { data, error } = await query;
+
+  // Si la consulta falla, no se muestra nada: es solo un aviso extra, el reporte sigue igual.
+  if (error || !data || data.length === 0) {
+    nota.classList.add('d-none');
+    return;
+  }
+
+  const cantidad = data.length;
+  const monto = data.reduce((suma, p) => suma + Number(p.importe_total || 0), 0)
+    .toLocaleString('es-AR', { minimumFractionDigits: 2 });
+  nota.innerText = `Hay ${cantidad} ${cantidad === 1 ? 'pedido entregado' : 'pedidos entregados'} sin cobrar en este período, por $${monto}. No están incluidos en los totales: aparecen cuando se cobran.`;
+  nota.classList.remove('d-none');
+}
+
 
 // -----------------------------------------------------------------------------
 // mostrarNotaDescuento  (interna)

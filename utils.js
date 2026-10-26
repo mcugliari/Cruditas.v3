@@ -204,7 +204,10 @@ const MENSAJES_FUNCIONES = {
   producto_invalido:    'Algún producto no existe, no tiene precio en la lista elegida o la cantidad no es válida.',
   pedido_inexistente:   'El pedido no existe.',
   pedido_no_editable:   'Este pedido ya no se puede editar: solo se editan los pedidos en preparación o preparados.',
-  transicion_invalida:  'Ese cambio de estado no está permitido para este pedido. Recargá la lista: puede que ya haya cambiado.'
+  transicion_invalida:  'Ese cambio de estado no está permitido para este pedido. Recargá la lista: puede que ya haya cambiado.',
+  // Reportes de compras (script 28)
+  rango_invalido:       'La fecha Desde no puede ser posterior a la fecha Hasta.',
+  agrupacion_invalida:  'La forma de agrupar el reporte no es válida.'
 };
 
 export function mensajeErrorFuncion(error, entidad = 'registro') {
