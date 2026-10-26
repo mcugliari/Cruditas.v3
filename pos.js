@@ -646,7 +646,15 @@ export async function vaciarCarrito() {
   resetearPedido();
 }
 
-// cobro: null, o { idMedio, idCuenta } cuando viene de la ventana de cobro (solo al cobrar y entregar).
+// -----------------------------------------------------------------------------
+// guardarPedido
+//   Crea o edita el pedido llamando a la función del servidor guardar_pedido (script 23).
+//   El navegador manda solo qué se pidió (productos y cantidades), el cliente, la lista,
+//   la referencia, el estado y, si se cobra, medio y cuenta. Los PRECIOS, el DESCUENTO por
+//   docena y el TOTAL los calcula el servidor; lo que se ve en pantalla es solo una vista previa.
+//   estadoInicial: 'PREPARACION', 'ENTREGADO_IMPAGO' o 'COMPLETADO' ("Cobrar y Entregar").
+//   cobro: null, o { idMedio, idCuenta } cuando viene de la ventana de cobro (solo al cobrar y entregar).
+// -----------------------------------------------------------------------------
 export async function guardarPedido(estadoInicial, cobro = null) {
   const keys = Object.keys(carrito);
   if (keys.length === 0) {
@@ -656,137 +664,65 @@ export async function guardarPedido(estadoInicial, cobro = null) {
 
   const idCliente = document.getElementById('select-cliente-pedido').value;
   const idLista = document.getElementById('select-lista-pedido').value;
+
   // Medio y cuenta llegan de la ventana de cobro (cobro.js) y SOLO al cobrar y entregar.
   // Un pedido que todavía no se cobró queda con medio y cuenta en NULL.
   if (estadoInicial === 'COMPLETADO' && !cobro) {
     mostrarNotificacion('Para cobrar, usá la ventana de cobro.', 'warning');
     return;
   }
-  const idMedio = cobro ? cobro.idMedio : null;
-  const idCuenta = cobro ? cobro.idCuenta : null;
 
   const inputRef = document.getElementById('input-ref-cliente');
-  const nombreReferencia = inputRef ? inputRef.value.trim() : null;
+  const nombreReferencia = inputRef ? inputRef.value.trim() : '';
 
-  // ⚠️️ VALIDACIÓN: Si es ID 1 (Consumidor Final) y no puso nombre/referencia
-   // La referencia solo se exige si el pedido NO se cobra y entrega en el momento.
-  // estadoInicial llega desde el botón que se apretó: 'COMPLETADO' es "Cobrar y Entregar".
-  // Con PREPARACION o ENTREGADO_IMPAGO hace falta saber a quién entregar o reclamar.
+  // La referencia solo se exige si el pedido NO se cobra y entrega en el momento.
+  // (El servidor repite esta regla; acá se avisa antes para no hacer el viaje.)
   const seCobraYEntregaYa = estadoInicial === 'COMPLETADO';
   if (idCliente === '1' && nombreReferencia === '' && !seCobraYEntregaYa) {
-    // Cambié alert() por el aviso del sistema, como en el resto de la app
     mostrarNotificacion('Indicá un nombre o referencia. Solo podés omitirlo si cobrás y entregás en el momento.', 'warning');
     if (inputRef) inputRef.focus();
     return; // Interrumpe el guardado
   }
 
-  let montoTotal = 0;
-  const detalles = [];
-
-  const lineasDocena = []; // productos que permiten docena (para el descuento)
-
-  const fechaISO = obtenerFechaActualISO();
-
-  // 1. Guardar los productos seleccionados a precio unitario normal
-  keys.forEach(idProd => {
+  // Productos y cantidades. Si alguno no tiene precio en la lista elegida, se avisa cuál
+  // (el servidor también lo rechaza, pero sin decir el nombre).
+  const items = [];
+  for (const idProd of keys) {
     const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
-    if (!p) return;
-
-    const cantidadTotal = Number(carrito[idProd]) || 0;
-    if (cantidadTotal <= 0) return;
+    const cantidad = Number(carrito[idProd]) || 0;
+    if (!p || cantidad <= 0) continue;
 
     const precios = obtenerPrecioProducto(p.id, p.id_categoria || p.idCategoria, idLista);
-    const precioUnidad = precios.unidad || 0;
-
-    if (p.m_permite_docena) {
-      lineasDocena.push({ cantidad: cantidadTotal, precioUnidad, precioDocena: precios.docena || 0 });
-    }
-
-    const subTotalItem = cantidadTotal * precioUnidad;
-
-    detalles.push({
-      id_pedido: null,
-      id_producto: p.id,
-      cantidad: cantidadTotal,
-      precioUnitario: precioUnidad,
-      subTotal: subTotalItem
-    });
-
-    montoTotal += subTotalItem;
-  });
-
-  // 2. Si completa docenas combinadas, agregar renglón de bonificación (Producto 999)
-  const { docenasCompletas, descuentoTotal } = calcularDescuentoDocena(lineasDocena);
-  if (descuentoTotal > 0) {
-    // Descuento promedio por docena (con precios mezclados no es un número redondo).
-    const descuentoPorDocena = Math.round((descuentoTotal / docenasCompletas) * 100) / 100;
-    detalles.push({
-      id_pedido: null,
-      id_producto: 999, // Producto 'Descuento por Docena'
-      cantidad: docenasCompletas,
-      precioUnitario: -descuentoPorDocena,
-      subTotal: -descuentoTotal
-    });
-
-    montoTotal -= descuentoTotal;
-  }
-
-  let idPedidoFinal = pedidoEditandoId;
-
-  if (pedidoEditandoId) {
-    const { error: errUpdate } = await supabaseAdmin
-      .from('TB_TPEDIDOS')
-      .update({
-        id_cliente: idCliente,
-        nombre_referencia: nombreReferencia,
-        id_lista_precio: idLista,
-        id_medio_pago: idMedio,
-        id_cuenta: idCuenta,
-        estado: estadoInicial,
-        importe_total: montoTotal
-      })
-      .eq('id', pedidoEditandoId);
-
-    if (errUpdate) {
-      mostrarNotificacion('Error al actualizar cabecera: ' + mensajeErrorFuncion(errUpdate, 'pedido'), 'danger');
+    if (!(precios.unidad > 0)) {
+      mostrarNotificacion(`"${p.nombre}" no tiene precio en la lista elegida.`, 'warning');
       return;
     }
-
-    await supabaseAdmin.from('TB_DPEDIDOS').delete().eq('id_pedido', pedidoEditandoId);
-
-  } else {
-    const { data: pedido, error } = await supabaseAdmin
-      .from('TB_TPEDIDOS')
-      .insert([{
-        fecha: fechaISO,
-        id_cliente: idCliente,
-        nombre_referencia: nombreReferencia,
-        id_lista_precio: idLista,
-        id_medio_pago: idMedio,
-        id_cuenta: idCuenta,
-        estado: estadoInicial,
-        importe_total: montoTotal
-      }])
-      .select()
-      .single();
-
-    if (error) {
-      mostrarNotificacion('Error al guardar el pedido: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
-      return;
-    }
-    idPedidoFinal = pedido.id;
+    items.push({ id_producto: Number(p.id), cantidad });
   }
-
-  detalles.forEach(d => d.id_pedido = idPedidoFinal);
-
-  const { error: errorDetalle } = await supabaseAdmin.from('TB_DPEDIDOS').insert(detalles);
-
-  if (errorDetalle) {
-    mostrarNotificacion('Error al guardar el detalle: ' + errorDetalle.message, 'danger');
+  if (items.length === 0) {
+    mostrarNotificacion('Agregá al menos un producto al carrito.', 'warning');
     return;
   }
 
-  mostrarNotificacion(`¡Pedido #${idPedidoFinal} ${pedidoEditandoId ? 'actualizado' : 'registrado'} con éxito!`, 'success');
+  const eraEdicion = Boolean(pedidoEditandoId);
+
+  const { data, error } = await supabaseAdmin.rpc('guardar_pedido', {
+    p_id_pedido: pedidoEditandoId || null,
+    p_id_cliente: Number(idCliente),
+    p_id_lista: Number(idLista),
+    p_referencia: nombreReferencia,
+    p_estado: estadoInicial,
+    p_items: items,
+    p_id_medio: cobro ? cobro.idMedio : null,
+    p_id_cuenta: cobro ? cobro.idCuenta : null
+  });
+
+  if (error) {
+    mostrarNotificacion('Error al guardar el pedido: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
+    return;
+  }
+
+  mostrarNotificacion(`¡Pedido #${data.id_pedido} ${eraEdicion ? 'actualizado' : 'registrado'} con éxito!`, 'success');
 
   if (inputRef) inputRef.value = '';
 

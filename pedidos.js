@@ -215,10 +215,11 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
     return;
   }
 
-  const { error } = await supabaseAdmin
-    .from('TB_TPEDIDOS')
-    .update({ estado: nuevoEstado })
-    .eq('id', idPedido);
+  // El servidor valida que la transición esté permitida (cambiar_estado_pedido, script 24).
+  const { error } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
+    p_id_pedido: Number(idPedido),
+    p_nuevo_estado: nuevoEstado
+  });
 
   if (error) {
     // La base puede rechazar el cambio con un código (por ejemplo, si la caja del día ya está cerrada)
@@ -263,11 +264,13 @@ async function cobrarPedido(idPedido) {
     unidades,
     // Callback: la ventana lo llama al confirmar. true = se guardó (la ventana se cierra).
     alConfirmar: async (idMedio, idCuenta) => {
-      // Estado, medio y cuenta van en la MISMA actualización: se guardan juntos o no se guarda nada.
-      const { error: errorCobro } = await supabaseAdmin
-        .from('TB_TPEDIDOS')
-        .update({ estado: 'COMPLETADO', id_medio_pago: idMedio, id_cuenta: idCuenta })
-        .eq('id', pedido.id);
+      // Estado, medio y cuenta van en la MISMA llamada: se guardan juntos o no se guarda nada.
+      const { error: errorCobro } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
+        p_id_pedido: Number(pedido.id),
+        p_nuevo_estado: 'COMPLETADO',
+        p_id_medio: idMedio,
+        p_id_cuenta: idCuenta
+      });
 
       if (errorCobro) {
         // Por ejemplo, si la caja de ese día ya está cerrada.

@@ -195,7 +195,16 @@ const MENSAJES_FUNCIONES = {
   movimiento_cerrado:      'El movimiento pertenece a un día con la caja cerrada: no se puede anular. Anulá primero el cierre de caja de ese día.',
   ajuste_de_cierre:        'Este ajuste lo generó un cierre de caja (diferencia de arqueo). Para deshacerlo, anulá ese cierre.',
   cuenta_efectivo_fija: 'La cuenta Efectivo es fija: no se puede desactivar, borrar ni cambiar de tipo.',
-  medio_requerido:      'Para cobrar hay que elegir el medio de pago.'
+  medio_requerido:      'Para cobrar hay que elegir el medio de pago.',
+  // Pedidos (guardar_pedido y cambiar_estado_pedido, scripts 23 y 24)
+  estado_invalido:      'El estado del pedido no es válido.',
+  cliente_invalido:     'El cliente no existe.',
+  lista_invalida:       'La lista de precios no existe.',
+  referencia_requerida: 'Indicá un nombre o referencia. Solo podés omitirlo si cobrás y entregás en el momento.',
+  producto_invalido:    'Algún producto no existe, no tiene precio en la lista elegida o la cantidad no es válida.',
+  pedido_inexistente:   'El pedido no existe.',
+  pedido_no_editable:   'Este pedido ya no se puede editar: solo se editan los pedidos en preparación o preparados.',
+  transicion_invalida:  'Ese cambio de estado no está permitido para este pedido. Recargá la lista: puede que ya haya cambiado.'
 };
 
 export function mensajeErrorFuncion(error, entidad = 'registro') {
