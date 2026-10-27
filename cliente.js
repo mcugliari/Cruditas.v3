@@ -533,6 +533,15 @@ function prepararModalConfirmacion() {
   ponerBotonConfirmar(false);
 }
 
+// Nombre de la categoría de un producto (ej.: 'Canastita', 'Empanada', 'Pizza especial'). Sirve para distinguir
+// productos que se llaman igual en categorías distintas (ej.: Caprese). Devuelve '' si no se encuentra.
+function nombreCategoriaDeProducto(idProd) {
+  const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
+  if (!p) return '';
+  const cat = cacheCategorias.find(c => Number(c.id) === Number(p.id_categoria || p.idCategoria));
+  return cat ? String(cat.nombre) : '';
+}
+
 function renderizarResumenEnModalCliente() {
   const contenedor = document.getElementById('resumen-pedido-modal-cliente');
   if (!contenedor) return;
@@ -547,9 +556,14 @@ function renderizarResumenEnModalCliente() {
   let html = `<ul class="list-group list-group-flush mb-3">`;
 
   resumen.listaItems.forEach(item => {
+    // Categoría del producto, para distinguir por ejemplo un Caprese de Canastita de uno de Empanada.
+    const categoria = nombreCategoriaDeProducto(item.id);
+    const htmlCategoria = categoria ? `<span class="prod-cat">${esc(categoria)}</span>` : '';
+
     html += `
       <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-transparent border-bottom">
         <div>
+          ${htmlCategoria}
           <strong class="d-block text-dark">${esc(item.nombre)}</strong>
           <small class="text-muted">${item.cantidad} u. x ${formatoPesos(item.precioUnitario)}</small>
         </div>
