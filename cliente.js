@@ -4,11 +4,20 @@ let cacheCategorias = [];
 let cacheProductos = [];
 let cachePrecios = [];
 let carrito = {}; // { id_producto: cantidad }
-let categoriaDeProducto = {}; // { id_producto: id_categoria } (se arma al dibujar el menú)
+let grupoDeProducto = {}; // { id_producto: id del bloque (g0, g1...) } (se arma al dibujar el menú)
 let enviando = false; // true mientras se está enviando el pedido (evita envíos duplicados)
 
 // Categorías desplegables: false = arranca abierta solo la primera; true = arrancan todas abiertas.
 const ABRIR_TODAS_LAS_CATEGORIAS = false;
+
+// Foto FIJA por grupo: la misma imagen en todas las tarjetas del grupo. Los archivos van en la
+// carpeta "img" junto a cliente.html. Se elige la foto cuando el nombre del grupo CONTIENE la clave
+// (ej.: "Pizzas" contiene "pizza"). Si el archivo no existe o no carga, se ve el ícono del grupo.
+const FOTOS_GRUPO = {
+  empanada: 'img/empanada.jpg',
+  canastita: 'img/canastita.jpg',
+  pizza: 'img/pizza.jpg'
+};
 
 // Token opcional del link (?t=...). Lo genera el bot desde el servidor.
 // Cliente consumidor final, lista de precios y medio de pago se fijan en la base.
@@ -92,64 +101,153 @@ async function cargarDatosMenu() {
 }
 
 // -----------------------------------------------------------------------------
+// Grupos, íconos y orden: MISMA lógica que el POS (pos.js), para que el menú del cliente se vea
+// agrupado igual: Empanada / Canastita / Pizzas (sin abrir por Simple, Especial y Premium).
+// Si se cambia la lógica en pos.js, cambiarla también acá.
+// -----------------------------------------------------------------------------
+
+// Grupo (bloque) de una categoría. Si la categoría no tiene grupo cargado, usa su propio nombre.
+function grupoDeCategoria(cat) {
+  return String(cat.grupo || '').trim() || String(cat.nombre || '').trim();
+}
+
+// El grupo "sistema" (bonificaciones) no se muestra. Se mantiene también la comprobación del id 99.
+function esCategoriaSistema(cat) {
+  return Number(cat.id) === 99 || grupoDeCategoria(cat).toUpperCase() === 'SISTEMA';
+}
+
+// Texto del bloque: 'PIZZAS' -> 'Pizzas'
+function titularGrupo(texto) {
+  const t = String(texto).trim();
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+// Clase del ícono de Font Awesome según el nombre (los mismos íconos que el POS).
+function iconoCategoria(nombre) {
+  const nom = String(nombre || '').toLowerCase();
+  if (nom.includes('pizza')) return 'fa-pizza-slice';
+  if (nom.includes('empanada')) return 'fa-cookie-bite';
+  if (nom.includes('canastita')) return 'fa-shopping-basket';
+  if (nom.includes('bebida')) return 'fa-wine-bottle';
+  if (nom.includes('otros')) return 'fa-th-large';
+  return 'fa-utensils'; // respaldo para cualquier categoría nueva
+}
+
+// Orden de las tarjetas: 1) por categoría (en el orden en que vienen), 2) por el campo "orden" del
+// producto (el menor primero; los que no tienen número van al final), 3) por id.
+function compararProductosCatalogo(a, b) {
+  const posCategoria = p => cacheCategorias.findIndex(c => Number(c.id) === Number(p.id_categoria || p.idCategoria));
+  // Sin orden = Infinity: queda al final. (Number(null) daría 0 y los pondría primeros.)
+  const ordenDe = p => (p.orden === null || p.orden === undefined || p.orden === '') ? Infinity : Number(p.orden);
+
+  const porCategoria = posCategoria(a) - posCategoria(b);
+  if (porCategoria !== 0) return porCategoria;
+
+  const oa = ordenDe(a);
+  const ob = ordenDe(b);
+  if (oa !== ob) return oa < ob ? -1 : 1; // (no se resta: Infinity - Infinity daría NaN)
+
+  return Number(a.id) - Number(b.id);
+}
+
+// Clave de la foto fija de un grupo ('' si no hay foto definida para ese grupo).
+function claveFotoGrupo(titulo) {
+  const nom = String(titulo || '').toLowerCase();
+  return Object.keys(FOTOS_GRUPO).find(clave => nom.includes(clave)) || '';
+}
+
+// Pone la foto fija en las tarjetas. El ícono queda debajo SIEMPRE: la foto se agrega solo si el
+// archivo carga. Se prueba UNA vez por foto (no una por tarjeta), así un archivo faltante no genera
+// decenas de pedidos fallidos.
+function cargarFotosFijas() {
+  Object.entries(FOTOS_GRUPO).forEach(([clave, url]) => {
+    const fichas = document.querySelectorAll(`.prod-foto[data-foto="${clave}"]`);
+    if (fichas.length === 0) return;
+
+    const prueba = new Image();
+    prueba.onload = () => {
+      fichas.forEach(ficha => {
+        if (ficha.querySelector('img')) return;
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = '';
+        img.decoding = 'async';
+        ficha.appendChild(img);
+      });
+    };
+    prueba.src = url; // si el archivo no existe, no pasa nada: queda el ícono
+  });
+}
+
+// -----------------------------------------------------------------------------
 // renderizarMenuPorCategorias
-//   Dibuja el menú UNA vez (al cargar). Cada categoría es un bloque desplegable
-//   (Bootstrap "collapse"): el encabezado es un botón que abre/cierra la lista, y
-//   muestra un globito con las unidades elegidas aunque esté cerrada.
+//   Dibuja el menú UNA vez (al cargar), agrupado como el POS. Cada grupo es un bloque desplegable
+//   (Bootstrap "collapse"): el encabezado es un botón que abre/cierra la lista y muestra un globito
+//   con las unidades elegidas aunque esté cerrado. Todos los encabezados tienen el mismo color.
 // -----------------------------------------------------------------------------
 function renderizarMenuPorCategorias() {
   const contenedor = document.getElementById('contenedor-productos-cliente');
   if (!contenedor) return;
 
-  const paletaColores = [
-    { bg: '#0d6efd', text: '#ffffff' },
-    { bg: '#198754', text: '#ffffff' },
-    { bg: '#ffc107', text: '#000000' },
-    { bg: '#dc3545', text: '#ffffff' },
-    { bg: '#0dcaf0', text: '#000000' },
-    { bg: '#6c757d', text: '#ffffff' }
-  ];
+  // Grupos SIN repetir, en el orden en que aparecen las categorías. La clave va en minúsculas
+  // para que 'Pizzas' y 'PIZZAS' cuenten como el mismo grupo.
+  const grupos = new Map(); // clave -> { titulo, ids: ids de las categorías del grupo }
+  cacheCategorias.forEach(cat => {
+    if (esCategoriaSistema(cat)) return;
+    const nombreGrupo = grupoDeCategoria(cat);
+    const clave = nombreGrupo.toLowerCase();
+    if (!grupos.has(clave)) grupos.set(clave, { titulo: titularGrupo(nombreGrupo), ids: new Set() });
+    grupos.get(clave).ids.add(Number(cat.id));
+  });
 
   let html = '';
-  let colorIndex = 0;
-  categoriaDeProducto = {};
+  let indice = 0;
+  grupoDeProducto = {};
 
-  cacheCategorias.forEach(cat => {
-    // Omitir categoría de ajuste/sistema
-    if (Number(cat.id) === 99) return;
+  grupos.forEach(grupo => {
+    // Productos de TODAS las categorías del grupo, en el orden del catálogo (sin el producto 999).
+    const prodsGrupo = cacheProductos
+      .filter(p => Number(p.id) !== 999 && grupo.ids.has(Number(p.id_categoria || p.idCategoria)))
+      .sort(compararProductosCatalogo);
+    if (prodsGrupo.length === 0) return;
 
-    // Filtrar producto bonificación 999
-    const prodsCat = cacheProductos.filter(p =>
-      Number(p.id_categoria || p.idCategoria) === Number(cat.id) && Number(p.id) !== 999
-    );
-    if (prodsCat.length === 0) return;
+    const idDom = `g${indice}`;
+    const abierta = ABRIR_TODAS_LAS_CATEGORIAS || indice === 0;
+    indice++;
 
-    const estiloColor = paletaColores[colorIndex % paletaColores.length];
-    const abierta = ABRIR_TODAS_LAS_CATEGORIAS || colorIndex === 0;
-    colorIndex++;
+    const icono = iconoCategoria(grupo.titulo);
+    const claveFoto = claveFotoGrupo(grupo.titulo);
+    // Si el grupo reúne varias categorías (ej. Pizzas: Simple, Especial, Premium), cada tarjeta
+    // muestra una etiqueta chica con la suya, porque el precio puede cambiar entre ellas.
+    const variasCategorias = grupo.ids.size > 1;
 
     html += `
       <section class="grupo-cat">
         <button type="button" class="cat-header ${abierta ? '' : 'collapsed'}"
-                style="background-color: ${estiloColor.bg}; color: ${estiloColor.text};"
-                data-toggle="collapse" data-target="#cat-${cat.id}"
-                aria-expanded="${abierta ? 'true' : 'false'}" aria-controls="cat-${cat.id}">
-          <span>${esc(cat.nombre)}</span>
+                data-toggle="collapse" data-target="#cat-${idDom}"
+                aria-expanded="${abierta ? 'true' : 'false'}" aria-controls="cat-${idDom}">
+          <span class="cat-titulo"><i class="fas ${icono}" aria-hidden="true"></i>${esc(grupo.titulo)}</span>
           <span class="cat-der">
-            <span class="cat-badge d-none" id="badge-cat-${cat.id}"></span>
+            <span class="cat-badge d-none" id="badge-${idDom}"></span>
             <i class="fas fa-chevron-down cat-chevron" aria-hidden="true"></i>
           </span>
         </button>
-        <div class="collapse ${abierta ? 'show' : ''}" id="cat-${cat.id}">
+        <div class="collapse ${abierta ? 'show' : ''}" id="cat-${idDom}">
           <div class="cat-lista">
     `;
 
-    prodsCat.forEach(p => {
-      categoriaDeProducto[p.id] = cat.id;
+    prodsGrupo.forEach(p => {
+      grupoDeProducto[p.id] = idDom;
 
       const cant = carrito[p.id] || 0;
       const idCatProd = p.id_categoria || p.idCategoria;
       const precios = obtenerPrecioProductoCliente(p.id, idCatProd);
+
+      let htmlEtiqueta = '';
+      if (variasCategorias) {
+        const cat = cacheCategorias.find(c => Number(c.id) === Number(idCatProd));
+        if (cat) htmlEtiqueta = `<span class="prod-cat">${esc(cat.nombre)}</span>`;
+      }
 
       // Jerarquía: nombre (protagonista) > precio por unidad > precio por docena (discreto)
       let htmlDocena = '';
@@ -159,7 +257,11 @@ function renderizarMenuPorCategorias() {
 
       html += `
             <div class="prod-card ${cant > 0 ? 'en-carrito' : ''}" data-prod="${p.id}">
+              <div class="prod-foto" ${claveFoto ? `data-foto="${claveFoto}"` : ''} aria-hidden="true">
+                <i class="fas ${icono}"></i>
+              </div>
               <div class="prod-info">
+                ${htmlEtiqueta}
                 <div class="prod-nombre">${esc(p.nombre)}</div>
                 <div class="prod-precio">${formatoPesos(precios.unidad)} <span class="prod-unidad">/ u</span></div>
                 ${htmlDocena}
@@ -184,9 +286,12 @@ function renderizarMenuPorCategorias() {
 
   contenedor.innerHTML = html;
 
-  // Globitos de las categorías y barra de abajo, según lo que ya haya en el carrito.
-  cacheCategorias.forEach(cat => actualizarBadgeCategoria(cat.id));
+  // Globitos de los grupos y barra de abajo, según lo que ya haya en el carrito.
+  for (let i = 0; i < indice; i++) actualizarBadgeGrupo(`g${i}`);
   actualizarBarraCarrito();
+
+  // Fotos fijas por grupo (solo se agregan si el archivo carga).
+  cargarFotosFijas();
 }
 
 // Atiende los toques en + y − (delegación: un solo oyente sobre el contenedor).
@@ -229,7 +334,7 @@ function cambiarCantidad(idProd, cambio) {
 
   // Se actualiza solo lo que cambió (tarjeta, globito de su categoría y barra de abajo).
   actualizarTarjeta(idProd);
-  actualizarBadgeCategoria(categoriaDeProducto[idProd]);
+  actualizarBadgeGrupo(grupoDeProducto[idProd]);
   actualizarBarraCarrito();
 }
 
@@ -248,14 +353,14 @@ function actualizarTarjeta(idProd) {
   if (menos) menos.disabled = cant === 0;
 }
 
-// Globito del encabezado de una categoría: unidades elegidas en ella (oculto si es 0).
-function actualizarBadgeCategoria(idCat) {
-  const badge = document.getElementById(`badge-cat-${idCat}`);
+// Globito del encabezado de un grupo: unidades elegidas en él (oculto si es 0).
+function actualizarBadgeGrupo(idDom) {
+  const badge = document.getElementById(`badge-${idDom}`);
   if (!badge) return;
 
   let unidades = 0;
   Object.entries(carrito).forEach(([idProd, cant]) => {
-    if (Number(categoriaDeProducto[idProd]) === Number(idCat)) unidades += cant;
+    if (grupoDeProducto[idProd] === idDom) unidades += cant;
   });
 
   badge.textContent = `${unidades} u.`;
