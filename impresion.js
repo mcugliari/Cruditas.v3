@@ -107,7 +107,7 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
         <hr class="dashed">
         <p><strong>Pedido #${pedido.id}</strong> | ${horaPedido} hs</p>
         <p><strong>Cliente:</strong> ${esc(clienteNombre)}</p>
-        ${!esComandaCocina ? `<p><strong>Pago:</strong> ${esc(pedido.TB_BMEDIO_PAGO?.nombre || 'Efectivo')}</p>` : ''}
+        ${!esComandaCocina ? `<p><strong>Pago:</strong> ${esc(pedido.TB_BMEDIO_PAGO?.nombre || 'Sin cobrar')}</p>` : ''}
       </div>
       
       <hr class="dashed">
