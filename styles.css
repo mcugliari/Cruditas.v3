@@ -1023,3 +1023,276 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   pointer-events: none; /* no tapa los toques sobre la tarjeta */
 }
 .pos-badge-top > i { font-size: .72rem; color: #e9b83f; }
+
+
+/* =============================================================================
+   ESTILO DE GESTIÓN · ETAPA 1  (Deuda a Proveedores, Proveedores y Productos)
+   Lleva a las pantallas de gestión el mismo lenguaje del POS: tarjetas redondeadas
+   con borde superior ámbar, tablas limpias y botones con texto.
+   Va al FINAL a propósito: con igual especificidad, gana la regla que aparece última.
+   Los selectores con :is(#sec-...) quedan limitados a estas pantallas; para sumar otra
+   pantalla se agrega su id a la lista. PARA REVERTIR: borrar desde este comentario
+   hasta el final del archivo.
+   ============================================================================= */
+
+/* ---- Botones de acción de las tablas (clases nuevas, sirven en cualquier pantalla) ---- */
+.btn.btn-accion {
+  display: inline-flex; align-items: center; gap: .4rem;
+  min-height: 38px; padding: 0 .95rem;
+  border: 1.5px solid transparent; border-radius: 999px;
+  font-size: .95rem; font-weight: 700; line-height: 1; white-space: nowrap;
+  box-shadow: none;
+}
+.btn.btn-accion i { font-size: .9em; }
+.btn.btn-accion:focus { outline: none; box-shadow: 0 0 0 3px rgba(233, 184, 63, .45); }
+
+/* Ver / Editar: contorno azul marino */
+.btn.btn-accion-ver, .btn.btn-accion-editar { background: #fff; border-color: #cfd6df; color: var(--cruditas-ink); }
+.btn.btn-accion-ver:hover, .btn.btn-accion-editar:hover { background: #f1f4f8; border-color: #b8c2cf; color: var(--cruditas-ink); }
+
+/* Acción principal (Pagar): ámbar de marca */
+.btn.btn-accion-pagar { background: var(--cruditas-brand); border-color: var(--cruditas-brand); color: #1b2d47; }
+.btn.btn-accion-pagar:hover { background: #deab2e; border-color: #deab2e; color: #1b2d47; }
+
+/* Acción delicada (Desactivar / Eliminar): rojo suave */
+.btn.btn-accion-peligro { background: #fff; border-color: #ebbcbc; color: #b42318; }
+.btn.btn-accion-peligro:hover { background: #fdeaea; border-color: #e09a9a; color: #b42318; }
+
+/* Reactivar: verde suave */
+.btn.btn-accion-ok { background: #fff; border-color: #a9d6bb; color: #0f5f32; }
+.btn.btn-accion-ok:hover { background: #e8f6ee; border-color: #86c39f; color: #0f5f32; }
+
+/* ---- Título de la pantalla y botón "Nuevo ..." ---- */
+:is(#sec-deuda, #sec-proveedores, #sec-productos) .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos) .content-header .btn-warning {
+  min-height: 42px; padding: 0 1.2rem; border: 0; border-radius: 999px;
+  background: var(--cruditas-brand); color: #1b2d47; font-weight: 700;
+}
+:is(#sec-deuda, #sec-proveedores, #sec-productos) .content-header .btn-warning:hover { background: #deab2e; color: #1b2d47; }
+
+/* ---- Tarjetas ---- */
+:is(#sec-deuda, #sec-proveedores, #sec-productos) .card {
+  border: 1px solid #e7ecf2; border-top: 3px solid var(--cruditas-brand);
+  border-radius: var(--cruditas-radius); overflow: hidden;
+  box-shadow: 0 5px 18px rgba(26, 42, 63, .06);
+}
+:is(#sec-deuda, #sec-proveedores, #sec-productos) .card-header { background: #fff; border-bottom: 1px solid var(--cruditas-line); padding: 14px 18px; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos) .card-title { color: var(--cruditas-ink); }
+
+/* ---- Indicadores de arriba de Deuda (info-box): ícono en cuadrito de color suave ---- */
+#sec-deuda .info-box {
+  min-height: 0; align-items: center; padding: 14px 16px;
+  background: #fff !important; border: 1px solid #e7ecf2 !important;
+  border-radius: var(--cruditas-radius); box-shadow: 0 5px 18px rgba(26, 42, 63, .06);
+}
+#sec-deuda .info-box-icon { flex: 0 0 46px; width: 46px; height: 46px; font-size: 1.15rem; border-radius: 12px; }
+#sec-deuda .info-box-icon.bg-danger  { background: #fde8e8 !important; color: #c62828 !important; }
+#sec-deuda .info-box-icon.bg-warning { background: #fff3d1 !important; color: #9a6b00 !important; }
+#sec-deuda .info-box-icon.bg-info    { background: #e3effb !important; color: #1c5fa8 !important; }
+#sec-deuda .info-box-text { color: var(--cruditas-muted); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+#sec-deuda .info-box-number { color: var(--cruditas-ink) !important; font-size: 1.45rem; font-weight: 700; }
+
+/* ---- Tablas (también la de compras pendientes dentro de la ventana del proveedor) ---- */
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .table thead th {
+  background: transparent; border-top: 0; border-bottom: 1px solid var(--cruditas-line);
+  color: var(--cruditas-muted); font-size: .74rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; padding: .85rem 1rem;
+}
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .table thead.bg-light { background: transparent !important; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .table td { padding: .85rem 1rem; vertical-align: middle; border-top: 1px solid #eef0f3; }
+/* La última columna (Acciones) no parte la línea: los botones quedan uno al lado del otro.
+   Si la pantalla es angosta, la tabla se desliza de costado en lugar de apilarlos. */
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .table td:last-child { white-space: nowrap; }
+/* Sin filas rayadas; al pasar el mouse, un tinte ámbar muy suave */
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .table-striped tbody tr:nth-of-type(odd) { background-color: transparent; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .table-hover tbody tr:hover { background-color: rgba(233, 184, 63, .10) !important; }
+
+/* ---- Insignias (badges) en forma de píldora ---- */
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .badge { padding: .4em .85em; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .badge-secondary { background: #eef1f5; color: #4a5565; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .badge-success   { background: #dcf3e5; color: #0f5f32; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .badge-info      { background: #d6f0f5; color: #0d5c6b; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .badge-danger    { background: #fde2e2; color: #9b1c1c; }
+:is(#sec-deuda, #sec-proveedores, #sec-productos, #modal-deuda-proveedor) .badge-light     { background: #f4f5f7; color: #4a5565; border-color: #e4e7ec !important; }
+
+/* ---- Ventanas (modales) de estas pantallas ---- */
+:is(#modal-producto, #modal-proveedor, #modal-deuda-proveedor, #modal-pago) .modal-content { border: 0; border-radius: var(--cruditas-radius); overflow: hidden; box-shadow: 0 18px 48px rgba(15, 25, 40, .25); }
+:is(#modal-producto, #modal-proveedor, #modal-deuda-proveedor, #modal-pago) .modal-header { border-bottom: 0; padding: 16px 20px; }
+:is(#modal-producto, #modal-proveedor, #modal-deuda-proveedor, #modal-pago) .modal-header.bg-warning { background: var(--cruditas-brand) !important; color: #1b2d47; }
+:is(#modal-producto, #modal-proveedor, #modal-deuda-proveedor, #modal-pago) .modal-header.bg-success { background: var(--cruditas-green) !important; }
+:is(#modal-producto, #modal-proveedor, #modal-deuda-proveedor, #modal-pago) .modal-title { font-weight: 700; }
+:is(#modal-producto, #modal-proveedor, #modal-deuda-proveedor, #modal-pago) .modal-footer { border-top: 1px solid var(--cruditas-line); }
+:is(#modal-producto, #modal-proveedor, #modal-deuda-proveedor, #modal-pago) .modal-footer .btn { min-height: 40px; padding: 0 1.2rem; border-radius: 999px; font-weight: 700; }
+
+
+/* =============================================================================
+   ESTILO DE GESTIÓN · ETAPA 3  (Gestión de Pedidos: tabla, botones y menú "Más")
+   Misma línea que la etapa 1. PARA REVERTIR: borrar desde este comentario hasta el
+   final del archivo (los botones de la fila quedarían sin estilo hasta volver al
+   pedidos.js anterior).
+   ============================================================================= */
+
+/* Título, tarjetas y tabla */
+#sec-pedidos-dia .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
+#sec-pedidos-dia .card {
+  border: 1px solid #e7ecf2; border-top: 3px solid var(--cruditas-brand);
+  border-radius: var(--cruditas-radius); overflow: hidden;
+  box-shadow: 0 5px 18px rgba(26, 42, 63, .06);
+}
+#sec-pedidos-dia .table thead th {
+  background: transparent; border-top: 0; border-bottom: 1px solid var(--cruditas-line);
+  color: var(--cruditas-muted); font-size: .74rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; padding: .85rem 1rem;
+}
+#sec-pedidos-dia .table thead.bg-light { background: transparent !important; }
+#sec-pedidos-dia .table td { padding: .85rem 1rem; vertical-align: middle; border-top: 1px solid #eef0f3; }
+#sec-pedidos-dia .table td:last-child { white-space: nowrap; }
+#sec-pedidos-dia .table-hover tbody tr:hover { background-color: rgba(233, 184, 63, .10) !important; }
+
+/* Insignias en forma de píldora (estados, canal, observaciones, medio de pago) */
+#sec-pedidos-dia .table .badge { padding: .4em .85em; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+#sec-pedidos-dia .table .badge.p-2 { padding: .45rem .9rem !important; }
+#sec-pedidos-dia .table .badge-secondary { background: #eef1f5; color: #4a5565; }
+#sec-pedidos-dia .table .badge-success   { background: #dcf3e5; color: #0f5f32; }
+#sec-pedidos-dia .table .badge-info      { background: #d6f0f5; color: #0d5c6b; }
+#sec-pedidos-dia .table .badge-primary   { background: #dbe8fb; color: #1c4f94; }
+#sec-pedidos-dia .table .badge-warning   { background: #fff0c9; color: #7a5200 !important; border-color: #f1dc9b !important; }
+#sec-pedidos-dia .table .badge-danger    { background: #fde2e2; color: #9b1c1c; }
+#sec-pedidos-dia .table .badge-light     { background: #f4f5f7; color: #4a5565; border-color: #e4e7ec !important; }
+
+/* Fila de acciones: botones uno al lado del otro */
+.acciones-fila { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; flex-wrap: nowrap; }
+.mas-wrap { position: relative; }
+
+/* Colores nuevos para los botones de acción (se suman a los de la etapa 1) */
+.btn.btn-accion-cobrar { background: var(--cruditas-green); border-color: var(--cruditas-green); color: #fff; }
+.btn.btn-accion-cobrar:hover { background: #11703b; border-color: #11703b; color: #fff; }
+.btn.btn-accion-aviso { background: #fff; border-color: var(--cruditas-brand); color: #6b4a00; }
+.btn.btn-accion-aviso:hover { background: #fff8e3; border-color: #deab2e; color: #6b4a00; }
+.btn.btn-accion-mas { background: #fff; border-color: var(--cruditas-ink); color: var(--cruditas-ink); }
+.btn.btn-accion-mas:hover, .btn.btn-accion-mas[aria-expanded="true"] { background: var(--cruditas-ink); border-color: var(--cruditas-ink); color: #fff; }
+.btn.btn-accion-mas i { font-size: .75em; }
+
+/* Menú "Más": position fixed para que el scroll de la tabla no lo recorte (pedidos.js lo ubica) */
+.menu-mas {
+  display: none; position: fixed; z-index: 2000; min-width: 240px; padding: 6px 0;
+  background: #fff; border: 1px solid #e7ecf2; border-radius: var(--cruditas-radius);
+  box-shadow: 0 12px 32px rgba(15, 25, 40, .22); text-align: left;
+}
+.menu-mas.show { display: block; }
+.menu-mas-item {
+  display: flex; align-items: center; gap: .75rem; width: 100%; min-height: 48px; padding: 0 1rem;
+  border: 0; background: transparent; color: var(--cruditas-ink);
+  font-family: inherit; font-size: 1rem; font-weight: 700; text-align: left; cursor: pointer;
+}
+.menu-mas-item i { width: 1.2rem; text-align: center; }
+.menu-mas-item:hover, .menu-mas-item:focus { background: #f3f5f8; outline: none; }
+.menu-mas-item.menu-mas-peligro { color: #b42318; }
+.menu-mas-item.menu-mas-peligro:hover, .menu-mas-item.menu-mas-peligro:focus { background: #fdeaea; }
+.menu-mas-sep { height: 1px; margin: 4px 0; background: var(--cruditas-line); }
+
+
+/* =============================================================================
+   ESTILO DE GESTIÓN · ETAPA 3b  (Gestión de Pedidos: cuadros de colores, filtros y
+   ventana "Detalle del pedido"). PARA REVERTIR: borrar desde este comentario hasta
+   el final del archivo.
+   ============================================================================= */
+
+/* ---- Cuadros de arriba (Total cobrado, etc.): colores suaves que repiten los de los
+        estados de la tabla, para que cada cuadro se asocie con su insignia ---- */
+#sec-pedidos-dia .small-box {
+  border: 1px solid transparent; border-radius: var(--cruditas-radius);
+  box-shadow: 0 5px 18px rgba(26, 42, 63, .06) !important;
+}
+#sec-pedidos-dia .small-box > .inner { padding: .9rem 1.1rem !important; }
+#sec-pedidos-dia .small-box h4 { font-size: 1.7rem; font-weight: 700 !important; color: inherit; }
+#sec-pedidos-dia .small-box p { font-size: .88rem !important; font-weight: 700; color: inherit; opacity: .92; }
+#sec-pedidos-dia .small-box.bg-success   { background: #e3f4ea !important; color: #0f5f32 !important; border-color: #cde9d8; }
+#sec-pedidos-dia .small-box.bg-warning   { background: #fff3d1 !important; color: #7a5200 !important; border-color: #f1dc9b; }
+#sec-pedidos-dia .small-box.bg-info      { background: #dff3f7 !important; color: #0d5c6b !important; border-color: #c4e6ee; }
+#sec-pedidos-dia .small-box.bg-primary   { background: #e3edfc !important; color: #1c4f94 !important; border-color: #c9dbf6; }
+#sec-pedidos-dia .small-box.bg-secondary { background: #eceff3 !important; color: #4a5565 !important; border-color: #dce1e8; }
+
+/* ---- Filtros: campos más altos y cómodos para tocar ---- */
+#sec-pedidos-dia .card-body label.small { color: var(--cruditas-ink-soft); font-size: .85rem !important; }
+#sec-pedidos-dia .card-body .form-control {
+  height: 42px; padding: 0 .8rem; font-size: .95rem;
+  border: 1px solid #d5dbe3; border-radius: 10px; background-color: #fff;
+}
+#sec-pedidos-dia .card-body .form-control:focus {
+  border-color: var(--cruditas-brand); box-shadow: 0 0 0 3px rgba(233, 184, 63, .30);
+}
+/* Las dos fechas van pegadas: solo se redondean los extremos */
+#sec-pedidos-dia .card-body .input-group > .form-control:not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#sec-pedidos-dia .card-body .input-group > .form-control:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; }
+#sec-pedidos-dia #btn-actualizar-pedidos {
+  min-height: 42px; border: 0; border-radius: 999px;
+  background: var(--cruditas-ink); color: #fff; font-weight: 700;
+}
+#sec-pedidos-dia #btn-actualizar-pedidos:hover { background: var(--cruditas-ink-soft); color: #fff; }
+
+/* ---- Ventana "Detalle del pedido" ---- */
+#modalDetallePedido .modal-content { border: 0; border-radius: var(--cruditas-radius); overflow: hidden; box-shadow: 0 18px 48px rgba(15, 25, 40, .25); }
+#modalDetallePedido .modal-header { border-bottom: 0; padding: 16px 20px; }
+#modalDetallePedido .modal-header.bg-light { background: var(--cruditas-brand) !important; color: #1b2d47; }
+#modalDetallePedido .modal-title { font-weight: 700; }
+#modalDetallePedido .modal-footer { border-top: 1px solid var(--cruditas-line); }
+#modalDetallePedido .modal-footer .btn { min-height: 40px; padding: 0 1.1rem; border-radius: 999px; font-weight: 700; }
+#modalDetallePedido .modal-footer .btn-outline-dark, #modalDetallePedido .modal-footer .btn-outline-primary {
+  background: #fff; border: 1.5px solid #cfd6df; color: var(--cruditas-ink);
+}
+#modalDetallePedido .modal-footer .btn-outline-dark:hover, #modalDetallePedido .modal-footer .btn-outline-primary:hover { background: #f1f4f8; border-color: #b8c2cf; color: var(--cruditas-ink); }
+#modalDetallePedido .alert-warning { background: #fff8e3; border-color: #f1dc9b !important; border-radius: 12px; }
+#modalDetallePedido .table thead th {
+  background: transparent; border-top: 0; border-bottom: 1px solid var(--cruditas-line);
+  color: var(--cruditas-muted); font-size: .74rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; padding: .7rem 1rem;
+}
+#modalDetallePedido .table td { padding: .65rem 1rem; vertical-align: middle; border-top: 1px solid #eef0f3; }
+#modalDetallePedido .table-striped tbody tr:nth-of-type(odd) { background-color: transparent; }
+#modalDetallePedido .badge { border-radius: 999px; font-weight: 700; }
+
+
+/* =============================================================================
+   ESTILO DE GESTIÓN · ETAPA 4  (Compras y su ventana de detalle)
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo
+   (junto con volver al compras.js, main.js e index.html anteriores).
+   ============================================================================= */
+#sec-compras .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
+#sec-compras .content-header .btn-warning {
+  min-height: 42px; padding: 0 1.2rem; border: 0; border-radius: 999px;
+  background: var(--cruditas-brand); color: #1b2d47; font-weight: 700;
+}
+#sec-compras .content-header .btn-warning:hover { background: #deab2e; color: #1b2d47; }
+#sec-compras .card {
+  border: 1px solid #e7ecf2; border-top: 3px solid var(--cruditas-brand);
+  border-radius: var(--cruditas-radius); overflow: hidden;
+  box-shadow: 0 5px 18px rgba(26, 42, 63, .06);
+}
+#sec-compras .card-header { background: #fff; border-bottom: 1px solid var(--cruditas-line); padding: 14px 18px; }
+#sec-compras .form-control { border: 1px solid #d5dbe3; border-radius: 10px; }
+#sec-compras .form-control:focus { border-color: var(--cruditas-brand); box-shadow: 0 0 0 3px rgba(233, 184, 63, .30); }
+#sec-compras #btn-filtrar-compras { min-height: 38px; border: 0; border-radius: 999px; background: var(--cruditas-ink); color: #fff; font-weight: 700; }
+:is(#sec-compras, #modal-detalle-compra) .table thead th {
+  background: transparent; border-top: 0; border-bottom: 1px solid var(--cruditas-line);
+  color: var(--cruditas-muted); font-size: .74rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; padding: .85rem 1rem;
+}
+:is(#sec-compras, #modal-detalle-compra) .table thead.bg-light, :is(#sec-compras, #modal-detalle-compra) .table .thead-light th { background: transparent !important; }
+:is(#sec-compras, #modal-detalle-compra) .table td { padding: .75rem 1rem; vertical-align: middle; border-top: 1px solid #eef0f3; }
+#sec-compras .table td:last-child { white-space: nowrap; }
+:is(#sec-compras, #modal-detalle-compra) .table-striped tbody tr:nth-of-type(odd) { background-color: transparent; }
+#sec-compras .table-hover tbody tr:hover { background-color: rgba(233, 184, 63, .10) !important; }
+:is(#sec-compras, #modal-detalle-compra) .badge { padding: .4em .85em; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+:is(#sec-compras, #modal-detalle-compra) .badge-secondary { background: #eef1f5; color: #4a5565; }
+:is(#sec-compras, #modal-detalle-compra) .badge-success   { background: #dcf3e5; color: #0f5f32; }
+:is(#sec-compras, #modal-detalle-compra) .badge-info      { background: #d6f0f5; color: #0d5c6b; }
+:is(#sec-compras, #modal-detalle-compra) .badge-warning   { background: #fff0c9; color: #7a5200 !important; }
+:is(#sec-compras, #modal-detalle-compra) .badge-danger    { background: #fde2e2; color: #9b1c1c; }
+:is(#sec-compras, #modal-detalle-compra) .badge-light     { background: #f4f5f7; color: #4a5565; }
+#modal-detalle-compra .modal-content { border: 0; border-radius: var(--cruditas-radius); overflow: hidden; box-shadow: 0 18px 48px rgba(15, 25, 40, .25); }
+#modal-detalle-compra .modal-header { border-bottom: 0; padding: 16px 20px; }
+#modal-detalle-compra .modal-header.bg-warning { background: var(--cruditas-brand) !important; color: #1b2d47; }
+#modal-detalle-compra .modal-title { font-weight: 700; }
+#modal-detalle-compra .modal-footer { border-top: 1px solid var(--cruditas-line); }
+#modal-detalle-compra .modal-footer .btn { min-height: 40px; padding: 0 1.2rem; border-radius: 999px; font-weight: 700; }

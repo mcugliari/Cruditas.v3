@@ -187,14 +187,49 @@ function renderizarCompras() {
       <td class="text-right text-success">$${formatearMoneda(c.pagado)}</td>
       <td class="text-right font-weight-bold ${Number(c.saldo) > 0 ? 'text-danger' : ''}">$${formatearMoneda(c.saldo)}</td>
       <td class="text-center">${badgeEstadoCompra(c)}</td>
-      <td class="text-center">
-        <button class="btn btn-sm btn-outline-info" title="Ver detalle"
-                data-action="ver-detalle-compra" data-id="${c.id_compra}">
-          <i class="fas fa-eye"></i>
-        </button>
+      <td>
+        <div class="acciones-fila">
+          ${Number(c.saldo) > 0 && c.estado_pago !== 'ANULADA'
+            ? `<button class="btn btn-accion btn-accion-pagar" title="Registrar un pago de esta compra"
+                       data-action="pagar-compra" data-id="${c.id_compra}">
+                 <i class="fas fa-dollar-sign"></i> Pagar
+               </button>`
+            : ''}
+          <button class="btn btn-accion btn-accion-ver" title="Ver detalle de la compra"
+                  data-action="ver-detalle-compra" data-id="${c.id_compra}">
+            <i class="fas fa-eye"></i> Ver detalle
+          </button>
+        </div>
       </td>
     </tr>
   `).join('');
+}
+
+
+// -----------------------------------------------------------------------------
+// pagarCompraDesdeLista
+//   Abre la ventana de pago directo desde la fila de la lista (botón "Pagar"),
+//   sin pasar por el detalle. La lista ya trae lo que hace falta: proveedor y saldo.
+//   Recibe: idCompra -> número de la compra.
+// -----------------------------------------------------------------------------
+export function pagarCompraDesdeLista(idCompra) {
+  const compra = comprasCache.find(c => c.id_compra === idCompra);
+  if (!compra) return;
+
+  abrirModalPago({
+    modo: 'compra',
+    id: compra.id_compra,
+    saldo: Number(compra.saldo),
+    titulo: `Pagar compra #${compra.id_compra}`,
+    descripcion: `<strong>${esc(compra.proveedor)}</strong><br>
+                  Saldo de la compra: <strong class="text-danger">$${formatearMoneda(compra.saldo)}</strong>`,
+    // No hay otra ventana abierta que cerrar o reabrir.
+    modalAnterior: null,
+    // Al cerrarse la ventana de pago: si se guardó algo, se refresca la lista.
+    alCerrar: async (huboPago) => {
+      if (huboPago) await cargarCompras();
+    }
+  });
 }
 
 

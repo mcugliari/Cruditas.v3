@@ -182,11 +182,11 @@ export async function cargarProductos() {
             : '<span class="badge badge-light border"><i class="fas fa-times mr-1 text-muted"></i>No</span>'}
         </td>
         <td class="text-center">
-        <button class="btn btn-sm btn-warning mr-1" data-action="editar-producto" data-id="${prod.id}" data-nombre="${esc(prod.nombre)}" data-categoria="${prod.id_categoria}" data-docena="${prod.m_permite_docena}">
-            <i class="fas fa-edit"></i>
+        <button class="btn btn-accion btn-accion-editar mr-1" data-action="editar-producto" data-id="${prod.id}" data-nombre="${esc(prod.nombre)}" data-categoria="${prod.id_categoria}" data-docena="${prod.m_permite_docena}">
+            <i class="fas fa-edit"></i> Editar
         </button>
-        <button class="btn btn-sm btn-danger" data-action="eliminar-producto" data-id="${prod.id}" data-nombre="${esc(prod.nombre)}">
-            <i class="fas fa-trash-alt"></i>
+        <button class="btn btn-accion btn-accion-peligro" data-action="eliminar-producto" data-id="${prod.id}" data-nombre="${esc(prod.nombre)}">
+            <i class="fas fa-trash-alt"></i> Eliminar
         </button>
         </td>
     </tr>

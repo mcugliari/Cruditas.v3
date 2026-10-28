@@ -127,63 +127,53 @@ export async function cargarTablaPedidos() {
     if (p.estado === 'COMPLETADO') { badgeClass = 'badge-success'; estadoTexto = '✅ Completado'; }
     if (p.estado === 'ANULADO') { badgeClass = 'badge-danger'; estadoTexto = '🚫 Anulado'; }
 
-    let botonesAccion = '';
+    // BOTONES DE LA FILA
+    // A la vista, con texto: solo lo que hace avanzar el pedido (preparar, cobrar, entregar).
+    // Todo lo demás va dentro del menú "Más". Los data-action y las clases btn-print-*
+    // son los de siempre, así que main.js y el escuchador de impresión (al final de este
+    // archivo) siguen funcionando sin cambios.
+    const idPed = p.id;
+    const cambiar = (estado) => `data-action="cambiar-estado" data-id="${idPed}" data-estado="${estado}"`;
+    const accionVer = `data-action="ver-detalle" data-id="${idPed}"`;
+    const visibles = [];
+    const enMenu = [];
 
     if (p.estado === 'PREPARACION') {
-      botonesAccion += `
-        <button class="btn btn-outline-primary" title="Marcar como Preparado" data-action="cambiar-estado" data-id="${p.id}" data-estado="PREPARADO">
-          <i class="fas fa-box-open"></i>
-        </button>
-        <button class="btn btn-outline-secondary" title="Editar Pedido" data-action="editar-pedido" data-id="${p.id}">
-          <i class="fas fa-edit"></i>
-        </button>
-      `;
+      visibles.push(btnFila('btn-accion-pagar', 'fa-box-open', 'Marcar preparado', cambiar('PREPARADO')));
+    } else if (p.estado === 'PREPARADO') {
+      visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Cobrar y entregar', cambiar('COMPLETADO')));
+      visibles.push(btnFila('btn-accion-aviso', 'fa-truck', 'Entregar sin cobrar', cambiar('ENTREGADO_IMPAGO')));
+    } else if (p.estado === 'ENTREGADO_IMPAGO') {
+      visibles.push(btnFila('btn-accion-cobrar', 'fa-dollar-sign', 'Registrar cobro', cambiar('COMPLETADO')));
+    } else {
+      // COMPLETADO o ANULADO: no queda nada por hacer, se deja a la vista la consulta
+      visibles.push(btnFila('btn-accion-ver', 'fa-eye', 'Ver detalle', accionVer));
     }
 
-    if (p.estado === 'PREPARADO') {
-      botonesAccion += `
-        <button class="btn btn-outline-success" title="Cobrar y Entregar" data-action="cambiar-estado" data-id="${p.id}" data-estado="COMPLETADO">
-          <i class="fas fa-check"></i>
-        </button>
-        <button class="btn btn-outline-warning" title="Entregar sin Cobrar (Impago)" data-action="cambiar-estado" data-id="${p.id}" data-estado="ENTREGADO_IMPAGO">
-          <i class="fas fa-truck"></i>
-        </button>
-        <button class="btn btn-outline-secondary" title="Editar Pedido" data-action="editar-pedido" data-id="${p.id}">
-          <i class="fas fa-edit"></i>
-        </button>
-      `;
+    // Menú "Más" (el orden es el que se ve en pantalla)
+    if (visibles.length > 0 && p.estado !== 'COMPLETADO' && p.estado !== 'ANULADO') {
+      enMenu.push(itemMenuMas('fa-eye', 'Ver detalle', accionVer));
     }
-
-    if (p.estado === 'ENTREGADO_IMPAGO') {
-      botonesAccion += `
-        <button class="btn btn-outline-success" title="Registrar Cobro" data-action="cambiar-estado" data-id="${p.id}" data-estado="COMPLETADO">
-          <i class="fas fa-dollar-sign"></i>
-        </button>
-      `;
+    if (p.estado === 'PREPARACION' || p.estado === 'PREPARADO') {
+      enMenu.push(itemMenuMas('fa-edit', 'Editar pedido', `data-action="editar-pedido" data-id="${idPed}"`));
     }
-
+    enMenu.push(itemMenuMas('fa-receipt', 'Comanda de cocina', `data-id="${idPed}"`, 'btn-print-cocina'));
+    enMenu.push(itemMenuMas('fa-print', 'Ticket del cliente', `data-id="${idPed}"`, 'btn-print-cliente'));
     if (p.estado !== 'ANULADO') {
-      botonesAccion += `
-        <button class="btn btn-outline-danger" title="Anular Pedido" data-action="cambiar-estado" data-id="${p.id}" data-estado="ANULADO">
-          <i class="fas fa-ban"></i>
-        </button>
-      `;
+      enMenu.push('<div class="menu-mas-sep" role="separator"></div>');
+      enMenu.push(itemMenuMas('fa-ban', 'Anular pedido', cambiar('ANULADO'), 'menu-mas-peligro'));
     }
 
-    botonesAccion += `
-      <button class="btn btn-outline-info" title="Ver detalle" data-action="ver-detalle" data-id="${p.id}">
-        <i class="fas fa-eye"></i>
-      </button>
-    `;
-
-    // BOTONES DE IMPRESIÓN DIRECTA EN LA TABLA
-    botonesAccion += `
-      <button class="btn btn-outline-dark btn-print-cocina" title="Imprimir Comanda Cocina" data-id="${p.id}">
-        <i class="fas fa-receipt"></i>
-      </button>
-      <button class="btn btn-outline-primary btn-print-cliente" title="Imprimir Ticket Cliente" data-id="${p.id}">
-        <i class="fas fa-print"></i>
-      </button>
+    const botonesAccion = `
+      <div class="acciones-fila">
+        ${visibles.join('')}
+        <div class="mas-wrap">
+          <button type="button" class="btn btn-accion btn-accion-mas" aria-haspopup="true" aria-expanded="false" title="Más acciones">
+            Más <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="menu-mas" role="menu">${enMenu.join('')}</div>
+        </div>
+      </div>
     `;
 
     return `
@@ -197,11 +187,7 @@ export async function cargarTablaPedidos() {
         <td>${medioPago}</td>
         <td class="text-right font-weight-bold">$${(p.importe_total || 0).toLocaleString('es-AR')}</td>
         <td class="text-center"><span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span></td>
-        <td class="text-center">
-          <div class="btn-group btn-group-sm">
-            ${botonesAccion}
-          </div>
-        </td>
+        <td class="text-center">${botonesAccion}</td>
       </tr>
     `;
   }).join('');
@@ -454,3 +440,59 @@ document.getElementById('tabla-pedidos-body')?.addEventListener('click', async (
     return;
   }
 });
+
+// =========================================================================
+// BOTONES DE LA FILA Y MENÚ "MÁS" (gestión de pedidos)
+// El menú queda dentro de la fila pero con position: fixed (ver styles.css): así no lo
+// recorta el scroll de la tabla. Estas funciones solo lo abren, lo ubican y lo cierran;
+// lo que hace cada opción lo siguen resolviendo main.js y el escuchador de impresión.
+// =========================================================================
+
+// Botón visible de la fila. Los textos y clases son fijos (no hay datos de usuarios acá).
+function btnFila(clase, icono, texto, atributos) {
+  return `<button type="button" class="btn btn-accion ${clase}" ${atributos}><i class="fas ${icono}"></i> ${texto}</button>`;
+}
+
+// Opción del menú "Más".
+function itemMenuMas(icono, texto, atributos, claseExtra = '') {
+  return `<button type="button" class="menu-mas-item ${claseExtra}" role="menuitem" ${atributos}><i class="fas ${icono}"></i> ${texto}</button>`;
+}
+
+function cerrarMenusMas() {
+  document.querySelectorAll('.menu-mas.show').forEach(m => m.classList.remove('show'));
+  document.querySelectorAll('.btn-accion-mas[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+
+// Abre el menú pegado al botón: hacia abajo y, si no entra, hacia arriba.
+function abrirMenuMas(btn) {
+  const menu = btn.nextElementSibling;
+  if (!menu) return;
+  menu.style.visibility = 'hidden';   // se muestra fuera de la vista solo para medirlo
+  menu.classList.add('show');
+  const r = btn.getBoundingClientRect();
+  const ancho = menu.offsetWidth;
+  const alto = menu.offsetHeight;
+  let arriba = r.bottom + 4;
+  if (arriba + alto > window.innerHeight - 8) arriba = Math.max(8, r.top - alto - 4);
+  const izquierda = Math.min(Math.max(8, r.right - ancho), window.innerWidth - ancho - 8);
+  menu.style.top = `${arriba}px`;
+  menu.style.left = `${izquierda}px`;
+  menu.style.visibility = '';
+  btn.setAttribute('aria-expanded', 'true');
+}
+
+// Un solo escuchador para toda la página: si se toca "Más" se abre (o se cierra si ya
+// estaba abierto); cualquier otro toque, incluso una opción del menú, lo cierra.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-accion-mas');
+  if (btn) {
+    const eraEste = btn.nextElementSibling?.classList.contains('show');
+    cerrarMenusMas();
+    if (!eraEste) abrirMenuMas(btn);
+    return;
+  }
+  cerrarMenusMas();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenusMas(); });
+document.addEventListener('scroll', cerrarMenusMas, true);   // true: también el scroll de la tabla
+window.addEventListener('resize', cerrarMenusMas);

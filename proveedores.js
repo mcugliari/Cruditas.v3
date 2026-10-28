@@ -97,14 +97,14 @@ function renderizarProveedores() {
           : '<span class="badge badge-secondary">Inactivo</span>'}
       </td>
       <td class="text-center">
-        <button class="btn btn-sm btn-warning mr-1" title="Editar"
+        <button class="btn btn-accion btn-accion-editar mr-1" title="Editar"
                 data-action="editar-proveedor" data-id="${p.id}">
-          <i class="fas fa-edit"></i>
+          <i class="fas fa-edit"></i> Editar
         </button>
-        <button class="btn btn-sm ${p.activo ? 'btn-outline-danger' : 'btn-outline-success'}"
+        <button class="btn btn-accion ${p.activo ? 'btn-accion-peligro' : 'btn-accion-ok'}"
                 title="${p.activo ? 'Desactivar' : 'Activar'}"
                 data-action="cambiar-estado-proveedor" data-id="${p.id}">
-          <i class="fas ${p.activo ? 'fa-ban' : 'fa-check'}"></i>
+          <i class="fas ${p.activo ? 'fa-ban' : 'fa-check'}"></i> ${p.activo ? 'Desactivar' : 'Activar'}
         </button>
       </td>
     </tr>

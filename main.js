@@ -6,7 +6,7 @@ import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCar
 import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
 import { confirmarCobro, elegirMedioCobro, actualizarVueltoCobro } from './cobro.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
-import { cargarCompras, verDetalleCompra, anularCompraAbierta, pagarCompraAbierta, anularPagoDeCompra } from './compras.js';
+import { cargarCompras, verDetalleCompra, anularCompraAbierta, pagarCompraAbierta, pagarCompraDesdeLista, anularPagoDeCompra } from './compras.js';
 import { guardarPago } from './pagos.js';
 import { cargarEgresos, abrirModalEgreso, guardarEgreso, anularEgreso } from './egresos.js';
 import { cargarDeuda, renderizarDeuda, verDeudaProveedor, pagarCompraDeLaDeuda, pagarDeudaProveedorAbierto, pagarDeudaProveedor } from './deuda.js';
@@ -287,9 +287,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-anular-compra')?.addEventListener('click', anularCompraAbierta);
 
   document.getElementById('tabla-compras-body')?.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action="ver-detalle-compra"]');
+    const btn = e.target.closest('[data-action="ver-detalle-compra"], [data-action="pagar-compra"]');
     if (!btn) return;
-    verDetalleCompra(Number(btn.dataset.id));
+    const id = Number(btn.dataset.id);
+    if (btn.dataset.action === 'pagar-compra') pagarCompraDesdeLista(id);
+    else verDetalleCompra(id);
   });
 
   // 12. Compras: formulario de compra nueva

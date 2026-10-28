@@ -108,13 +108,13 @@ export function renderizarDeuda() {
       </td>
       <td class="text-center">${d.primer_vencimiento ? formatearFechaAR(d.primer_vencimiento) : '-'}</td>
       <td class="text-center">
-        <button class="btn btn-sm btn-outline-info mr-1" title="Ver compras pendientes"
+        <button class="btn btn-accion btn-accion-ver mr-1" title="Ver compras pendientes"
                 data-action="ver-deuda-proveedor" data-id="${d.id_proveedor}">
-          <i class="fas fa-eye"></i>
+          <i class="fas fa-eye"></i> Ver compras
         </button>
-        <button class="btn btn-sm btn-success" title="Pagar a cuenta"
+        <button class="btn btn-accion btn-accion-pagar" title="Pagar a cuenta"
                 data-action="pagar-deuda-proveedor" data-id="${d.id_proveedor}">
-          <i class="fas fa-dollar-sign"></i>
+          <i class="fas fa-dollar-sign"></i> Pagar
         </button>
       </td>
     </tr>
@@ -170,7 +170,7 @@ export async function verDeudaProveedor(idProveedor) {
       <td class="text-right">$${formatearMoneda(c.total)}</td>
       <td class="text-right font-weight-bold text-danger">$${formatearMoneda(c.saldo)}</td>
       <td class="text-center">
-        <button class="btn btn-sm btn-success" title="Pagar esta compra"
+        <button class="btn btn-accion btn-accion-pagar" title="Pagar esta compra"
                 data-action="pagar-compra-deuda" data-id="${c.id_compra}">
           <i class="fas fa-dollar-sign"></i> Pagar
         </button>
