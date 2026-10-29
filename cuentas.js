@@ -48,6 +48,7 @@ import {
   mostrarNotificacion, esc, mensajeErrorFuncion, formatearMoneda, formatearFechaAR,
   obtenerFechaActualISO, confirmarAccion
 } from './utils.js';
+import './menuMas.js';   // deja listo el botón "Más" de la tabla (abre / cierra el menú)
 
 
 // Copia en memoria de las cuentas que se muestran (ver proveedores.js).
@@ -166,7 +167,7 @@ function renderizarCuentas() {
     const saldo = Number(c.saldo_actual);
     const traspasos = Number(c.traspasos || 0);   // transferencias y ajustes (suman o restan)
 
-    // Opciones del menú "Más" (se abre con el código de pedidos.js, que escucha toda la página).
+    // Opciones del menú "Más" (lo abre y lo cierra menuMas.js).
     // Solo las cuentas activas se pueden ajustar.
     const opcionesMas = [];
     if (c.activo) {

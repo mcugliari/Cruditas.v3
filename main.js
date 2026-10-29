@@ -21,6 +21,7 @@ import {
 import { inicializarCierreCaja, inicializarHistorialCierres, cargarTablaHistorialCierres, verDetalleCierre, actualizarIndicadorCaja } from './caja.js';
 import { inicializarReporteCompras } from './reporteCompras.js';
 import './categorias.js';
+import './menuMas.js';   // botón "Más" de las tablas (Pedidos y Cuentas): abre / ubica / cierra el menú
 import { inicializarPreferencias } from './preferencias.js';
 
 // FUNCION DE NAVEGACIÓN

@@ -79,11 +79,11 @@ async function cargarCategorias() {
           : '<span class="badge badge-secondary">Inactiva</span>'}
       </td>
       <td class="text-center">
-        <button type="button" class="btn btn-sm btn-warning mr-1" title="Renombrar"
-                data-cat-adm="editar" data-id="${c.id}"><i class="fas fa-edit"></i></button>
-        <button type="button" class="btn btn-sm ${c.activo ? 'btn-outline-danger' : 'btn-outline-success'}"
+        <button type="button" class="btn btn-accion btn-accion-editar mr-1" title="Renombrar"
+                data-cat-adm="editar" data-id="${c.id}"><i class="fas fa-edit"></i> Renombrar</button>
+        <button type="button" class="btn btn-accion ${c.activo ? 'btn-accion-peligro' : 'btn-accion-ok'}"
                 title="${c.activo ? 'Desactivar' : 'Activar'}"
-                data-cat-adm="estado" data-id="${c.id}"><i class="fas ${c.activo ? 'fa-ban' : 'fa-check'}"></i></button>
+                data-cat-adm="estado" data-id="${c.id}"><i class="fas ${c.activo ? 'fa-ban' : 'fa-check'}"></i> ${c.activo ? 'Desactivar' : 'Activar'}</button>
       </td>
     </tr>
   `).join('');

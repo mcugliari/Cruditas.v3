@@ -45,6 +45,7 @@ export async function guardarCliente(event) {
   if (error) mostrarNotificacion('Error al guardar: ' + error.message, 'danger');
   else {
     document.getElementById('form-cliente').reset();
+    mostrarNotificacion('Cliente creado.');
     cargarClientes();
   }
 }
@@ -68,6 +69,7 @@ export async function guardarEdicionCliente(event) {
   if (error) mostrarNotificacion('Error al actualizar cliente: ' + error.message, 'danger');
   else {
     $('#modal-editar-cliente').modal('hide');
+    mostrarNotificacion('Cliente actualizado.');
     cargarClientes();
   }
 }
@@ -82,7 +84,10 @@ export async function eliminarCliente(id, nombre) {
   if (ok) {
     const { error } = await supabaseAdmin.from('TB_BCLIENTES').delete().eq('id', id);
     if (error) mostrarNotificacion('Error al eliminar: ' + error.message, 'danger');
-    else cargarClientes();
+    else {
+      mostrarNotificacion('Cliente eliminado.');
+      cargarClientes();
+    }
   }
 }
 
@@ -135,20 +140,51 @@ export async function guardarAsociacionClienteLista(event) {
   const idLista = parseInt(document.getElementById('asoc-select-lista').value);
   const esPredeterminada = document.getElementById('asoc-predeterminada').checked;
 
-  if (esPredeterminada) {
-    await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').update({ m_predeterminada: false }).eq('id_cliente', idCliente);
+  // Un cliente no puede tener dos veces la misma lista. Se controla ANTES de guardar
+  // (la base también lo impide con el script 30; esto da un mensaje claro y evita el viaje).
+  // Al editar, se ignora la propia fila (por eso se compara con "id").
+  const { data: existentes, error: errExistentes } = await supabaseAdmin
+    .from('TB_ACLIENTE_LISTA_PRECIOS')
+    .select('id')
+    .eq('id_cliente', idCliente)
+    .eq('id_lista_precio', idLista);
+  if (errExistentes) {
+    mostrarNotificacion('No se pudo comprobar la asociación: ' + errExistentes.message, 'danger');
+    return;
+  }
+  if ((existentes || []).some(fila => String(fila.id) !== String(id))) {
+    mostrarNotificacion('Ese cliente ya tiene asignada esa lista. Si querés cambiar cuál es la predeterminada, editá la asociación que ya existe.', 'warning');
+    return;
   }
 
+  // Primero se guarda esta asociación y recién después se desmarcan las otras como predeterminadas:
+  // así, si el guardado falla, el cliente no se queda sin lista predeterminada.
   const payload = { id_cliente: idCliente, id_lista_precio: idLista, m_predeterminada: esPredeterminada };
-  let res = id 
-    ? await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').update(payload).eq('id', id)
-    : await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').insert([payload]);
+  const res = id
+    ? await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').update(payload).eq('id', id).select('id').single()
+    : await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').insert([payload]).select('id').single();
 
-  if (res.error) mostrarNotificacion('Error al guardar: ' + res.error.message, 'danger');
-  else {
-    resetearFormAsociacion();
-    await listarAsociacionesClienteLista();
+  if (res.error) {
+    // 23505 = la base rechazó un duplicado (por ejemplo, dos personas guardando a la vez).
+    const mensaje = res.error.code === '23505'
+      ? 'Ese cliente ya tiene asignada esa lista.'
+      : 'Error al guardar: ' + res.error.message;
+    mostrarNotificacion(mensaje, res.error.code === '23505' ? 'warning' : 'danger');
+    return;
   }
+
+  if (esPredeterminada) {
+    const { error: errOtras } = await supabaseAdmin
+      .from('TB_ACLIENTE_LISTA_PRECIOS')
+      .update({ m_predeterminada: false })
+      .eq('id_cliente', idCliente)
+      .neq('id', res.data.id);
+    if (errOtras) mostrarNotificacion('La lista se guardó, pero no se pudo desmarcar la predeterminada anterior: ' + errOtras.message, 'warning');
+  }
+
+  mostrarNotificacion('Lista asignada al cliente.');
+  resetearFormAsociacion();
+  await listarAsociacionesClienteLista();
 }
 
 export function editarAsociacion(id, idCliente, idLista, esPredeterminada) {
@@ -168,7 +204,10 @@ export async function eliminarAsociacion(id) {
   if (!ok) return;
   const { error } = await supabaseAdmin.from('TB_ACLIENTE_LISTA_PRECIOS').delete().eq('id', id);
   if (error) mostrarNotificacion('Error al eliminar: ' + error.message, 'danger');
-  else await listarAsociacionesClienteLista();
+  else {
+    mostrarNotificacion('Asociación eliminada.');
+    await listarAsociacionesClienteLista();
+  }
 }
 
 function resetearFormAsociacion() {

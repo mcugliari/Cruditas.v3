@@ -134,10 +134,10 @@ function renderizarLineas() {
       <td class="text-right font-weight-bold" style="width: 130px" data-subtotal="${i}">
         $${formatearMoneda(subtotalLinea(l))}
       </td>
-      <td class="text-center" style="width: 50px">
-        <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar línea"
+      <td class="text-center" style="width: 120px">
+        <button type="button" class="btn btn-accion btn-accion-peligro" title="Quitar línea"
                 data-action="quitar-linea" data-index="${i}">
-          <i class="fas fa-times"></i>
+          <i class="fas fa-times"></i> Quitar
         </button>
       </td>
     </tr>

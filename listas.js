@@ -17,6 +17,30 @@ function esCategoriaSistema(cat) {
     || String(cat?.grupo || '').toUpperCase().trim() === 'SISTEMA';
 }
 
+// Lista cuyos precios se están mostrando. Sirve para avisar si se cambia de lista con precios
+// sin guardar (ver cargarMatrizPrecios).
+let listaMostrada = '';
+
+// ¿Hay filas de la tabla de categorías con cambios sin guardar?
+function hayCambiosSinGuardar() {
+  return document.querySelectorAll('#tabla-precios-categorias-body tr.fila-modificada').length > 0;
+}
+
+// Marca en amarillo (y con la etiqueta "Sin guardar") las filas cuyo precio se tocó.
+// Se registra UNA sola vez: la tabla se redibuja, pero el <tbody> es siempre el mismo.
+function iniciarMarcaCambios() {
+  const tbody = document.getElementById('tabla-precios-categorias-body');
+  if (!tbody || tbody.dataset.marcaCambios) return;
+  tbody.dataset.marcaCambios = '1';
+  tbody.addEventListener('input', (e) => {
+    const fila = e.target.closest('tr');
+    if (!fila) return;
+    const un = fila.querySelector('[id^="cat-un-"]')?.value ?? '';
+    const doc = fila.querySelector('[id^="cat-doc-"]')?.value ?? '';
+    fila.classList.toggle('fila-modificada', un !== fila.dataset.origUn || doc !== fila.dataset.origDoc);
+  });
+}
+
 export async function inicializarModuloListas() {
   const select = document.getElementById('select-lista-activa');
   if (select.children.length > 1 && select.value !== '') return;
@@ -29,8 +53,25 @@ export async function inicializarModuloListas() {
 }
 
 export async function cargarMatrizPrecios() {
-  const idLista = document.getElementById('select-lista-activa').value;
+  const selectLista = document.getElementById('select-lista-activa');
+  const idLista = selectLista.value;
   if (!idLista) return;
+
+  // Si se cambió de lista teniendo precios sin guardar, se pregunta antes de descartarlos.
+  if (listaMostrada && idLista !== listaMostrada && hayCambiosSinGuardar()) {
+    const descartar = await confirmarAccion({
+      titulo: 'Precios sin guardar',
+      mensaje: 'Cambiaste precios y todavía no los guardaste. Si cambiás de lista se pierden. ¿Querés descartarlos?',
+      textoConfirmar: 'Sí, descartar',
+      peligro: true
+    });
+    if (!descartar) {
+      selectLista.value = listaMostrada;   // se vuelve a la lista anterior
+      return;
+    }
+  }
+  listaMostrada = idLista;
+  iniciarMarcaCambios();
 
   const { data: categoriasTodas } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('id', { ascending: true });
   const { data: preciosExistentes } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', idLista);
@@ -45,7 +86,7 @@ export async function cargarMatrizPrecios() {
     const doc = p.precio_docena ?? '';
 
     return `
-      <tr>
+      <tr data-orig-un="${un}" data-orig-doc="${doc}">
         <td class="font-weight-bold">${esc(cat.nombre)}</td>
         <td><input type="number" step="0.01" class="form-control form-control-sm text-right" id="cat-un-${cat.id}" value="${un}" placeholder="0.00"></td>
         <td><input type="number" step="0.01" class="form-control form-control-sm text-right" id="cat-doc-${cat.id}" value="${doc}" placeholder="-"></td>
@@ -96,23 +137,52 @@ export async function cargarMatrizPrecios() {
 
 export async function guardarPrecioCategoria(id_categoria, idDetalle) {
   const idLista = document.getElementById('select-lista-activa').value;
-  const precio_unidad = document.getElementById(`cat-un-${id_categoria}`).value || null;
-  const precio_docena = document.getElementById(`cat-doc-${id_categoria}`).value || null;
+  const inputUn = document.getElementById(`cat-un-${id_categoria}`);
+  const inputDoc = document.getElementById(`cat-doc-${id_categoria}`);
+  const fila = inputUn.closest('tr');
+  const nombreCat = fila?.querySelector('td')?.textContent.trim() || 'la categoría';
+  const boton = fila?.querySelector('[data-action="guardar-precio-cat"]');
+
+  // Campo vacío = sin precio (null). Si hay algo escrito tiene que ser un número de 0 en adelante.
+  const textoUn = inputUn.value.trim();
+  const textoDoc = inputDoc.value.trim();
+  const precio_unidad = textoUn === '' ? null : Number(textoUn);
+  const precio_docena = textoDoc === '' ? null : Number(textoDoc);
+  const invalido = (n) => n !== null && (!Number.isFinite(n) || n < 0);
+  if (invalido(precio_unidad) || invalido(precio_docena)) {
+    mostrarNotificacion('Los precios tienen que ser números de 0 en adelante.', 'warning');
+    return;
+  }
 
   const payload = {
     id_lista_precio: idLista,
     id_categoria: id_categoria,
     id_producto: null,
-    precio_unidad: precio_unidad ? parseFloat(precio_unidad) : null,
-    precio_docena: precio_docena ? parseFloat(precio_docena) : null
+    precio_unidad,
+    precio_docena
   };
 
-  let res = idDetalle 
-    ? await supabaseAdmin.from('TB_DLISTA_PRECIOS').update(payload).eq('id', idDetalle)
-    : await supabaseAdmin.from('TB_DLISTA_PRECIOS').insert([payload]);
+  // El botón se bloquea mientras guarda: un doble toque no puede crear el precio dos veces.
+  if (boton) boton.disabled = true;
+  try {
+    const res = idDetalle
+      ? await supabaseAdmin.from('TB_DLISTA_PRECIOS').update(payload).eq('id', idDetalle)
+      : await supabaseAdmin.from('TB_DLISTA_PRECIOS').insert([payload]);
 
-  if (res.error) mostrarNotificacion('Error: ' + res.error.message, 'danger');
-  else cargarMatrizPrecios();
+    if (res.error) {
+      mostrarNotificacion('Error al guardar el precio: ' + res.error.message, 'danger');
+      return;
+    }
+
+    mostrarNotificacion(
+      precio_unidad === null && precio_docena === null
+        ? `Se quitó el precio de ${nombreCat} en esta lista.`
+        : `Precio de ${nombreCat} guardado.`
+    );
+    await cargarMatrizPrecios();   // se redibuja con lo guardado y se limpia la marca "Sin guardar"
+  } finally {
+    if (boton) boton.disabled = false;
+  }
 }
 
 export async function abrirModalPrecioEspecial() {
@@ -168,6 +238,7 @@ export async function guardarPrecioEspecial(e) {
   if (error) mostrarNotificacion('Error: ' + error.message, 'danger');
   else {
     $('#modal-precio-especial').modal('hide');
+    mostrarNotificacion('Precio especial guardado.');
     cargarMatrizPrecios();
   }
 }
@@ -180,7 +251,12 @@ export async function eliminarPrecioEspecial(idDetalle) {
     peligro: true
   });
   if (ok) {
-    await supabaseAdmin.from('TB_DLISTA_PRECIOS').delete().eq('id', idDetalle);
+    const { error } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').delete().eq('id', idDetalle);
+    if (error) {
+      mostrarNotificacion('Error al eliminar: ' + error.message, 'danger');
+      return;
+    }
+    mostrarNotificacion('Precio especial eliminado.');
     cargarMatrizPrecios();
   }
 }

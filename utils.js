@@ -7,19 +7,21 @@ export function mostrarNotificacion(mensaje, tipo = 'success') {
     document.body.appendChild(container);
   }
 
-  const colores = { success: '#28a745', danger: '#dc3545', warning: '#ffc107', info: '#17a2b8' };
+  const colores = { success: '#168647', danger: '#c62828', warning: '#e9b83f', info: '#0d5c6b' };
   const colorFondo = colores[tipo] || colores.success;
-  const colorTexto = tipo === 'warning' ? '#212529' : '#ffffff';
+  const colorTexto = tipo === 'warning' ? '#1b2d47' : '#ffffff';
 
   const toast = document.createElement('div');
   toast.innerText = mensaje;
   toast.style.cssText = `
     background-color: ${colorFondo};
     color: ${colorTexto};
-    padding: 12px 20px;
-    border-radius: 8px;
+    padding: 14px 22px;
+    border-radius: 12px;
     font-weight: bold;
-    font-size: 0.9rem;
+    font-size: 1rem;
+    line-height: 1.3;
+    max-width: 380px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     opacity: 0;
     transform: translateY(-10px);
@@ -33,11 +35,14 @@ export function mostrarNotificacion(mensaje, tipo = 'success') {
     toast.style.transform = 'translateY(0)';
   });
 
+  // Los avisos de error y de advertencia quedan más tiempo en pantalla para poder leerlos.
+  const duracion = (tipo === 'danger' || tipo === 'warning') ? 6000 : 3500;
+
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateY(-10px)';
     setTimeout(() => toast.remove(), 250);
-  }, 2500);
+  }, duracion);
 }
 
 export function formatearFechaAR(fechaISO) {

@@ -56,26 +56,26 @@ let cierresCache = [];
 function htmlMovimientoCuentas(filas) {
   if (filas.length === 0) return '';
 
-  // Misma grilla en el encabezado y en cada fila: el nombre ocupa lo que sobra y los 4 importes
-  // tienen un ancho mínimo, así las columnas quedan alineadas.
-  const grilla = 'display:grid; grid-template-columns: 1fr repeat(4, minmax(78px, auto)); gap: 8px; align-items: center;';
+  // Las columnas se definen en styles.css (.mov-cuenta-fila), la misma grilla para el encabezado y
+  // para cada fila. En pantallas angostas cada cuenta se muestra apilada: el nombre arriba y cada
+  // importe con su rótulo (data-label), así nada se corta.
 
   const encabezado = `
     <div class="list-group-item bg-light py-1 small font-weight-bold text-uppercase">Movimiento por cuenta</div>
-    <div class="list-group-item py-1 small text-muted" style="${grilla}">
-      <span></span><span class="text-right">Entra</span><span class="text-right">Sale</span><span class="text-right">Traspasos</span><span class="text-right">Neto</span>
+    <div class="list-group-item py-1 small text-muted mov-cuenta-fila mov-cuenta-cab">
+      <span></span><span class="text-right">Entra</span><span class="text-right">Sale</span><span class="text-right">Traspasos y ajustes</span><span class="text-right">Neto</span>
     </div>`;
 
   const cuerpo = filas.map(f => {
     const neto = Number(f.neto);
     const traspasos = Number(f.traspasos || 0);
     return `
-    <div class="list-group-item py-2" style="${grilla}">
-      <span>${esc(f.nombre)}${f.sinCuenta ? '<br><small class="text-muted">cobros o pagos sin cuenta cargada</small>' : ''}</span>
-      <span class="text-right">$${formatearMoneda(f.entra)}</span>
-      <span class="text-right ${Number(f.sale) > 0 ? 'text-danger' : 'text-muted'}">${Number(f.sale) > 0 ? '-$' + formatearMoneda(f.sale) : '-'}</span>
-      <span class="text-right ${traspasos < 0 ? 'text-danger' : (traspasos > 0 ? 'text-success' : 'text-muted')}">${traspasos === 0 ? '-' : (traspasos > 0 ? '+' : '-') + '$' + formatearMoneda(Math.abs(traspasos))}</span>
-      <span class="text-right font-weight-bold">${neto < 0 ? '-' : ''}$${formatearMoneda(Math.abs(neto))}</span>
+    <div class="list-group-item py-2 mov-cuenta-fila">
+      <span class="mov-cuenta-nombre">${esc(f.nombre)}${f.sinCuenta ? '<br><small class="text-muted">cobros o pagos sin cuenta cargada</small>' : ''}</span>
+      <span class="text-right" data-label="Entra">$${formatearMoneda(f.entra)}</span>
+      <span class="text-right ${Number(f.sale) > 0 ? 'text-danger' : 'text-muted'}" data-label="Sale">${Number(f.sale) > 0 ? '-$' + formatearMoneda(f.sale) : '-'}</span>
+      <span class="text-right ${traspasos < 0 ? 'text-danger' : (traspasos > 0 ? 'text-success' : 'text-muted')}" data-label="Traspasos y ajustes">${traspasos === 0 ? '-' : (traspasos > 0 ? '+' : '-') + '$' + formatearMoneda(Math.abs(traspasos))}</span>
+      <span class="text-right font-weight-bold" data-label="Neto">${neto < 0 ? '-' : ''}$${formatearMoneda(Math.abs(neto))}</span>
     </div>`;
   }).join('');
 
@@ -126,8 +126,8 @@ export async function cargarResumenVentasDia() {
             Total rendido: <strong>$${formatearMoneda(resumen.total_general)}</strong> |
             Dif. Efectivo: <strong>$${formatearMoneda(resumen.diferencia_efectivo)}</strong>
           </p>
-          <button type="button" class="btn btn-sm btn-outline-danger font-weight-bold mt-1" id="btn-anular-cierre">
-            ⚠️ ANULAR CIERRE Y REABRIR CAJA
+          <button type="button" class="btn btn-accion btn-accion-peligro mt-1" id="btn-anular-cierre">
+            <i class="fas fa-lock-open"></i> Anular cierre y reabrir caja
           </button>
         </div>
       `;
@@ -478,15 +478,15 @@ export async function cargarTablaHistorialCierres() {
 
       return `
         <tr class="${esCerrado ? '' : 'text-muted'}">
-          <td><strong>#${c.id}</strong></td>
+          <td><span class="badge badge-secondary">#${c.id}</span></td>
           <td>${formatearFechaAR(c.fecha)}</td>
           <td><span class="badge ${badgeClass}">${esc(c.estado)}</span></td>
-          <td>$${formatearMoneda(c.total_general)}</td>
-          <td>$${formatearMoneda(c.efectivo_real)}</td>
-          <td class="${difClass} font-weight-bold">$${formatearMoneda(dif)}</td>
-          <td class="text-center">
-            <button class="btn btn-sm btn-outline-info" data-action="ver-detalle-cierre" data-id="${c.id}">
-              👁️ Ver Detalle
+          <td class="text-right">$${formatearMoneda(c.total_general)}</td>
+          <td class="text-right">$${formatearMoneda(c.efectivo_real)}</td>
+          <td class="text-right ${difClass} font-weight-bold">$${formatearMoneda(dif)}</td>
+          <td class="text-right">
+            <button class="btn btn-accion btn-accion-ver" data-action="ver-detalle-cierre" data-id="${c.id}">
+              <i class="fas fa-eye"></i> Ver detalle
             </button>
           </td>
         </tr>`;

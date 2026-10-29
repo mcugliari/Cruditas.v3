@@ -5,6 +5,7 @@ import { abrirModalCobro } from './cobro.js';
 import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo } from './pos.js';
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
+import { btnFila, itemMenuMas } from './menuMas.js';   // botones de la fila y menú "Más"
 
 // Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
 // nombre_referencia y observaciones los escribe un cliente anónimo desde la web.
@@ -131,7 +132,7 @@ export async function cargarTablaPedidos() {
     // A la vista, con texto: solo lo que hace avanzar el pedido (preparar, cobrar, entregar).
     // Todo lo demás va dentro del menú "Más". Los data-action y las clases btn-print-*
     // son los de siempre, así que main.js y el escuchador de impresión (al final de este
-    // archivo) siguen funcionando sin cambios.
+    // archivo) siguen funcionando sin cambios. El menú "Más" se abre con menuMas.js.
     const idPed = p.id;
     const cambiar = (estado) => `data-action="cambiar-estado" data-id="${idPed}" data-estado="${estado}"`;
     const accionVer = `data-action="ver-detalle" data-id="${idPed}"`;
@@ -440,59 +441,3 @@ document.getElementById('tabla-pedidos-body')?.addEventListener('click', async (
     return;
   }
 });
-
-// =========================================================================
-// BOTONES DE LA FILA Y MENÚ "MÁS" (gestión de pedidos)
-// El menú queda dentro de la fila pero con position: fixed (ver styles.css): así no lo
-// recorta el scroll de la tabla. Estas funciones solo lo abren, lo ubican y lo cierran;
-// lo que hace cada opción lo siguen resolviendo main.js y el escuchador de impresión.
-// =========================================================================
-
-// Botón visible de la fila. Los textos y clases son fijos (no hay datos de usuarios acá).
-function btnFila(clase, icono, texto, atributos) {
-  return `<button type="button" class="btn btn-accion ${clase}" ${atributos}><i class="fas ${icono}"></i> ${texto}</button>`;
-}
-
-// Opción del menú "Más".
-function itemMenuMas(icono, texto, atributos, claseExtra = '') {
-  return `<button type="button" class="menu-mas-item ${claseExtra}" role="menuitem" ${atributos}><i class="fas ${icono}"></i> ${texto}</button>`;
-}
-
-function cerrarMenusMas() {
-  document.querySelectorAll('.menu-mas.show').forEach(m => m.classList.remove('show'));
-  document.querySelectorAll('.btn-accion-mas[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
-}
-
-// Abre el menú pegado al botón: hacia abajo y, si no entra, hacia arriba.
-function abrirMenuMas(btn) {
-  const menu = btn.nextElementSibling;
-  if (!menu) return;
-  menu.style.visibility = 'hidden';   // se muestra fuera de la vista solo para medirlo
-  menu.classList.add('show');
-  const r = btn.getBoundingClientRect();
-  const ancho = menu.offsetWidth;
-  const alto = menu.offsetHeight;
-  let arriba = r.bottom + 4;
-  if (arriba + alto > window.innerHeight - 8) arriba = Math.max(8, r.top - alto - 4);
-  const izquierda = Math.min(Math.max(8, r.right - ancho), window.innerWidth - ancho - 8);
-  menu.style.top = `${arriba}px`;
-  menu.style.left = `${izquierda}px`;
-  menu.style.visibility = '';
-  btn.setAttribute('aria-expanded', 'true');
-}
-
-// Un solo escuchador para toda la página: si se toca "Más" se abre (o se cierra si ya
-// estaba abierto); cualquier otro toque, incluso una opción del menú, lo cierra.
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.btn-accion-mas');
-  if (btn) {
-    const eraEste = btn.nextElementSibling?.classList.contains('show');
-    cerrarMenusMas();
-    if (!eraEste) abrirMenuMas(btn);
-    return;
-  }
-  cerrarMenusMas();
-});
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenusMas(); });
-document.addEventListener('scroll', cerrarMenusMas, true);   // true: también el scroll de la tabla
-window.addEventListener('resize', cerrarMenusMas);

@@ -260,6 +260,7 @@ export async function guardarProducto(event) {
     if (result.error) mostrarNotificacion('Error al guardar producto: ' + result.error.message, 'danger');
     else {
       $('#modal-producto').modal('hide');
+      mostrarNotificacion(id ? 'Producto actualizado.' : 'Producto creado.');
       cargarProductos();
     }
   } finally {
@@ -277,6 +278,9 @@ export async function eliminarProducto(id, nombre) {
   if (ok) {
     const { error } = await supabaseAdmin.from('TB_BPRODUCTOS').delete().eq('id', id);
     if (error) mostrarNotificacion('Error al eliminar: ' + error.message, 'danger');
-    else cargarProductos();
+    else {
+      mostrarNotificacion('Producto eliminado.');
+      cargarProductos();
+    }
   }
 }

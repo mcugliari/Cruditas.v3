@@ -1391,3 +1391,121 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 .switch-grande .custom-control-input:checked ~ .custom-control-label::before { background-color: var(--cruditas-green); border-color: var(--cruditas-green); }
 .switch-grande .custom-control-input:checked ~ .custom-control-label::after { transform: translateX(1.2rem); }
 .switch-grande .custom-control-input:focus ~ .custom-control-label::before { box-shadow: 0 0 0 3px rgba(233, 184, 63, .45); }
+
+
+/* =============================================================================
+   ESTILO · ETAPA 7  (Listas de precios: aviso de precios sin guardar)
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   ============================================================================= */
+#sec-listas tr.fila-modificada { background-color: #fff8e3; }
+#sec-listas tr.fila-modificada td:first-child::after {
+  content: "Sin guardar"; margin-left: .6rem; padding: .2em .7em; border-radius: 999px;
+  background: #fff0c9; color: #7a5200; font-size: .75rem; font-weight: 700;
+}
+
+
+/* =============================================================================
+   ESTILO · ETAPA 8  (Historial de caja, Cierre de caja, ventana de cobro, ventana de
+   confirmación, categorías y pantalla de ingreso)
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   ============================================================================= */
+
+/* ---- Historial de cierres de caja ---- */
+#sec-historial-caja .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
+#sec-historial-caja .content-header h1 i { color: var(--cruditas-brand) !important; }
+#sec-historial-caja .card {
+  border: 1px solid #e7ecf2; border-top: 3px solid var(--cruditas-brand);
+  border-radius: var(--cruditas-radius); overflow: hidden; box-shadow: 0 5px 18px rgba(26, 42, 63, .06);
+}
+#sec-historial-caja .form-control { border: 1px solid #d5dbe3; border-radius: 10px; }
+#sec-historial-caja .form-control:focus { border-color: var(--cruditas-brand); box-shadow: 0 0 0 3px rgba(233, 184, 63, .30); }
+#sec-historial-caja .btn-primary { min-height: 42px; border: 0; border-radius: 999px; background: var(--cruditas-ink); color: #fff; font-weight: 700; }
+#sec-historial-caja .btn-primary:hover { background: var(--cruditas-ink-soft); }
+#sec-historial-caja .table thead th {
+  background: transparent; border-top: 0; border-bottom: 1px solid var(--cruditas-line);
+  color: var(--cruditas-muted); font-size: .74rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; padding: .85rem 1rem;
+}
+#sec-historial-caja .table thead.bg-light { background: transparent !important; }
+#sec-historial-caja .table td { padding: .75rem 1rem; vertical-align: middle; border-top: 1px solid #eef0f3; }
+#sec-historial-caja .table td:last-child { white-space: nowrap; }
+#sec-historial-caja .table-hover tbody tr:hover { background-color: rgba(233, 184, 63, .10) !important; }
+#sec-historial-caja .badge { padding: .4em .85em; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+#sec-historial-caja .badge-success { background: #dcf3e5; color: #0f5f32; }
+#sec-historial-caja .badge-danger  { background: #fde2e2; color: #9b1c1c; }
+#sec-historial-caja .badge-secondary { background: #eef1f5; color: #4a5565; }
+#sec-historial-caja .text-info { color: #0d5c6b !important; }   /* sobrante de efectivo: más contraste */
+
+/* ---- Ventanas de cierre de caja y de cobro ---- */
+:is(#modalCierreCaja, #modalDetalleCierre, #modal-cobro-pedido) .modal-content { border: 0; border-radius: var(--cruditas-radius); overflow: hidden; box-shadow: 0 18px 48px rgba(15, 25, 40, .25); }
+:is(#modalCierreCaja, #modalDetalleCierre, #modal-cobro-pedido) .modal-header { border-bottom: 0; padding: 16px 20px; }
+:is(#modalCierreCaja, #modalDetalleCierre, #modal-cobro-pedido) .modal-header.bg-dark { background: var(--cruditas-header) !important; }
+:is(#modalCierreCaja, #modalDetalleCierre, #modal-cobro-pedido) .modal-title { font-weight: 700; }
+:is(#modalCierreCaja, #modalDetalleCierre, #modal-cobro-pedido) .modal-footer { border-top: 1px solid var(--cruditas-line); }
+:is(#modalCierreCaja, #modalDetalleCierre, #modal-cobro-pedido) .modal-footer .btn { min-height: 42px; padding: 0 1.3rem; border-radius: 999px; font-weight: 700; }
+:is(#modalCierreCaja, #modalDetalleCierre, #modal-cobro-pedido) .form-control { border: 1px solid #d5dbe3; border-radius: 10px; }
+:is(#modalCierreCaja, #modalDetalleCierre, #modal-cobro-pedido) .form-control:focus { border-color: var(--cruditas-brand); box-shadow: 0 0 0 3px rgba(233, 184, 63, .30); }
+:is(#modalCierreCaja, #modalDetalleCierre) .list-group { border: 1px solid #e7ecf2; border-radius: 12px; overflow: hidden; }
+:is(#modalCierreCaja, #modalDetalleCierre) .list-group-item { border-left: 0; border-right: 0; border-color: #eef0f3; }
+:is(#modalCierreCaja, #modalDetalleCierre) .list-group-item:first-child { border-top: 0; }
+:is(#modalCierreCaja, #modalDetalleCierre) .list-group-item:last-child { border-bottom: 0; }
+:is(#modalCierreCaja, #modalDetalleCierre) .list-group-item.bg-light { background: #f8f9fb !important; }
+#modalCierreCaja .card.bg-light { background: #f8f9fb !important; border-color: #e7ecf2 !important; border-radius: 12px; }
+#btn-confirmar-cierre { min-height: 46px; }
+
+/* Ventana de cobro: encabezado ámbar, caja del total y botón de confirmar bien visibles */
+#modal-cobro-pedido .modal-header { background: var(--cruditas-brand); color: #1b2d47; }
+#modal-cobro-pedido #cobro-subtitulo { color: #4a5565 !important; }
+#modal-cobro-pedido .border.rounded { border-radius: var(--cruditas-radius) !important; background: #f8f9fb !important; border-color: #e7ecf2 !important; }
+#btn-confirmar-cobro { min-height: 46px; background: var(--cruditas-green); border-color: var(--cruditas-green); font-size: 1.05rem; }
+#btn-confirmar-cobro:hover { background: #11703b; border-color: #11703b; }
+
+/* ---- Ventana de confirmación (confirmarAccion, en utils.js) ---- */
+#modal-confirmar .modal-content { border: 0; border-radius: var(--cruditas-radius); box-shadow: 0 18px 48px rgba(15, 25, 40, .30); }
+#modal-confirmar .modal-title { color: var(--cruditas-ink); }
+#modal-confirmar .modal-body p { color: var(--cruditas-ink); font-size: 1.05rem; }
+#modal-confirmar .form-control { border: 1px solid #d5dbe3; border-radius: 10px; }
+#modal-confirmar .modal-footer .btn { min-height: 44px; padding: 0 1.3rem; border-radius: 999px; font-weight: 700; }
+#modal-confirmar .btn-light { background: #fff; border: 1.5px solid #cfd6df; color: var(--cruditas-ink); }
+#modal-confirmar .btn-danger { background: #b42318; border-color: #b42318; }
+#modal-confirmar .btn-success { background: var(--cruditas-green); border-color: var(--cruditas-green); }
+
+/* ---- Categorías: la última columna no parte la línea ---- */
+#modal-categorias .table td:last-child { white-space: nowrap; }
+
+/* ---- Pantalla de ingreso (auth.js) ---- */
+#overlay-login { background: var(--cruditas-header) !important; }
+#overlay-login .card { border: 0 !important; border-top: 4px solid var(--cruditas-brand) !important; border-radius: var(--cruditas-radius); }
+#overlay-login label.small { font-size: .9rem !important; }
+#overlay-login .form-control { height: 46px; border: 1px solid #d5dbe3; border-radius: 10px; }
+#overlay-login .form-control:focus { border-color: var(--cruditas-brand); box-shadow: 0 0 0 3px rgba(233, 184, 63, .30); }
+#overlay-login .btn { min-height: 46px; border: 0; border-radius: 999px; background: var(--cruditas-brand); color: #1b2d47; font-size: 1.05rem; }
+#overlay-login .btn:hover { background: #deab2e; }
+
+
+/* =============================================================================
+   ESTILO · ETAPA 8b  (Cierre de caja: ventana más ancha y "Movimiento por cuenta" que no se corta)
+   PARA REVERTIR: borrar desde este comentario hasta el final (y volver al caja.js anterior).
+   ============================================================================= */
+@media (min-width: 576px) {
+  #modalCierreCaja .modal-dialog, #modalDetalleCierre .modal-dialog { max-width: 680px; }
+}
+
+/* Una fila = el nombre de la cuenta + 4 importes (Entra, Sale, Traspasos y ajustes, Neto) */
+.mov-cuenta-fila {
+  display: grid; grid-template-columns: minmax(120px, 1fr) repeat(4, minmax(96px, auto));
+  gap: 8px; align-items: center;
+}
+.mov-cuenta-fila > span { min-width: 0; }
+.mov-cuenta-fila > [data-label] { white-space: nowrap; }
+
+/* Pantallas angostas: cada cuenta se apila. Nombre arriba y, abajo, cada importe con su rótulo. */
+@media (max-width: 575.98px) {
+  .mov-cuenta-cab { display: none; }
+  .mov-cuenta-fila { grid-template-columns: repeat(2, 1fr); row-gap: 8px; }
+  .mov-cuenta-nombre { grid-column: 1 / -1; font-weight: 700; }
+  .mov-cuenta-fila > [data-label]::before {
+    content: attr(data-label); display: block; color: var(--cruditas-muted);
+    font-size: .75rem; font-weight: 600; text-align: right;
+  }
+}
