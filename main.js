@@ -21,6 +21,7 @@ import {
 import { inicializarCierreCaja, inicializarHistorialCierres, cargarTablaHistorialCierres, verDetalleCierre, actualizarIndicadorCaja } from './caja.js';
 import { inicializarReporteCompras } from './reporteCompras.js';
 import './categorias.js';
+import { inicializarPreferencias } from './preferencias.js';
 
 // FUNCION DE NAVEGACIÓN
 export function navegarA(seccionId, elementoMenu) {
@@ -75,6 +76,8 @@ export function navegarA(seccionId, elementoMenu) {
     cargarCuentas();
   } else if (seccionId === 'insumos') {
     cargarInsumos();
+  } else if (seccionId === 'impresion') {
+    inicializarPreferencias();
   } else if (seccionId === 'reportes-compras') {
     inicializarReporteCompras();
   }

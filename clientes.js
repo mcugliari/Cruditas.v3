@@ -24,11 +24,11 @@ export async function cargarClientes() {
         <td>${esc(cli.telefono || '-')}</td>
         <td>${esc(cli.direccion || '-')}</td>
         <td class="text-center">
-        <button class="btn btn-sm btn-warning mr-1" data-action="editar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}" data-telefono="${esc(cli.telefono || '')}" data-direccion="${esc(cli.direccion || '')}">
-            <i class="fas fa-edit"></i>
+        <button class="btn btn-accion btn-accion-editar mr-1" data-action="editar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}" data-telefono="${esc(cli.telefono || '')}" data-direccion="${esc(cli.direccion || '')}">
+            <i class="fas fa-edit"></i> Editar
         </button>
-        <button class="btn btn-sm btn-danger" data-action="eliminar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}">
-            <i class="fas fa-trash-alt"></i>
+        <button class="btn btn-accion btn-accion-peligro" data-action="eliminar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}">
+            <i class="fas fa-trash-alt"></i> Eliminar
         </button>
         </td>
     </tr>
@@ -121,8 +121,8 @@ export async function listarAsociacionesClienteLista() {
         ${item.m_predeterminada ? '<span class="badge badge-success px-2 py-1">Sí</span>' : '<span class="badge badge-secondary px-2 py-1">No</span>'}
       </td>
       <td class="text-right">
-        <button class="btn btn-sm btn-outline-info mr-1" data-action="editar-asoc" data-id="${item.id}" data-cliente="${item.id_cliente}" data-lista="${item.id_lista_precio}" data-predeterminada="${item.m_predeterminada}">Editar</button>
-        <button class="btn btn-sm btn-danger" data-action="eliminar-asoc" data-id="${item.id}">Eliminar</button>
+        <button class="btn btn-accion btn-accion-editar mr-1" data-action="editar-asoc" data-id="${item.id}" data-cliente="${item.id_cliente}" data-lista="${item.id_lista_precio}" data-predeterminada="${item.m_predeterminada}">Editar</button>
+        <button class="btn btn-accion btn-accion-peligro" data-action="eliminar-asoc" data-id="${item.id}">Eliminar</button>
       </td>
     </tr>
   `).join('');

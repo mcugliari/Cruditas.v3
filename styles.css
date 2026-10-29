@@ -1296,3 +1296,98 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 #modal-detalle-compra .modal-title { font-weight: 700; }
 #modal-detalle-compra .modal-footer { border-top: 1px solid var(--cruditas-line); }
 #modal-detalle-compra .modal-footer .btn { min-height: 40px; padding: 0 1.2rem; border-radius: 999px; font-weight: 700; }
+
+
+/* =============================================================================
+   ESTILO DE GESTIÓN · ETAPA 5  (Clientes, Gastos y retiros, Insumos, Listas de precios,
+   Cuentas y saldos, Reporte de compras y Resumen de ventas, más sus ventanas)
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo (y volver a los
+   .js e index.html anteriores si se quieren los botones de antes).
+   ============================================================================= */
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .content-header .btn-warning {
+  min-height: 42px; padding: 0 1.2rem; border: 0; border-radius: 999px;
+  background: var(--cruditas-brand); color: #1b2d47; font-weight: 700;
+}
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .content-header .btn-warning:hover { background: #deab2e; color: #1b2d47; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .card {
+  border: 1px solid #e7ecf2; border-top: 3px solid var(--cruditas-brand);
+  border-radius: var(--cruditas-radius); overflow: hidden;
+  box-shadow: 0 5px 18px rgba(26, 42, 63, .06);
+}
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .card-header { background: #fff; border-bottom: 1px solid var(--cruditas-line); padding: 14px 18px; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .card-title { color: var(--cruditas-ink); }
+
+/* Campos y botones de los filtros */
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .form-control { border: 1px solid #d5dbe3; border-radius: 10px; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .form-control:focus { border-color: var(--cruditas-brand); box-shadow: 0 0 0 3px rgba(233, 184, 63, .30); }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .form-control-sm { height: 38px; font-size: .95rem; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .card-body .btn:not(.btn-accion):not(.btn-group > .btn):not(.input-group-append .btn) { border-radius: 999px; font-weight: 700; }
+
+/* Tablas */
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .table thead th {
+  background: transparent; border-top: 0; border-bottom: 1px solid var(--cruditas-line);
+  color: var(--cruditas-muted); font-size: .74rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; padding: .85rem 1rem;
+}
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .table thead.bg-light, :is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .table .thead-light th { background: transparent !important; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .table td { padding: .75rem 1rem; vertical-align: middle; border-top: 1px solid #eef0f3; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .table tfoot td, :is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .table tfoot th { background: #f8f9fb; border-top: 1px solid var(--cruditas-line); font-weight: 700; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas) .table td:last-child { white-space: nowrap; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .table-striped tbody tr:nth-of-type(odd) { background-color: transparent; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .table-hover tbody tr:hover { background-color: rgba(233, 184, 63, .10) !important; }
+
+/* Insignias en píldora */
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .badge { padding: .4em .85em; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .badge-secondary { background: #eef1f5; color: #4a5565; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .badge-success   { background: #dcf3e5; color: #0f5f32; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .badge-info      { background: #d6f0f5; color: #0d5c6b; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .badge-primary   { background: #dbe8fb; color: #1c4f94; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .badge-warning   { background: #fff0c9; color: #7a5200 !important; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .badge-danger    { background: #fde2e2; color: #9b1c1c; }
+:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas, #modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .badge-light     { background: #f4f5f7; color: #4a5565; }
+
+/* Indicadores (info-box) de Cuentas y del Resumen de ventas: igual que los de Deuda */
+:is(#sec-cuentas, #sec-resumen-ventas) .info-box {
+  min-height: 0; align-items: center; padding: 14px 16px;
+  background: #fff !important; border: 1px solid #e7ecf2 !important;
+  border-radius: var(--cruditas-radius); box-shadow: 0 5px 18px rgba(26, 42, 63, .06);
+}
+:is(#sec-cuentas, #sec-resumen-ventas) .info-box-icon { flex: 0 0 46px; width: 46px; height: 46px; font-size: 1.15rem; border-radius: 12px; }
+:is(#sec-cuentas, #sec-resumen-ventas) .info-box-icon.bg-danger  { background: #fde8e8 !important; color: #c62828 !important; }
+:is(#sec-cuentas, #sec-resumen-ventas) .info-box-icon.bg-warning { background: #fff3d1 !important; color: #9a6b00 !important; }
+:is(#sec-cuentas, #sec-resumen-ventas) .info-box-icon.bg-info    { background: #e3effb !important; color: #1c5fa8 !important; }
+:is(#sec-cuentas, #sec-resumen-ventas) .info-box-icon.bg-success { background: #dcf3e5 !important; color: #0f5f32 !important; }
+:is(#sec-cuentas, #sec-resumen-ventas) .info-box-text { color: var(--cruditas-muted); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+:is(#sec-cuentas, #sec-resumen-ventas) .info-box-number { color: var(--cruditas-ink) !important; font-size: 1.45rem; font-weight: 700; }
+
+/* Ventanas */
+:is(#modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .modal-content { border: 0; border-radius: var(--cruditas-radius); overflow: hidden; box-shadow: 0 18px 48px rgba(15, 25, 40, .25); }
+:is(#modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .modal-header { border-bottom: 0; padding: 16px 20px; }
+:is(#modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .modal-header.bg-warning { background: var(--cruditas-brand) !important; color: #1b2d47; }
+:is(#modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .modal-title { font-weight: 700; }
+:is(#modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .modal-footer { border-top: 1px solid var(--cruditas-line); }
+:is(#modal-editar-cliente, #modal-egreso, #modal-compra, #modal-movimientos-cuenta, #modal-transferencia, #modal-ajuste, #modal-cuenta, #modal-insumo, #modal-categorias, #modal-precio-especial) .modal-footer .btn { min-height: 40px; padding: 0 1.2rem; border-radius: 999px; font-weight: 700; }
+
+
+/* =============================================================================
+   ESTILO · ETAPA 6  (pantalla "Impresión": tarjetas e interruptores grandes)
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   ============================================================================= */
+#sec-impresion .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
+#sec-impresion .card {
+  border: 1px solid #e7ecf2; border-top: 3px solid var(--cruditas-brand);
+  border-radius: var(--cruditas-radius); overflow: hidden;
+  box-shadow: 0 5px 18px rgba(26, 42, 63, .06);
+}
+#sec-impresion .card-header { background: #fff; border-bottom: 1px solid var(--cruditas-line); padding: 14px 18px; }
+#sec-impresion .btn { min-height: 42px; border-radius: 999px; }
+
+/* Interruptor grande (fácil de ver y de tocar) */
+.switch-grande { padding-left: 3.8rem; min-height: 1.9rem; }
+.switch-grande .custom-control-label { font-size: 1.05rem; font-weight: 700; line-height: 1.9rem; cursor: pointer; }
+.switch-grande .custom-control-label::before { top: 0; left: -3.8rem; width: 3.1rem; height: 1.9rem; border-radius: 1rem; }
+.switch-grande .custom-control-label::after { top: 2px; left: calc(-3.8rem + 2px); width: calc(1.9rem - 4px); height: calc(1.9rem - 4px); border-radius: 50%; }
+.switch-grande .custom-control-input:checked ~ .custom-control-label::before { background-color: var(--cruditas-green); border-color: var(--cruditas-green); }
+.switch-grande .custom-control-input:checked ~ .custom-control-label::after { transform: translateX(1.2rem); }
+.switch-grande .custom-control-input:focus ~ .custom-control-label::before { box-shadow: 0 0 0 3px rgba(233, 184, 63, .45); }

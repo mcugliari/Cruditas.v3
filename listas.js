@@ -50,8 +50,8 @@ export async function cargarMatrizPrecios() {
         <td><input type="number" step="0.01" class="form-control form-control-sm text-right" id="cat-un-${cat.id}" value="${un}" placeholder="0.00"></td>
         <td><input type="number" step="0.01" class="form-control form-control-sm text-right" id="cat-doc-${cat.id}" value="${doc}" placeholder="-"></td>
         <td class="text-center">
-          <button class="btn btn-sm btn-success" data-action="guardar-precio-cat" data-cat="${cat.id}" data-detalle="${p.id || 'null'}">
-            <i class="fas fa-save"></i>
+          <button class="btn btn-accion btn-accion-pagar" data-action="guardar-precio-cat" data-cat="${cat.id}" data-detalle="${p.id || 'null'}">
+            <i class="fas fa-save"></i> Guardar
           </button>
         </td>
       </tr>
@@ -85,8 +85,8 @@ export async function cargarMatrizPrecios() {
         <td class="text-right font-weight-bold text-success">$${p.precio_unidad || 0}</td>
         <td class="text-right">${p.precio_docena ? '$' + p.precio_docena : '-'}</td>
         <td class="text-center">
-          <button class="btn btn-sm btn-outline-danger" data-action="eliminar-precio-prod" data-id="${p.id}">
-            <i class="fas fa-trash-alt"></i>
+          <button class="btn btn-accion btn-accion-peligro" data-action="eliminar-precio-prod" data-id="${p.id}">
+            <i class="fas fa-trash-alt"></i> Eliminar
           </button>
         </td>
       </tr>

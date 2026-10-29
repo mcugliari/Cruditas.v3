@@ -166,22 +166,21 @@ function renderizarCuentas() {
     const saldo = Number(c.saldo_actual);
     const traspasos = Number(c.traspasos || 0);   // transferencias y ajustes (suman o restan)
 
+    // Opciones del menú "Más" (se abre con el código de pedidos.js, que escucha toda la página).
     // Solo las cuentas activas se pueden ajustar.
-    const botonAjuste = c.activo
-      ? `<button class="btn btn-sm btn-outline-secondary mr-1" title="Ajustar saldo"
-                 data-action="ajustar-cuenta" data-id="${c.id}">
-           <i class="fas fa-sliders-h"></i>
-         </button>`
-      : '';
-
-    // La cuenta Efectivo no se puede desactivar: en vez del botón va un candado.
-    const botonEstado = c.tipo === 'EFECTIVO'
-      ? '<i class="fas fa-lock text-muted ml-2" title="La cuenta Efectivo no se puede desactivar"></i>'
-      : `<button class="btn btn-sm ${c.activo ? 'btn-outline-danger' : 'btn-outline-success'}"
-                 title="${c.activo ? 'Desactivar' : 'Activar'}"
-                 data-action="cambiar-estado-cuenta" data-id="${c.id}">
-           <i class="fas ${c.activo ? 'fa-ban' : 'fa-check'}"></i>
-         </button>`;
+    const opcionesMas = [];
+    if (c.activo) {
+      opcionesMas.push(`<button type="button" class="menu-mas-item" role="menuitem"
+                 data-action="ajustar-cuenta" data-id="${c.id}"><i class="fas fa-sliders-h"></i> Ajustar saldo</button>`);
+    }
+    opcionesMas.push(`<button type="button" class="menu-mas-item" role="menuitem"
+                 data-action="editar-cuenta" data-id="${c.id}"><i class="fas fa-edit"></i> Editar cuenta</button>`);
+    // La cuenta Efectivo no se puede desactivar: esa opción directamente no aparece.
+    if (c.tipo !== 'EFECTIVO') {
+      opcionesMas.push('<div class="menu-mas-sep" role="separator"></div>');
+      opcionesMas.push(`<button type="button" class="menu-mas-item ${c.activo ? 'menu-mas-peligro' : ''}" role="menuitem"
+                 data-action="cambiar-estado-cuenta" data-id="${c.id}"><i class="fas ${c.activo ? 'fa-ban' : 'fa-check'}"></i> ${c.activo ? 'Desactivar cuenta' : 'Activar cuenta'}</button>`);
+    }
 
     return `
       <tr class="${c.activo ? '' : 'text-muted'}">
@@ -204,17 +203,19 @@ function renderizarCuentas() {
             ? '<span class="badge badge-success">Activa</span>'
             : '<span class="badge badge-secondary">Inactiva</span>'}
         </td>
-        <td class="text-center">
-          <button class="btn btn-sm btn-outline-info mr-1" title="Ver movimientos"
-                  data-action="ver-movimientos-cuenta" data-id="${c.id}">
-            <i class="fas fa-list"></i>
-          </button>
-          <button class="btn btn-sm btn-warning mr-1" title="Editar"
-                  data-action="editar-cuenta" data-id="${c.id}">
-            <i class="fas fa-edit"></i>
-          </button>
-          ${botonAjuste}
-          ${botonEstado}
+        <td>
+          <div class="acciones-fila">
+            <button class="btn btn-accion btn-accion-ver" title="Ver movimientos de la cuenta"
+                    data-action="ver-movimientos-cuenta" data-id="${c.id}">
+              <i class="fas fa-list"></i> Ver movimientos
+            </button>
+            <div class="mas-wrap">
+              <button type="button" class="btn btn-accion btn-accion-mas" aria-haspopup="true" aria-expanded="false" title="Más acciones">
+                Más <i class="fas fa-chevron-down"></i>
+              </button>
+              <div class="menu-mas" role="menu">${opcionesMas.join('')}</div>
+            </div>
+          </div>
         </td>
       </tr>`;
   }).join('');
@@ -690,9 +691,9 @@ async function cargarMovimientosCuenta() {
       } else if (m.id_cierre) {
         acciones = '<i class="fas fa-lock text-muted" title="El día ya está cerrado"></i>';
       } else {
-        acciones = `<button class="btn btn-sm btn-outline-danger" title="Anular"
+        acciones = `<button class="btn btn-accion btn-accion-peligro" title="Anular"
                             data-action="anular-movimiento-cuenta" data-id="${m.id_origen}">
-                      <i class="fas fa-ban"></i>
+                      <i class="fas fa-ban"></i> Anular
                     </button>`;
       }
     } else if (m.id_cierre) {

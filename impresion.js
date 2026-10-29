@@ -132,3 +132,45 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
   // Disparar la impresión nativa
   window.print();
 }
+
+
+// =============================================================================
+// IMPRESIÓN AUTOMÁTICA AL TOMAR UN PEDIDO (la llama pos.js según las preferencias de
+// preferencias.js). Reutiliza obtenerPedidoParaImprimir e imprimirComprobante.
+// =============================================================================
+
+// Pausa corta. Sirve para que la 2ª impresión no pise a la 1ª cuando el navegador imprime
+// directo (modo kiosco): se espera a que la primera ya haya salido hacia la impresora.
+const esperar = (ms) => new Promise(resolver => setTimeout(resolver, ms));
+
+// Lee el pedido ya guardado y manda a imprimir la comanda y/o el ticket.
+// Si hay que imprimir los dos, va primero la comanda y después el ticket.
+// Devuelve true si imprimió, false si no encontró el pedido.
+export async function imprimirAutomatico(idPedido, { comanda = false, ticket = false } = {}) {
+  const pedido = await obtenerPedidoParaImprimir(idPedido);
+  if (!pedido) return false;
+
+  if (comanda) imprimirComprobante(pedido, true);
+  if (comanda && ticket) await esperar(700);
+  if (ticket) imprimirComprobante(pedido, false);
+  return true;
+}
+
+// Imprime una comanda y un ticket de PRUEBA (no toca la base), para comprobar la impresora
+// y el ancho del papel. Se usa desde la pantalla "Impresión".
+export async function imprimirPrueba() {
+  const pedido = {
+    id: 'PRUEBA',
+    created_at: new Date().toISOString(),
+    nombre_referencia: 'Prueba de impresión',
+    importe_total: 3000,
+    TB_BMEDIO_PAGO: { nombre: 'Efectivo' },
+    TB_DPEDIDOS: [
+      { cantidad: 12, subTotal: 2400, TB_BPRODUCTOS: { id: 0, id_categoria: 0, nombre: 'Producto de prueba', TB_BCATEGORIAS: { nombre: 'Empanada' } } },
+      { cantidad: 1,  subTotal: 600,  TB_BPRODUCTOS: { id: 0, id_categoria: 0, nombre: 'Otro producto',    TB_BCATEGORIAS: { nombre: 'Pizza' } } }
+    ]
+  };
+  imprimirComprobante(pedido, true);
+  await esperar(700);
+  imprimirComprobante(pedido, false);
+}

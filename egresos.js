@@ -194,10 +194,10 @@ function renderizarEgresos() {
     let acciones = '';
     if (!anulado) {
       acciones = e.id_cierre
-        ? '<i class="fas fa-lock text-muted" title="El día ya está cerrado"></i>'
-        : `<button class="btn btn-sm btn-outline-danger" title="Anular"
+        ? '<span class="text-muted small" title="El día ya está cerrado"><i class="fas fa-lock"></i> Día cerrado</span>'
+        : `<button class="btn btn-accion btn-accion-peligro" title="Anular"
                    data-action="anular-egreso" data-id="${e.id}" data-tipo="${esc(e.tipo)}">
-             <i class="fas fa-ban"></i>
+             <i class="fas fa-ban"></i> Anular
            </button>`;
     }
 

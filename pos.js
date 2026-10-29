@@ -9,6 +9,8 @@ import {
 
 import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
+import { leerPreferenciasImpresion } from './preferencias.js';
+import { imprimirAutomatico } from './impresion.js';
 
 // Nuevas variables de estado para el POS
 let grupoSeleccionado = null;   // clave (en minúsculas) del grupo/solapa activa
@@ -655,7 +657,21 @@ export async function vaciarCarrito() {
 //   estadoInicial: 'PREPARACION', 'ENTREGADO_IMPAGO' o 'COMPLETADO' ("Cobrar y Entregar").
 //   cobro: null, o { idMedio, idCuenta } cuando viene de la ventana de cobro (solo al cobrar y entregar).
 // -----------------------------------------------------------------------------
+// Mientras un pedido se está guardando, un segundo toque (doble clic) no hace nada: así no se
+// crea el pedido dos veces ni se imprime dos veces. "finally" libera el bloqueo siempre.
+let guardandoPedido = false;
+
 export async function guardarPedido(estadoInicial, cobro = null) {
+  if (guardandoPedido) return;
+  guardandoPedido = true;
+  try {
+    await guardarPedidoSinBloqueo(estadoInicial, cobro);
+  } finally {
+    guardandoPedido = false;
+  }
+}
+
+async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   const keys = Object.keys(carrito);
   if (keys.length === 0) {
     mostrarNotificacion('Agregá al menos un producto al carrito.', 'warning');
@@ -728,6 +744,43 @@ export async function guardarPedido(estadoInicial, cobro = null) {
 
   setPedidoEditandoId(null);
   resetearPedido();
+
+  // Impresión automática (si este equipo la tiene activada en la pantalla "Impresión").
+  programarImpresion(data.id_pedido, estadoInicial, eraEdicion);
+}
+
+// -----------------------------------------------------------------------------
+// programarImpresion  (interna)
+//   Decide qué imprimir después de guardar, según las preferencias de este equipo:
+//     Solo preparar (pedido nuevo)      -> comanda
+//     Cobrar y entregar (pedido nuevo)  -> comanda y ticket
+//     Cobrar y entregar (pedido editado)-> solo el ticket (la comanda ya salió al prepararlo)
+//     Editar y dejar en preparación     -> nada
+//   La impresión se difiere un instante (setTimeout) y NO se espera: el pedido ya está
+//   guardado y la pantalla ya se limpió, así que un problema de la impresora no afecta nada.
+// -----------------------------------------------------------------------------
+function programarImpresion(idPedido, estado, eraEdicion) {
+  const pref = leerPreferenciasImpresion();
+  let comanda = false;
+  let ticket = false;
+
+  if (estado === 'PREPARACION') {
+    comanda = pref.comandaAlPreparar && !eraEdicion;
+  } else if (estado === 'COMPLETADO' && pref.imprimirAlCobrar) {
+    comanda = !eraEdicion;
+    ticket = true;
+  }
+  if (!comanda && !ticket) return;
+
+  setTimeout(async () => {
+    try {
+      const ok = await imprimirAutomatico(idPedido, { comanda, ticket });
+      if (!ok) throw new Error('No se encontró el pedido para imprimir.');
+    } catch (err) {
+      console.error('Error al imprimir automáticamente:', err);
+      mostrarNotificacion(`El pedido #${idPedido} se guardó, pero no se pudo imprimir. Podés reimprimirlo desde Gestión de Pedidos (botón Más).`, 'warning');
+    }
+  }, 150);
 }
 
 // -----------------------------------------------------------------------------
