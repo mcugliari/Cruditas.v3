@@ -1509,3 +1509,210 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
     font-size: .75rem; font-weight: 600; text-align: right;
   }
 }
+
+
+/* =============================================================================
+   ESTILO · ETAPA 9  (POS: ocupa la pantalla, panel de pedido con los botones de cobro
+   SIEMPRE a la vista, letra y botones más grandes para tablet y mostrador)
+   Solo CSS: no cambia pos.js ni index.html.
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   Todo va dentro de #sec-pedidos (la pantalla del POS), así no toca al resto del sistema.
+   ============================================================================= */
+
+/* Alto disponible para el POS = pantalla menos barra azul (58px) y márgenes (~50px).
+   Si en tu pantalla queda un hueco abajo o aparece scroll de página, ajustá SOLO el 108px.
+   (100dvh = alto "real" en tablets y celulares, descontando la barra del navegador.) */
+#sec-pedidos { --pos-alto: calc(100vh - 108px); }
+@supports (height: 100dvh) { #sec-pedidos { --pos-alto: calc(100dvh - 108px); } }
+
+/* ---------- A. Tamaños y letra (sirven en tablet, PC y celular) ---------- */
+
+/* Solapas y buscador */
+#sec-pedidos .pos-category-tab { min-height: 48px; font-size: 1rem; }
+#sec-pedidos .pos-main-card-header .input-group { width: 300px !important; max-width: 100%; }
+#sec-pedidos .pos-main-card-header .input-group .form-control,
+#sec-pedidos .pos-main-card-header .input-group .input-group-text { height: 44px; font-size: 1rem; }
+
+/* Tarjetas de producto: botones − / + de 44 px (para el dedo) y +6 / +12 más altos */
+#sec-pedidos .pos-qty-pill { grid-template-columns: 46px minmax(24px, 1fr) 46px; min-height: 52px; }
+#sec-pedidos .btn-pos-sq { width: 44px; height: 44px; font-size: 1.3rem; }
+#sec-pedidos .pos-cant-num { font-size: 1.1rem; }
+#sec-pedidos .pos-prod-price { font-size: 1.1rem; }
+#sec-pedidos .btn-docena-pill { min-height: 42px; font-size: .95rem; }
+#sec-pedidos .pos-btn-reset { width: 34px; height: 34px; }
+
+/* Panel del pedido: etiquetas, campos y avisos legibles */
+#sec-pedidos .pos-order-card label { font-size: .9rem; margin-bottom: 3px; }
+#sec-pedidos .pos-order-card .form-group { margin-bottom: 8px; }
+#sec-pedidos .pos-order-card .form-control { min-height: 44px; font-size: 1rem; }
+#sec-pedidos #label-ref-cliente small { color: #aab4c3 !important; font-size: .8rem; }   /* "(obligatorio, salvo...)" */
+#sec-pedidos .pos-order-dark .select2-container .select2-selection--single { height: 44px; }
+#sec-pedidos .pos-order-dark .select2-container--default .select2-selection--single .select2-selection__rendered {
+  line-height: 42px; font-size: 1rem; padding-left: 14px;
+}
+#sec-pedidos .pos-order-dark .select2-container--default .select2-selection--single .select2-selection__arrow { height: 42px; }
+#sec-pedidos .pos-order-dark .btn-limpiar-todo { min-height: 40px; font-size: .95rem; }
+
+/* Carrito: letra un poco mayor y botones − / + / tacho de 40 px */
+#sec-pedidos .pos-cart-line { padding: 7px 2px; column-gap: 10px; }
+#sec-pedidos .pos-cart-name { font-size: 1rem; }
+#sec-pedidos .pos-cart-sub { font-size: .85rem; }
+#sec-pedidos .pos-cart-btn { width: 40px; height: 40px; font-size: .8rem; }
+#sec-pedidos .pos-cart-n { min-width: 26px; font-size: 1.15rem; }
+#sec-pedidos .pos-cart-total { font-size: 1.05rem; }
+#sec-pedidos .pos-cart-del { width: 40px; height: 40px; font-size: 1.05rem; }
+
+/* Cada ítem en 2 filas (nombre arriba; cantidad y subtotal abajo) salvo en pantallas muy anchas */
+@media (max-width: 1499.98px) {
+  #sec-pedidos .pos-cart-line {
+    grid-template-columns: 46px minmax(0, 1fr) 40px;
+    grid-template-areas: "thumb info del" "thumb qty total";
+    row-gap: 4px;
+  }
+  #sec-pedidos .pos-cart-qty { justify-self: start; }
+  #sec-pedidos .pos-cart-total { justify-self: end; }
+}
+/* PC ancha: todo en una sola fila */
+@media (min-width: 1500px) {
+  #sec-pedidos .pos-cart-line { grid-template-columns: 46px minmax(0, 1fr) auto auto 40px; }
+}
+
+/* Totales: "Total de unidades" en una sola línea (ocupa menos alto) */
+#sec-pedidos .pos-totales { padding: 8px 14px; margin-bottom: 8px; align-items: center; }
+#sec-pedidos .pos-tot-unidades { flex-direction: row; align-items: baseline; gap: 10px; }
+#sec-pedidos .pos-totales span { font-size: .95rem; }
+#sec-pedidos .pos-order-dark #cant-total-items { font-size: 1.6rem; }
+#sec-pedidos .pos-desglose dt { font-size: .9rem; }
+#sec-pedidos .pos-total-cobrar { padding: 8px 16px; margin-bottom: 8px; gap: 14px; }
+#sec-pedidos .pos-total-cobrar span { font-size: .95rem; }
+#sec-pedidos .pos-order-dark #monto-total-pedido { font-size: clamp(1.9rem, 2.6vw, 2.5rem); }
+
+/* Botones de cobro: más altos y con letra legible ("Solo Preparar" tenía 12 px) */
+#sec-pedidos .btn-pos-action { min-height: 62px; }
+#sec-pedidos .btn-pos-action span { font-size: .95rem; margin-top: 2px; }
+#sec-pedidos .pos-order-dark .btn-pos-cobrar { min-height: 62px; }
+#sec-pedidos .pos-cobrar-texto { font-size: 1.05rem; }
+
+/* ---------- B. Tablet horizontal y PC: el POS ocupa la pantalla, sin scroll de página ---------- */
+@media (min-width: 768px) {
+  /* La fila mide lo que mide la pantalla; las dos columnas la llenan */
+  #sec-pedidos .pos-layout-row { height: var(--pos-alto); min-height: 440px; align-items: stretch; flex-wrap: nowrap; }
+  #sec-pedidos .pos-catalog-column { flex: 1 1 0; max-width: none; min-width: 0; }
+  #sec-pedidos .pos-order-column { flex: 0 0 clamp(340px, 34%, 500px); max-width: clamp(340px, 34%, 500px); min-width: 0; }
+  #sec-pedidos .pos-catalog-column,
+  #sec-pedidos .pos-order-column { display: flex; flex-direction: column; min-height: 0; }
+  #sec-pedidos .pos-main-card,
+  #sec-pedidos .pos-order-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+  #sec-pedidos .pos-order-card { position: static; }
+
+  /* Catálogo: encabezado y solapas fijos; solo las tarjetas se desplazan */
+  #sec-pedidos .pos-main-card-header,
+  #sec-pedidos .pos-category-tabs { flex: 0 0 auto; }
+  #sec-pedidos .pos-catalog-scroll { flex: 1 1 auto; min-height: 0; max-height: none; }
+  #sec-pedidos .pos-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* Panel del pedido: encabezado fijo y cuerpo en grilla. Las filas van numeradas A PROPÓSITO:
+     así, aunque "Nombre / Referencia" se oculte, el carrito sigue siendo la fila que se estira
+     y los totales y los botones quedan siempre pegados abajo. */
+  #sec-pedidos .pos-order-dark .pos-order-header { flex: 0 0 auto; padding: 12px 16px 8px; min-height: 0; }
+  #sec-pedidos .pos-order-dark > .card-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;   /* respaldo si la pantalla es muy baja */
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto auto minmax(120px, 1fr) auto auto auto;
+    column-gap: 10px;
+    padding: 0 16px 14px;
+  }
+  #sec-pedidos .pos-order-dark > .card-body > * { grid-column: 1 / -1; min-width: 0; }
+  #sec-pedidos .pos-order-dark > .card-body > .form-group:first-child { grid-row: 1; }      /* Cliente */
+  #sec-pedidos .pos-order-dark > .card-body > #group-ref-cliente { grid-row: 2; }           /* Nombre / Referencia */
+  #sec-pedidos .pos-order-dark > .card-body > .form-group:nth-child(3) { grid-row: 3; }     /* Lista de precios */
+  #sec-pedidos .pos-order-dark > .card-body > .pos-cart-items { grid-row: 4; min-height: 0; max-height: none; margin: 4px 0 10px; }
+  #sec-pedidos .pos-order-dark > .card-body > .pos-totales { grid-row: 5; }
+  #sec-pedidos .pos-order-dark > .card-body > .pos-total-cobrar { grid-row: 6; }
+  #sec-pedidos .pos-order-dark > .card-body > .pos-actions-container { grid-row: 7; }
+}
+
+/* 768–991 px: panel angosto, 2 columnas de productos (ya puestas arriba). 3 columnas desde 992 px; 4 desde 1280 px */
+@media (min-width: 992px)  { #sec-pedidos .pos-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { #sec-pedidos .pos-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Cliente y Lista de precios lado a lado cuando el panel es ancho (ahorra una fila entera) */
+@media (min-width: 1100px) {
+  #sec-pedidos .pos-order-dark > .card-body > .form-group:first-child { grid-column: 1; grid-row: 1; }
+  #sec-pedidos .pos-order-dark > .card-body > .form-group:nth-child(3) { grid-column: 2; grid-row: 1; }
+}
+
+/* Pantallas BAJAS (tablet apaisada con la barra del navegador): se compacta lo de arriba
+   para que entren más productos y más líneas del carrito */
+@media (min-width: 768px) and (max-height: 820px) {
+  #sec-pedidos .pos-main-card-header { padding: 10px 16px; min-height: 0; }
+  #sec-pedidos .pos-main-card-header .text-muted.small { display: none; }
+  #sec-pedidos .pos-category-tabs { padding: 8px 14px; }
+  #sec-pedidos .pos-card-producto { padding: 9px; gap: 6px; }
+  #sec-pedidos .pos-card-producto .pos-prod-title { min-height: 0; }
+  #sec-pedidos .pos-prod-img { aspect-ratio: 16 / 9; }
+  #sec-pedidos .pos-order-card .form-group { margin-bottom: 6px; }
+}
+
+/* Pantallas MUY bajas (tablet chica apaisada, ~700 px de alto o menos): Cliente y Lista lado a lado,
+   campos y totales más finos, para que los botones de cobro sigan a la vista sin hacer scroll */
+@media (min-width: 768px) and (max-height: 760px) {
+  #sec-pedidos .pos-order-dark > .card-body { grid-template-rows: auto auto auto minmax(84px, 1fr) auto auto auto; padding: 0 14px 12px; }
+  #sec-pedidos .pos-order-dark > .card-body > .form-group:first-child { grid-column: 1; grid-row: 1; }
+  #sec-pedidos .pos-order-dark > .card-body > .form-group:nth-child(3) { grid-column: 2; grid-row: 1; }
+  #sec-pedidos .pos-order-dark .pos-order-header { padding: 8px 14px 4px; }
+  #sec-pedidos .pos-order-dark .btn-limpiar-todo { min-height: 36px; }
+  #sec-pedidos .pos-order-card .form-control { min-height: 40px; font-size: .95rem; }
+  #sec-pedidos .pos-order-dark .select2-container .select2-selection--single { height: 40px; }
+  #sec-pedidos .pos-order-dark .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 38px; font-size: .95rem; padding-left: 10px; }
+  #sec-pedidos .pos-order-dark .select2-container--default .select2-selection--single .select2-selection__arrow { height: 38px; }
+  #sec-pedidos .pos-order-dark > .card-body > .pos-cart-items { margin: 2px 0 8px; }
+  #sec-pedidos .pos-order-dark > .card-body > .form-group:first-child label,
+  #sec-pedidos .pos-order-dark > .card-body > .form-group:nth-child(3) label { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #sec-pedidos .pos-totales { padding: 5px 12px; margin-bottom: 6px; }
+  #sec-pedidos .pos-order-dark #cant-total-items { font-size: 1.4rem; }
+  #sec-pedidos .pos-total-cobrar { padding: 5px 14px; margin-bottom: 6px; }
+  #sec-pedidos .pos-order-dark #monto-total-pedido { font-size: 1.8rem; }
+  #sec-pedidos .btn-pos-action,
+  #sec-pedidos .pos-order-dark .btn-pos-cobrar { min-height: 54px; }
+}
+
+
+/* =============================================================================
+   ESTILO · ETAPA 10
+   (a) POS en celular vertical: "Total a cobrar" y los botones de cobro quedan FIJOS abajo.
+   (b) Columna Acciones alineada a la derecha en Productos, Deuda a Proveedores y Proveedores.
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   ============================================================================= */
+
+/* (a) Solo celulares en vertical (menos de 768 px). En tablet y PC no cambia nada. */
+@media (max-width: 767.98px) {
+  /* Lugar libre al final de la pantalla para que la barra fija no tape el último contenido */
+  #sec-pedidos { padding-bottom: 150px; }
+
+  /* Botones: pegados al borde de abajo */
+  #sec-pedidos .pos-order-dark .pos-actions-container {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1030; margin: 0;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: #111827; border-top: 1px solid rgba(255, 255, 255, .12);
+  }
+  /* Total a cobrar: una sola línea, justo encima de los botones */
+  #sec-pedidos .pos-order-dark .pos-total-cobrar {
+    position: fixed; left: 0; right: 0; z-index: 1030; margin: 0;
+    bottom: calc(79px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 16px; border-radius: 12px 12px 0 0; gap: 0;
+  }
+  #sec-pedidos .pos-order-dark .pos-total-cobrar > i { display: none; }
+  #sec-pedidos .pos-order-dark .pos-total-cobrar > div {
+    display: flex; align-items: baseline; justify-content: space-between; width: 100%; gap: 12px;
+  }
+  #sec-pedidos .pos-order-dark .pos-total-cobrar span { display: inline; font-size: 1rem; }
+  #sec-pedidos .pos-order-dark #monto-total-pedido { font-size: 1.7rem; }
+}
+
+/* (b) Acciones a la derecha (el encabezado se cambia en index.html; acá van las celdas).
+   ":not([colspan])" deja centrados los mensajes "No hay ..." que ocupan toda la fila. */
+#tabla-productos-body > tr > td:last-child:not([colspan]),
+#tabla-deuda-body > tr > td:last-child:not([colspan]),
+#tabla-proveedores-body > tr > td:last-child:not([colspan]) { text-align: right !important; }

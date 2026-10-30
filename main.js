@@ -1,7 +1,7 @@
 import { asegurarSesion } from './auth.js';
 import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente, eliminarCliente, inicializarCrudClienteLista, guardarAsociacionClienteLista, editarAsociacion, eliminarAsociacion } from './clientes.js';
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
-import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial } from './listas.js';
+import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial, permitirSalirDeListas } from './listas.js';
 import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito, iniciarCobroPOS } from './pos.js';
 import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
 import { confirmarCobro, elegirMedioCobro, actualizarVueltoCobro } from './cobro.js';
@@ -25,7 +25,13 @@ import './menuMas.js';   // botón "Más" de las tablas (Pedidos y Cuentas): abr
 import { inicializarPreferencias } from './preferencias.js';
 
 // FUNCION DE NAVEGACIÓN
-export function navegarA(seccionId, elementoMenu) {
+export async function navegarA(seccionId, elementoMenu) {
+  // Si se sale de Listas de precios con precios sin guardar, se pregunta antes.
+  // Si la persona cancela, no se navega: la pantalla y el menú quedan como estaban.
+  const secListas = document.getElementById('sec-listas');
+  const estaEnListas = !!secListas && !secListas.classList.contains('d-none');
+  if (estaEnListas && seccionId !== 'listas' && !(await permitirSalirDeListas())) return;
+
   // Refresca el indicador de caja en cada cambio de sección. No se usa "await"
   // a propósito: se actualiza solo cuando llega la respuesta y no demora la navegación.
   actualizarIndicadorCaja();

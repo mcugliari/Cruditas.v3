@@ -316,6 +316,7 @@ export async function anularCierreCaja(idCierre) {
 
   mostrarNotificacion('Cierre anulado. Ya podés realizar el nuevo arqueo.');
   actualizarIndicadorCaja();   // el encabezado vuelve a "Caja abierta"
+  refrescarHistorialCierres();   // el historial (si ya estaba consultado) refleja la anulación
   await cargarResumenVentasDia();   // vuelve a calcular y mostrar el día
 }
 
@@ -384,6 +385,7 @@ export function inicializarCierreCaja() {
 
       mostrarNotificacion(`¡Cierre de caja guardado con éxito! (${textoDif})`);
       actualizarIndicadorCaja();   // el encabezado pasa a "Caja cerrada"
+      refrescarHistorialCierres();   // el historial (si ya estaba consultado) muestra el cierre nuevo
       $('#modalCierreCaja').modal('hide');
 
     } catch (err) {
@@ -419,6 +421,19 @@ export async function inicializarHistorialCierres() {
   if (inputHasta && !inputHasta.value) inputHasta.value = hoy;
 
   await cargarTablaHistorialCierres();
+}
+
+
+// -----------------------------------------------------------------------------
+// refrescarHistorialCierres  (interna)
+//   Vuelve a cargar la tabla del historial después de cerrar o anular un cierre.
+//   Solo si el historial ya se consultó (tiene las dos fechas puestas); si todavía no se
+//   abrió, no hace falta: se carga solo al entrar a la sección. Sin "await": no frena nada.
+// -----------------------------------------------------------------------------
+function refrescarHistorialCierres() {
+  const desde = document.getElementById('filtro-cierre-desde')?.value;
+  const hasta = document.getElementById('filtro-cierre-hasta')?.value;
+  if (desde && hasta) cargarTablaHistorialCierres();
 }
 
 

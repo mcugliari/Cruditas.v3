@@ -15,6 +15,13 @@ let fotoIniciada = false;
 let urlVistaLocal = null;
 
 
+// Categorías internas del sistema (Bonificación: id 99 / grupo SISTEMA). No se muestran ni se editan
+// en este ABM: contienen el producto 999 "Descuento por Docena". Mismo criterio que pos.js y listas.js.
+function esCategoriaSistema(cat) {
+  if (!cat) return false;
+  return Number(cat.id) === 99 || String(cat.grupo || '').trim().toUpperCase() === 'SISTEMA';
+}
+
 // Acepta solo direcciones http(s); cualquier otra cosa cuenta como "sin foto".
 function urlHttp(valor) {
   const u = String(valor || '').trim();
@@ -119,24 +126,55 @@ async function subirFoto(archivo) {
 }
 
 
+// Si la foto vive en NUESTRO bucket, devuelve su ruta dentro del bucket; si es una dirección
+// externa (pegada a mano) devuelve null: esas no se tocan.
+function rutaEnBucket(url) {
+  const marca = `/storage/v1/object/public/${BUCKET_FOTOS}/`;
+  const u = String(url || '');
+  const i = u.indexOf(marca);
+  if (i === -1) return null;
+  try { return decodeURIComponent(u.slice(i + marca.length).split('?')[0]); }
+  catch { return null; }
+}
+
+// Borra del bucket una foto que quedó sin usar (se reemplazó, se quitó o se eliminó el producto).
+// Es "mejor esfuerzo": si algo falla, solo se avisa en la consola y NO se afecta el guardado.
+// Antes de borrar se verifica que ningún otro producto use la misma dirección.
+async function borrarFotoVieja(urlVieja) {
+  const ruta = rutaEnBucket(urlVieja);
+  if (!ruta) return;
+  try {
+    const { data: enUso } = await supabaseAdmin
+      .from('TB_BPRODUCTOS').select('id').eq('imagen_url', urlVieja).limit(1);
+    if (enUso && enUso.length > 0) return;   // otro producto la sigue usando
+    const { error } = await supabaseAdmin.storage.from(BUCKET_FOTOS).remove([ruta]);
+    if (error) console.warn('No se pudo borrar la foto vieja del bucket:', error.message);
+  } catch (e) {
+    console.warn('No se pudo borrar la foto vieja del bucket:', e);
+  }
+}
+
+
+// Llena el select de categorías del formulario (sin las categorías del sistema).
+function pintarSelectCategorias(categorias) {
+  const select = document.getElementById('prod-categoria');
+  if (!select) return;
+  select.innerHTML = '<option value="">-- Seleccionar Categoría --</option>' +
+    categorias.filter(c => !esCategoriaSistema(c))
+      .map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+}
+
+// El caché guarda TODAS las categorías (pos.js las necesita); el filtro se aplica solo al dibujar el select.
 export async function cargarCategoriasSelect() {
   if (cacheCategorias && cacheCategorias.length > 0) {
-    const select = document.getElementById('prod-categoria');
-    if (select) {
-      select.innerHTML = '<option value="">-- Seleccionar Categoría --</option>' + 
-        cacheCategorias.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
-    }
+    pintarSelectCategorias(cacheCategorias);
     return;
   }
 
   const { data: categorias, error } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('nombre', { ascending: true });
   if (!error && categorias) {
     setCacheCategorias(categorias);
-    const select = document.getElementById('prod-categoria');
-    if (select) {
-      select.innerHTML = '<option value="">-- Seleccionar Categoría --</option>' + 
-        categorias.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
-    }
+    pintarSelectCategorias(categorias);
   }
 }
 
@@ -146,7 +184,7 @@ export async function cargarProductos() {
 
   const { data: productos, error } = await supabaseAdmin
     .from('TB_BPRODUCTOS')
-    .select('id, nombre, m_permite_docena, id_categoria, imagen_url, orden, TB_BCATEGORIAS ( nombre )')
+    .select('id, nombre, m_permite_docena, id_categoria, imagen_url, orden, TB_BCATEGORIAS ( nombre, grupo )')
     .order('id_categoria', { ascending: true })
     .order('orden', { ascending: true, nullsFirst: false }) // los que tienen orden primero; sin orden al final
     .order('nombre', { ascending: true });
@@ -155,14 +193,18 @@ export async function cargarProductos() {
     tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">Error: ${esc(error.message)}</td></tr>`;
     return;
   }
-  if (!productos || productos.length === 0) {
+  // Se ocultan los productos de las categorías del sistema (el 999 "Descuento por Docena"): no se editan ni se borran desde acá.
+  const visibles = (productos || []).filter(
+    p => !esCategoriaSistema({ id: p.id_categoria, grupo: p.TB_BCATEGORIAS?.grupo })
+  );
+  if (visibles.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No hay productos registrados.</td></tr>`;
     return;
   }
 
-  productosPorId = new Map(productos.map(p => [Number(p.id), p]));
+  productosPorId = new Map(visibles.map(p => [Number(p.id), p]));
 
-  tbody.innerHTML = productos.map(prod => {
+  tbody.innerHTML = visibles.map(prod => {
     const foto = urlHttp(prod.imagen_url);
     return `
     <tr>
@@ -220,6 +262,8 @@ export async function guardarProducto(event) {
   const nombre = document.getElementById('prod-nombre').value;
   const id_categoria = document.getElementById('prod-categoria').value;
   const m_permite_docena = document.getElementById('prod-permite-docena').checked;
+  // Foto que tenía el producto antes de guardar (solo al editar): si cambia, la vieja se borra del bucket.
+  const fotoAnterior = id ? (productosPorId.get(Number(id))?.imagen_url || null) : null;
 
   // Desactivamos el botón: la subida de la foto tarda y un doble clic crearía el producto dos veces.
   const boton = event.submitter || document.querySelector('#form-producto [type="submit"]');
@@ -261,6 +305,7 @@ export async function guardarProducto(event) {
     else {
       $('#modal-producto').modal('hide');
       mostrarNotificacion(id ? 'Producto actualizado.' : 'Producto creado.');
+      if (fotoAnterior && fotoAnterior !== imagen_url) borrarFotoVieja(fotoAnterior);   // sin await: no demora nada
       cargarProductos();
     }
   } finally {
@@ -276,10 +321,12 @@ export async function eliminarProducto(id, nombre) {
     peligro: true
   });
   if (ok) {
+    const fotoDelProducto = productosPorId.get(Number(id))?.imagen_url || null;
     const { error } = await supabaseAdmin.from('TB_BPRODUCTOS').delete().eq('id', id);
     if (error) mostrarNotificacion('Error al eliminar: ' + error.message, 'danger');
     else {
       mostrarNotificacion('Producto eliminado.');
+      if (fotoDelProducto) borrarFotoVieja(fotoDelProducto);
       cargarProductos();
     }
   }

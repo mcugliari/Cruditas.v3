@@ -26,6 +26,27 @@ function hayCambiosSinGuardar() {
   return document.querySelectorAll('#tabla-precios-categorias-body tr.fila-modificada').length > 0;
 }
 
+// -----------------------------------------------------------------------------
+// permitirSalirDeListas
+//   La llama main.js (navegarA) cuando se quiere ir a OTRA sección estando en Listas de precios.
+//   Sin cambios sin guardar devuelve true (se puede salir). Con cambios, pregunta:
+//     - "Sí, descartar": los precios tocados se descartan (la tabla se vuelve a cargar con lo
+//       guardado, para que al volver no queden valores a medias) y devuelve true.
+//     - Cancelar: devuelve false y la pantalla queda como estaba.
+// -----------------------------------------------------------------------------
+export async function permitirSalirDeListas() {
+  if (!hayCambiosSinGuardar()) return true;
+  const descartar = await confirmarAccion({
+    titulo: 'Precios sin guardar',
+    mensaje: 'Cambiaste precios y todavía no los guardaste. Si salís de esta pantalla se pierden. ¿Querés descartarlos?',
+    textoConfirmar: 'Sí, descartar',
+    peligro: true
+  });
+  if (!descartar) return false;
+  cargarMatrizPrecios();   // sin await: deja la tabla con lo guardado mientras se cambia de pantalla
+  return true;
+}
+
 // Marca en amarillo (y con la etiqueta "Sin guardar") las filas cuyo precio se tocó.
 // Se registra UNA sola vez: la tabla se redibuja, pero el <tbody> es siempre el mismo.
 function iniciarMarcaCambios() {
