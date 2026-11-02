@@ -3,8 +3,10 @@ import { iniciarRoles, puedeVerSeccion } from './roles.js';
 import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente, eliminarCliente, inicializarCrudClienteLista, guardarAsociacionClienteLista, editarAsociacion, eliminarAsociacion } from './clientes.js';
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial, permitirSalirDeListas } from './listas.js';
-import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito, iniciarCobroPOS } from './pos.js';
-import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido } from './pedidos.js';
+import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito, iniciarCobroPOS, cancelarEdicionPOS } from './pos.js';
+import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido, abrirListadoPedidos, cambiarModoPedidos, marcarPedidoVisto, marcarTodosLosPedidosVistos } from './pedidos.js';
+import { iniciarReloj } from './reloj.js';   // fecha y hora de la barra superior
+import { iniciarAvisoPedidos } from './avisoPedidos.js';   // aviso de pedidos web nuevos + contador de pendientes
 import { confirmarCobro, elegirMedioCobro, actualizarVueltoCobro } from './cobro.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
 import { cargarCompras, verDetalleCompra, anularCompraAbierta, pagarCompraAbierta, pagarCompraDesdeLista, anularPagoDeCompra } from './compras.js';
@@ -71,7 +73,7 @@ export async function navegarA(seccionId, elementoMenu) {
   } else if (seccionId === 'pedidos') {
     inicializarPOS();
   } else if (seccionId === 'pedidos-dia') {
-    cargarTablaPedidos();
+    abrirListadoPedidos();   // siempre abre en la vista Pendientes (con botón para pasar a Historial)
   } else if (seccionId === 'resumen-ventas') {
     inicializarReporteVentas();
   } else if (seccionId === 'historial-caja') {
@@ -109,6 +111,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 1. Navegación inicial a Pedidos
   const primerLink = document.querySelector('#menu-navegacion .nav-link[data-section="pedidos"]');
   navegarA('pedidos', primerLink);
+
+  iniciarReloj();
+
+  // 1 bis. Aviso de pedidos web nuevos: campana arriba, sonido y contador de pendientes.
+  // Al tocar la campana o el cartel se abre el listado en Pendientes.
+  iniciarAvisoPedidos({
+    alIrAPedidos: () => navegarA('pedidos-dia', document.querySelector('#menu-navegacion .nav-link[data-section="pedidos-dia"]'))
+  });
 
   // 2. Event Listener Menú Lateral
   document.getElementById('menu-navegacion')?.addEventListener('click', (e) => {
@@ -186,11 +196,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       else guardarPedido(estado);
     } else if (action === 'vaciar-carrito') {
       vaciarCarrito();
+    } else if (action === 'cancelar-edicion') {
+      cancelarEdicionPOS();
     }
   });
 
   // 4. Event Listeners Pedidos
   document.getElementById('btn-actualizar-pedidos')?.addEventListener('click', cargarTablaPedidos);
+  // Vista Pendientes / Historial del listado
+  document.getElementById('btn-modo-pendientes')?.addEventListener('click', () => cambiarModoPedidos('PENDIENTES'));
+  document.getElementById('btn-modo-historial')?.addEventListener('click', () => cambiarModoPedidos('HISTORIAL'));
+  document.getElementById('btn-actualizar-pendientes')?.addEventListener('click', cargarTablaPedidos);
+  document.getElementById('btn-marcar-vistos')?.addEventListener('click', marcarTodosLosPedidosVistos);
   document.getElementById('filtro-fecha-desde')?.addEventListener('change', cargarTablaPedidos);
   document.getElementById('filtro-fecha-hasta')?.addEventListener('change', cargarTablaPedidos);
   document.getElementById('filtro-estado-pedido')?.addEventListener('change', cargarTablaPedidos);
@@ -211,6 +228,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       editarPedido(id);
     } else if (action === 'ver-detalle') {
       verDetallePedido(id);
+    } else if (action === 'marcar-visto') {
+      marcarPedidoVisto(id);
     }
   });
 

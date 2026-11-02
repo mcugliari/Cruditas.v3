@@ -1,0 +1,126 @@
+/* =============================================================================
+   AVISO DE PEDIDOS NUEVOS (avisoPedidos.js) + vista "Pendientes"
+   Archivo aparte para no tocar styles.css. Se enlaza en index.html después de styles.css.
+   ============================================================================= */
+
+/* ---- Campana de la barra superior ------------------------------------------ */
+.aviso-pedidos {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .3rem .7rem;
+  border: 1px solid rgba(255, 255, 255, .35);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.aviso-pedidos:hover { background: rgba(255, 255, 255, .12); }
+.aviso-pedidos .aviso-pedidos-texto { font-weight: 600; }
+.aviso-pedidos.hay-nuevos {
+  background: #dc3545;
+  border-color: #dc3545;
+}
+.aviso-pedidos.hay-nuevos i { animation: aviso-campana 1.2s ease-in-out infinite; transform-origin: 50% 0; }
+
+@keyframes aviso-campana {
+  0%, 60%, 100% { transform: rotate(0); }
+  10%, 30%, 50% { transform: rotate(14deg); }
+  20%, 40%      { transform: rotate(-14deg); }
+}
+
+.btn-aviso-sonido {
+  color: #fff;
+  opacity: .9;
+  padding: .25rem .5rem;
+}
+.btn-aviso-sonido.silenciado { opacity: .55; }
+
+/* ---- Cartel flotante --------------------------------------------------------- */
+.cartel-pedido-nuevo {
+  position: fixed;
+  top: 66px;
+  right: 14px;
+  z-index: 2000;
+  width: 300px;
+  max-width: calc(100vw - 28px);
+  padding: .75rem .85rem;
+  background: #fff;
+  color: #212529;
+  border-left: 5px solid #dc3545;
+  border-radius: 6px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.cartel-pedido-nuevo.visible { opacity: 1; transform: none; pointer-events: auto; }
+.cartel-pedido-nuevo .cartel-cabecera { display: flex; justify-content: space-between; align-items: center; }
+.cartel-pedido-nuevo .cartel-cerrar {
+  border: 0; background: transparent; font-size: 1.4rem; line-height: 1; color: #6c757d; cursor: pointer;
+}
+.cartel-pedido-nuevo .cartel-linea { font-size: .92rem; margin-top: .25rem; }
+
+/* ---- Vista Pendientes ------------------------------------------------------- */
+.pedidos-selector-modo .btn { font-weight: 700; }
+.fila-grupo-estado td {
+  background: #eef1f4;
+  font-weight: 700;
+  font-size: .9rem;
+  padding-top: .45rem;
+  padding-bottom: .45rem;
+}
+tr.fila-pedido-nuevo > td { background-color: #fff3cd; }
+.fecha-atrasada { color: #dc3545; font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+  .aviso-pedidos.hay-nuevos i { animation: none; }
+  .cartel-pedido-nuevo { transition: none; }
+}
+
+/* =============================================================================
+   MODO EDICIÓN DEL POS (pos.js → actualizarModoEdicionPOS)
+   Mientras se edita un pedido existente el panel se tiñe de ámbar y el título dice
+   "Editando pedido #N". No cambia el tamaño de nada: solo colores y un renglón de texto.
+   ============================================================================= */
+.pos-order-title h3 small {
+  display: block;
+  font-size: .72rem;
+  font-weight: 600;
+  line-height: 1.25;
+  opacity: .92;
+}
+.pos-order-card.pos-modo-edicion {
+  box-shadow: 0 0 0 3px #f59e0b;
+}
+.pos-order-card.pos-modo-edicion .pos-order-header {
+  background: #b45309;
+  color: #fff;
+}
+.pos-order-card.pos-modo-edicion .pos-order-header h3 {
+  color: #fff;
+}
+
+/* =============================================================================
+   RELOJ DE LA BARRA SUPERIOR (reloj.js): "Lun 2 Nov 2026 | 14:32"
+   ============================================================================= */
+.nav-reloj {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-size: .85rem;
+  color: rgba(255, 255, 255, .85);
+  font-variant-numeric: tabular-nums;   /* los dígitos no "bailan" al cambiar la hora */
+}
+.nav-reloj-fecha {
+  padding-right: .6rem;
+  margin-right: .6rem;
+  border-right: 1px solid rgba(255, 255, 255, .3);
+}
+.nav-reloj-hora {
+  font-weight: 700;
+  color: #fff;
+}

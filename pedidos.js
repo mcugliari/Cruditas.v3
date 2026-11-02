@@ -1,12 +1,13 @@
 import { supabaseAdmin } from './config.js';
-import { setPedidoEditandoId, setCarrito } from './state.js';
+import { setPedidoEditandoId, setPedidoEditandoEstado, setCarrito } from './state.js';
 import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
-import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo } from './pos.js';
+import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarModoEdicionPOS } from './pos.js';
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
 import { btnFila, itemMenuMas } from './menuMas.js';   // botones de la fila y menú "Más"
 import { puedeAlMenos } from './roles.js';   // el rol decide si se ve "Anular pedido"
+import { esPedidoNuevoSinVer, marcarVistos, marcarTodosVistos } from './avisoPedidos.js';   // "NUEVO" / visto de los pedidos web
 
 // Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
 // nombre_referencia y observaciones los escribe un cliente anónimo desde la web.
@@ -19,7 +20,44 @@ function esc(valor) {
 // Variable para conservar el id del pedido que se está viendo en el modal
 let pedidoActualModalId = null;
 
+// Vista del listado: 'PENDIENTES' (la de siempre al entrar: sin filtros, solo lo que falta
+// hacer) o 'HISTORIAL' (la tabla con filtros de fecha, estado y búsqueda).
+let modoPedidos = 'PENDIENTES';
+let numeroConsultaPendientes = 0;   // descarta respuestas viejas si se cambia de vista a mitad de carga
+const ESTADOS_PENDIENTES = ['PREPARACION', 'PREPARADO', 'ENTREGADO_IMPAGO'];   // los que NO son COMPLETADO ni ANULADO
+const COLUMNAS_PEDIDO = 'id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre)';
+
+// Entrar al listado desde el menú (o desde la campana): siempre arranca en Pendientes.
+export function abrirListadoPedidos() {
+  cambiarModoPedidos('PENDIENTES');
+}
+
+export function cambiarModoPedidos(modo) {
+  modoPedidos = (modo === 'HISTORIAL') ? 'HISTORIAL' : 'PENDIENTES';
+  const esPend = modoPedidos === 'PENDIENTES';
+
+  document.getElementById('btn-modo-pendientes')?.classList.toggle('active', esPend);
+  document.getElementById('btn-modo-pendientes')?.classList.toggle('btn-warning', esPend);
+  document.getElementById('btn-modo-pendientes')?.classList.toggle('btn-outline-secondary', !esPend);
+  document.getElementById('btn-modo-historial')?.classList.toggle('active', !esPend);
+  document.getElementById('btn-modo-historial')?.classList.toggle('btn-info', !esPend);
+  document.getElementById('btn-modo-historial')?.classList.toggle('btn-outline-secondary', esPend);
+
+  document.getElementById('filtros-historial')?.classList.toggle('d-none', esPend);
+  document.getElementById('kpis-historial')?.classList.toggle('d-none', esPend);
+  document.getElementById('resumen-pendientes')?.classList.toggle('d-none', !esPend);
+  document.getElementById('btn-actualizar-pendientes')?.classList.toggle('d-none', !esPend);
+  if (!esPend) document.getElementById('btn-marcar-vistos')?.classList.add('d-none');
+
+  return cargarTablaPedidos();
+}
+
 export async function cargarTablaPedidos() {
+  if (modoPedidos === 'PENDIENTES') {
+    await cargarPendientes();
+    return;
+  }
+
   const inputDesde = document.getElementById('filtro-fecha-desde');
   const inputHasta = document.getElementById('filtro-fecha-hasta');
   const inputBuscar = document.getElementById('filtro-buscar-pedido');
@@ -92,111 +130,224 @@ export async function cargarTablaPedidos() {
     return;
   }
 
-  tbody.innerHTML = pedidosFiltrados.map(p => {
-    const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
-    const medioBase = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : '';   // sin medio = todavía no se cobró
-    const cuentaPago = p.TB_BCUENTAS?.nombre;
-    // La cuenta se agrega solo si aporta algo (para efectivo, medio y cuenta se llaman igual)
-    const mostrarCuenta = cuentaPago && cuentaPago.toLowerCase() !== medioBase.toLowerCase();
-    // Celda armada como HTML (los textos pasan por esc()): el medio en su insignia y, debajo,
-    // la cuenta en letra chica y gris. Sin medio (pedido sin cobrar) se muestra un guion.
-    const medioPago = medioBase
-      ? `<small class="badge badge-light border">${esc(medioBase)}</small>`
-        + (mostrarCuenta ? `<div class="small text-muted">${esc(cuentaPago)}</div>` : '')
-      : '<span class="text-muted">-</span>';
-    // Marca del canal de venta (solo se muestra si no es MOSTRADOR, para no saturar la tabla)
-    const badgeCanal = (p.canal && p.canal !== 'MOSTRADOR')
-      ? ` <span class="badge badge-dark ml-1">${esc(p.canal)}</span>`
-      : '';
-    const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    const htmlObservaciones = p.observaciones 
-    ? `<div class="mt-1"><span class="badge badge-warning text-dark border"><i class="fas fa-comment-alt mr-1"></i> ${esc(p.observaciones)}</span></div>` 
+  tbody.innerHTML = pedidosFiltrados.map(filaPedidoHtml).join('');
+}
+
+// Una fila de la tabla de pedidos. La usan las dos vistas (Pendientes e Historial).
+function filaPedidoHtml(p) {
+  const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
+  const medioBase = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : '';   // sin medio = todavía no se cobró
+  const cuentaPago = p.TB_BCUENTAS?.nombre;
+  // La cuenta se agrega solo si aporta algo (para efectivo, medio y cuenta se llaman igual)
+  const mostrarCuenta = cuentaPago && cuentaPago.toLowerCase() !== medioBase.toLowerCase();
+  // Celda armada como HTML (los textos pasan por esc()): el medio en su insignia y, debajo,
+  // la cuenta en letra chica y gris. Sin medio (pedido sin cobrar) se muestra un guion.
+  const medioPago = medioBase
+    ? `<small class="badge badge-light border">${esc(medioBase)}</small>`
+      + (mostrarCuenta ? `<div class="small text-muted">${esc(cuentaPago)}</div>` : '')
+    : '<span class="text-muted">-</span>';
+  // Marca del canal de venta (solo se muestra si no es MOSTRADOR, para no saturar la tabla)
+  const badgeCanal = (p.canal && p.canal !== 'MOSTRADOR')
+    ? ` <span class="badge badge-dark ml-1">${esc(p.canal)}</span>`
     : '';
+  const nuevoSinVer = esPedidoNuevoSinVer(p);   // pedido web que este equipo todavía no vio
+  const etiquetaNuevo = nuevoSinVer ? ' <span class="badge badge-danger ml-1">NUEVO</span>' : '';
+  const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  const htmlObservaciones = p.observaciones 
+  ? `<div class="mt-1"><span class="badge badge-warning text-dark border"><i class="fas fa-comment-alt mr-1"></i> ${esc(p.observaciones)}</span></div>` 
+  : '';
 
-    const fechaPedido = new Date(`${p.fecha.split('T')[0]}T00:00:00`).toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+  const fechaPedido = new Date(`${p.fecha.split('T')[0]}T00:00:00`).toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
 
-    let badgeClass = 'badge-secondary';
-    let estadoTexto = p.estado;
+  // En Pendientes, un pedido de un día anterior se marca en rojo (se quedó sin cerrar)
+  const fechaAtrasada = modoPedidos === 'PENDIENTES' && p.fecha.split('T')[0] < obtenerFechaActualISO();
 
-    if (p.estado === 'PREPARACION') { badgeClass = 'badge-info'; estadoTexto = '⏳ En Preparación'; }
-    if (p.estado === 'PREPARADO') { badgeClass = 'badge-primary'; estadoTexto = '🔔 Preparado'; }
-    if (p.estado === 'ENTREGADO_IMPAGO') { badgeClass = 'badge-warning'; estadoTexto = '📦 Entregado (Impago)'; }
-    if (p.estado === 'COMPLETADO') { badgeClass = 'badge-success'; estadoTexto = '✅ Completado'; }
-    if (p.estado === 'ANULADO') { badgeClass = 'badge-danger'; estadoTexto = '🚫 Anulado'; }
+  let badgeClass = 'badge-secondary';
+  let estadoTexto = p.estado;
 
-    // BOTONES DE LA FILA
-    // A la vista, con texto: solo lo que hace avanzar el pedido (preparar, cobrar, entregar).
-    // Todo lo demás va dentro del menú "Más". Los data-action y las clases btn-print-*
-    // son los de siempre, así que main.js y el escuchador de impresión (al final de este
-    // archivo) siguen funcionando sin cambios. El menú "Más" se abre con menuMas.js.
-    const idPed = p.id;
-    const cambiar = (estado) => `data-action="cambiar-estado" data-id="${idPed}" data-estado="${estado}"`;
-    const accionVer = `data-action="ver-detalle" data-id="${idPed}"`;
-    const visibles = [];
-    const enMenu = [];
+  if (p.estado === 'PREPARACION') { badgeClass = 'badge-info'; estadoTexto = '⏳ En Preparación'; }
+  if (p.estado === 'PREPARADO') { badgeClass = 'badge-primary'; estadoTexto = '🔔 Preparado'; }
+  if (p.estado === 'ENTREGADO_IMPAGO') { badgeClass = 'badge-warning'; estadoTexto = '📦 Entregado (Impago)'; }
+  if (p.estado === 'COMPLETADO') { badgeClass = 'badge-success'; estadoTexto = '✅ Completado'; }
+  if (p.estado === 'ANULADO') { badgeClass = 'badge-danger'; estadoTexto = '🚫 Anulado'; }
 
-    if (p.estado === 'PREPARACION') {
-      visibles.push(btnFila('btn-accion-pagar', 'fa-box-open', 'Marcar preparado', cambiar('PREPARADO')));
-    } else if (p.estado === 'PREPARADO') {
-      visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Cobrar y entregar', cambiar('COMPLETADO')));
-      visibles.push(btnFila('btn-accion-aviso', 'fa-truck', 'Entregar sin cobrar', cambiar('ENTREGADO_IMPAGO')));
-    } else if (p.estado === 'ENTREGADO_IMPAGO') {
-      visibles.push(btnFila('btn-accion-cobrar', 'fa-dollar-sign', 'Registrar cobro', cambiar('COMPLETADO')));
-    } else {
-      // COMPLETADO o ANULADO: no queda nada por hacer, se deja a la vista la consulta
-      visibles.push(btnFila('btn-accion-ver', 'fa-eye', 'Ver detalle', accionVer));
-    }
+  // BOTONES DE LA FILA
+  // A la vista, con texto: solo lo que hace avanzar el pedido (preparar, cobrar, entregar).
+  // Todo lo demás va dentro del menú "Más". Los data-action y las clases btn-print-*
+  // son los de siempre, así que main.js y el escuchador de impresión (al final de este
+  // archivo) siguen funcionando sin cambios. El menú "Más" se abre con menuMas.js.
+  const idPed = p.id;
+  const cambiar = (estado) => `data-action="cambiar-estado" data-id="${idPed}" data-estado="${estado}"`;
+  const accionVer = `data-action="ver-detalle" data-id="${idPed}"`;
+  const visibles = [];
+  const enMenu = [];
 
-    // Menú "Más" (el orden es el que se ve en pantalla)
-    if (visibles.length > 0 && p.estado !== 'COMPLETADO' && p.estado !== 'ANULADO') {
-      enMenu.push(itemMenuMas('fa-eye', 'Ver detalle', accionVer));
-    }
-    if (p.estado === 'PREPARACION' || p.estado === 'PREPARADO') {
-      enMenu.push(itemMenuMas('fa-edit', 'Editar pedido', `data-action="editar-pedido" data-id="${idPed}"`));
-    }
-    enMenu.push(itemMenuMas('fa-receipt', 'Comanda de cocina', `data-id="${idPed}"`, 'btn-print-cocina'));
-    enMenu.push(itemMenuMas('fa-print', 'Ticket del cliente', `data-id="${idPed}"`, 'btn-print-cliente'));
-    // Anular un pedido: solo Encargado y Dueño (la base también lo verifica).
-    if (p.estado !== 'ANULADO' && puedeAlMenos('ENCARGADO')) {
-      enMenu.push('<div class="menu-mas-sep" role="separator"></div>');
-      enMenu.push(itemMenuMas('fa-ban', 'Anular pedido', cambiar('ANULADO'), 'menu-mas-peligro'));
-    }
+  if (p.estado === 'PREPARACION') {
+    visibles.push(btnFila('btn-accion-pagar', 'fa-box-open', 'Marcar preparado', cambiar('PREPARADO')));
+  } else if (p.estado === 'PREPARADO') {
+    visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Cobrar y entregar', cambiar('COMPLETADO')));
+    visibles.push(btnFila('btn-accion-aviso', 'fa-truck', 'Entregar sin cobrar', cambiar('ENTREGADO_IMPAGO')));
+  } else if (p.estado === 'ENTREGADO_IMPAGO') {
+    visibles.push(btnFila('btn-accion-cobrar', 'fa-dollar-sign', 'Registrar cobro', cambiar('COMPLETADO')));
+  } else {
+    // COMPLETADO o ANULADO: no queda nada por hacer, se deja a la vista la consulta
+    visibles.push(btnFila('btn-accion-ver', 'fa-eye', 'Ver detalle', accionVer));
+  }
 
-    const botonesAccion = `
-      <div class="acciones-fila">
-        ${visibles.join('')}
-        <div class="mas-wrap">
-          <button type="button" class="btn btn-accion btn-accion-mas" aria-haspopup="true" aria-expanded="false" title="Más acciones">
-            Más <i class="fas fa-chevron-down"></i>
-          </button>
-          <div class="menu-mas" role="menu">${enMenu.join('')}</div>
-        </div>
+  // Pedido web nuevo: botón para marcarlo como visto sin tener que abrirlo
+  if (nuevoSinVer) {
+    visibles.push(btnFila('btn-accion-ver', 'fa-eye', 'Visto', `data-action="marcar-visto" data-id="${idPed}"`));
+  }
+
+  // Menú "Más" (el orden es el que se ve en pantalla)
+  if (visibles.length > 0 && p.estado !== 'COMPLETADO' && p.estado !== 'ANULADO') {
+    enMenu.push(itemMenuMas('fa-eye', 'Ver detalle', accionVer));
+  }
+  if (p.estado === 'PREPARACION' || p.estado === 'PREPARADO') {
+    enMenu.push(itemMenuMas('fa-edit', 'Editar pedido', `data-action="editar-pedido" data-id="${idPed}"`));
+  }
+  enMenu.push(itemMenuMas('fa-receipt', 'Comanda de cocina', `data-id="${idPed}"`, 'btn-print-cocina'));
+  enMenu.push(itemMenuMas('fa-print', 'Ticket del cliente', `data-id="${idPed}"`, 'btn-print-cliente'));
+  // Anular un pedido: solo Encargado y Dueño (la base también lo verifica).
+  if (p.estado !== 'ANULADO' && puedeAlMenos('ENCARGADO')) {
+    enMenu.push('<div class="menu-mas-sep" role="separator"></div>');
+    enMenu.push(itemMenuMas('fa-ban', 'Anular pedido', cambiar('ANULADO'), 'menu-mas-peligro'));
+  }
+
+  const botonesAccion = `
+    <div class="acciones-fila">
+      ${visibles.join('')}
+      <div class="mas-wrap">
+        <button type="button" class="btn btn-accion btn-accion-mas" aria-haspopup="true" aria-expanded="false" title="Más acciones">
+          Más <i class="fas fa-chevron-down"></i>
+        </button>
+        <div class="menu-mas" role="menu">${enMenu.join('')}</div>
       </div>
-    `;
+    </div>
+  `;
 
-    return `
-      <tr>
-        <td class="font-weight-bold">#${p.id}</td>
-        <td>${fechaPedido} ${hora} hs</td>
-        <td>
-          <div class="font-weight-bold">${esc(clienteNombre)}${badgeCanal}</div>
-          ${htmlObservaciones}
-        </td>
-        <td>${medioPago}</td>
-        <td class="text-right font-weight-bold">$${(p.importe_total || 0).toLocaleString('es-AR')}</td>
-        <td class="text-center"><span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span></td>
-        <td class="text-center">${botonesAccion}</td>
-      </tr>
-    `;
+  return `
+    <tr class="${nuevoSinVer ? 'fila-pedido-nuevo' : ''}">
+      <td class="font-weight-bold">#${p.id}</td>
+      <td class="${fechaAtrasada ? 'fecha-atrasada' : ''}">${fechaPedido} ${hora} hs</td>
+      <td>
+        <div class="font-weight-bold">${esc(clienteNombre)}${badgeCanal}${etiquetaNuevo}</div>
+        ${htmlObservaciones}
+      </td>
+      <td>${medioPago}</td>
+      <td class="text-right font-weight-bold">$${(p.importe_total || 0).toLocaleString('es-AR')}</td>
+      <td class="text-center"><span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span></td>
+      <td class="text-center">${botonesAccion}</td>
+    </tr>
+  `;
+}
+
+// =============================================================================
+// VISTA "PENDIENTES": todo lo que no está COMPLETADO ni ANULADO, sin filtros de fecha
+// ni de estado. Agrupado por estado y, dentro de cada grupo, el más antiguo primero.
+// =============================================================================
+const GRUPOS_PENDIENTES = [
+  { estado: 'PREPARACION', titulo: '⏳ En preparación' },
+  { estado: 'PREPARADO', titulo: '🔔 Listos para entregar' },
+  { estado: 'ENTREGADO_IMPAGO', titulo: '📦 Entregados sin cobrar' }
+];
+
+async function cargarPendientes() {
+  const numero = ++numeroConsultaPendientes;
+
+  const { data, error } = await supabaseAdmin
+    .from('TB_TPEDIDOS')
+    .select(COLUMNAS_PEDIDO)
+    .in('estado', ESTADOS_PENDIENTES)
+    .order('created_at', { ascending: true })
+    .limit(500);
+
+  // Si mientras tanto se pidió otra carga o se cambió de vista, esta respuesta ya no sirve.
+  if (numero !== numeroConsultaPendientes || modoPedidos !== 'PENDIENTES') return;
+
+  if (error) {
+    console.error('Error al cargar pedidos pendientes:', error);
+    mostrarNotificacion('No se pudieron cargar los pedidos pendientes.', 'danger');
+    return;
+  }
+
+  const pedidos = data || [];
+  const porEstado = (estado) => pedidos.filter(p => p.estado === estado);
+  const cantPrep = porEstado('PREPARACION').length;
+  const cantListos = porEstado('PREPARADO').length;
+  const impagos = porEstado('ENTREGADO_IMPAGO');
+  const porCobrar = impagos.reduce((acc, p) => acc + Number(p.importe_total || 0), 0);
+
+  const resumen = document.getElementById('resumen-pendientes');
+  if (resumen) {
+    resumen.textContent = pedidos.length === 0
+      ? ''
+      : `${cantPrep} en preparación · ${cantListos} listo${cantListos !== 1 ? 's' : ''} para entregar · `
+        + `${impagos.length} entregado${impagos.length !== 1 ? 's' : ''} sin cobrar`
+        + (impagos.length > 0 ? ` ($${porCobrar.toLocaleString('es-AR')} por cobrar)` : '');
+  }
+
+  const sinVer = pedidos.filter(esPedidoNuevoSinVer).length;
+  document.getElementById('btn-marcar-vistos')?.classList.toggle('d-none', sinVer === 0);
+
+  const tbody = document.getElementById('tabla-pedidos-body');
+  if (!tbody) return;
+
+  if (pedidos.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-check-circle text-success mr-1"></i> No hay pedidos pendientes. Todo al día.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = GRUPOS_PENDIENTES.map(g => {
+    const delGrupo = porEstado(g.estado);
+    if (delGrupo.length === 0) return '';
+    return `<tr class="fila-grupo-estado"><td colspan="7">${g.titulo} (${delGrupo.length})</td></tr>`
+      + delGrupo.map(filaPedidoHtml).join('');
   }).join('');
 }
 
+// Botón "Visto" de una fila y botón "Marcar pedidos web como vistos"
+export function marcarPedidoVisto(idPedido) {
+  marcarVistos([idPedido]);
+  cargarTablaPedidos();
+}
+
+export function marcarTodosLosPedidosVistos() {
+  marcarTodosVistos();
+  cargarTablaPedidos();
+}
+
+// Refresco automático cuando otro equipo (o un cliente desde la web) cambia pedidos.
+// Si hay un menú "Más" abierto no se redibuja la tabla (se cerraría en la cara de la persona):
+// se espera unos segundos y se vuelve a intentar.
+function hayMenuMasAbierto() {
+  if (document.querySelector('.btn-accion-mas[aria-expanded="true"]')) return true;
+  return [...document.querySelectorAll('.menu-mas')].some(m => {
+    const est = getComputedStyle(m);
+    return est.display !== 'none' && est.visibility !== 'hidden' && est.opacity !== '0' && m.getClientRects().length > 0;
+  });
+}
+
+let temporizadorRefresco = null;
+function programarRefrescoListado(espera = 500, intentos = 0) {
+  clearTimeout(temporizadorRefresco);
+  temporizadorRefresco = setTimeout(() => {
+    const sec = document.getElementById('sec-pedidos-dia');
+    if (!sec || sec.classList.contains('d-none')) return;   // la pantalla no está a la vista
+    if (hayMenuMasAbierto() && intentos < 6) { programarRefrescoListado(4000, intentos + 1); return; }
+    cargarTablaPedidos();
+  }, espera);
+}
+document.addEventListener('pedidos:cambio', () => programarRefrescoListado());
+
 export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
+  marcarVistos([idPedido]);   // si la persona actúa sobre un pedido web, ya lo vio
+
   // Cobrar: antes de marcar COMPLETADO preguntamos con qué medio se cobra.
   // La ventana se encarga de guardar el estado y el medio juntos.
   if (nuevoEstado === 'COMPLETADO') {
@@ -275,6 +426,7 @@ async function cobrarPedido(idPedido) {
 }
 
 export async function editarPedido(idPedido) {
+  marcarVistos([idPedido]);
   try {
     const { data: pedido, error } = await supabaseAdmin
       .from('TB_TPEDIDOS')
@@ -288,6 +440,8 @@ export async function editarPedido(idPedido) {
     }
 
     setPedidoEditandoId(pedido.id);
+    setPedidoEditandoEstado(pedido.estado);   // PREPARACION o PREPARADO: el POS lo muestra y lo conserva al guardar
+    actualizarModoEdicionPOS();
 
     const linkPedidos = document.querySelector('#menu-navegacion .nav-link[data-section="pedidos"]');
     navegarA('pedidos', linkPedidos);
@@ -331,6 +485,7 @@ export async function editarPedido(idPedido) {
     setCarrito(nuevoCarrito);
 
     renderizarGrillaPOS();
+    actualizarModoEdicionPOS();
     mostrarNotificacion(`Editando Pedido #${pedido.id}`, 'info');
 
   } catch (err) {
@@ -348,6 +503,12 @@ export async function verDetallePedido(idPedido) {
       .single();
 
     if (error || !pedido) return;
+
+    // Abrir el detalle de un pedido web nuevo lo da por visto (y se quita la marca NUEVO de la fila).
+    if (esPedidoNuevoSinVer(pedido)) {
+      marcarVistos([pedido.id]);
+      cargarTablaPedidos();
+    }
 
     pedidoActualModalId = idPedido;
 

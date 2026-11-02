@@ -4,7 +4,8 @@ import {
   cacheProductos, setCacheProductos, 
   cachePrecios, setCachePrecios, 
   cacheCategorias, setCacheCategorias, 
-  pedidoEditandoId, setPedidoEditandoId 
+  pedidoEditandoId, setPedidoEditandoId,
+  pedidoEditandoEstado, setPedidoEditandoEstado
 } from './state.js';
 
 import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion } from './utils.js';
@@ -627,10 +628,59 @@ export async function resetearPedido() {
   }
 
   setPedidoEditandoId(null);
+  setPedidoEditandoEstado(null);
+  actualizarModoEdicionPOS();   // vuelve el título, los colores y los botones de un pedido nuevo
   setCarrito({});
 
   // 3. Recargar la grilla de precios del POS
   await cargarPOS();        
+}
+
+// -----------------------------------------------------------------------------
+// MODO EDICIÓN DEL POS
+//   Cuando se edita un pedido existente (Gestión de Pedidos -> Más -> Editar pedido) el
+//   panel lo deja bien a la vista: el título dice "Editando pedido #N", se muestra su estado,
+//   el panel cambia de color y los botones son los de una edición:
+//     Guardar cambios  (el pedido sigue en el mismo estado)  ·  Cobrar y entregar
+//   "Cancelar edición" ocupa el lugar de "Limpiar todo". Todo se deshace en resetearPedido.
+// -----------------------------------------------------------------------------
+const ROTULO_ESTADO_EDICION = { PREPARACION: 'En preparación', PREPARADO: 'Preparado' };
+
+export function actualizarModoEdicionPOS() {
+  const editando = Boolean(pedidoEditandoId);
+
+  document.querySelector('.pos-order-card')?.classList.toggle('pos-modo-edicion', editando);
+
+  const titulo = document.getElementById('pos-titulo-texto');
+  if (titulo) titulo.textContent = editando ? `Editando pedido #${pedidoEditandoId}` : 'Pedido Actual';
+
+  const sub = document.getElementById('pos-titulo-estado');
+  if (sub) {
+    sub.classList.toggle('d-none', !editando);
+    const rotulo = ROTULO_ESTADO_EDICION[pedidoEditandoEstado] || pedidoEditandoEstado || '';
+    sub.textContent = editando && rotulo ? `Estado actual: ${rotulo} · no cambia al guardar` : '';
+  }
+
+  document.getElementById('btn-pos-preparar')?.classList.toggle('d-none', editando);
+  document.getElementById('btn-pos-guardar-cambios')?.classList.toggle('d-none', !editando);
+  document.getElementById('btn-limpiar-todo')?.classList.toggle('d-none', editando);
+  document.getElementById('btn-cancelar-edicion')?.classList.toggle('d-none', !editando);
+}
+
+// "Cancelar edición": descarta lo que se cambió en pantalla (el pedido guardado no se toca)
+// y deja el POS listo para un pedido nuevo.
+export async function cancelarEdicionPOS() {
+  if (!pedidoEditandoId) return;
+  const id = pedidoEditandoId;
+  const ok = await confirmarAccion({
+    titulo: 'Cancelar edición',
+    mensaje: `Se descartan los cambios hechos al pedido #${id}. El pedido queda como estaba guardado. ¿Querés continuar?`,
+    textoConfirmar: 'Sí, descartar cambios',
+    peligro: true
+  });
+  if (!ok) return;
+  await resetearPedido();
+  mostrarNotificacion(`Edición del pedido #${id} cancelada. No se modificó nada.`, 'info');
 }
 
 export async function vaciarCarrito() {
@@ -654,7 +704,8 @@ export async function vaciarCarrito() {
 //   El navegador manda solo qué se pidió (productos y cantidades), el cliente, la lista,
 //   la referencia, el estado y, si se cobra, medio y cuenta. Los PRECIOS, el DESCUENTO por
 //   docena y el TOTAL los calcula el servidor; lo que se ve en pantalla es solo una vista previa.
-//   estadoInicial: 'PREPARACION', 'ENTREGADO_IMPAGO' o 'COMPLETADO' ("Cobrar y Entregar").
+//   estadoInicial: 'PREPARACION', 'ENTREGADO_IMPAGO' o 'COMPLETADO' ("Cobrar y Entregar"), o
+//   'MANTENER' (solo al editar: "Guardar cambios"; la base deja el pedido en el estado que tiene).
 //   cobro: null, o { idMedio, idCuenta } cuando viene de la ventana de cobro (solo al cobrar y entregar).
 // -----------------------------------------------------------------------------
 // Mientras un pedido se está guardando, un segundo toque (doble clic) no hace nada: así no se
@@ -672,6 +723,13 @@ export async function guardarPedido(estadoInicial, cobro = null) {
 }
 
 async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
+  // "Guardar cambios" (solo existe al editar): se manda 'MANTENER' y guardar_pedido (script 39)
+  // deja el pedido en el estado que tiene en la base (PREPARACION o PREPARADO), todo en un paso.
+  if (estadoInicial === 'MANTENER' && !pedidoEditandoId) {
+    mostrarNotificacion('No hay un pedido en edición.', 'warning');
+    return;
+  }
+
   const keys = Object.keys(carrito);
   if (keys.length === 0) {
     mostrarNotificacion('Agregá al menos un producto al carrito.', 'warning');
