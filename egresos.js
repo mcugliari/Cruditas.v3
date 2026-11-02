@@ -34,6 +34,7 @@ import {
   formatearMoneda, formatearFechaAR, obtenerFechaActualISO, llenarSelectCuentas
 } from './utils.js';
 import { anularPago } from './pagos.js';
+import { puedeAlMenos, cargarSaldosCuentas } from './roles.js';   // el rol decide si se puede anular un retiro
 
 
 // Copia en memoria de la lista que se muestra (ver proveedores.js).
@@ -192,7 +193,9 @@ function renderizarEgresos() {
     // Acciones: un movimiento ACTIVO se puede anular, salvo que su día ya esté
     // cerrado (en ese caso mostramos un candado). La base vuelve a controlar esto.
     let acciones = '';
-    if (!anulado) {
+    // Anular un retiro: solo el Dueño (la base también lo verifica). Los gastos los anula el Encargado.
+    const puedeAnular = e.tipo !== 'RETIRO' || puedeAlMenos('DUENO');
+    if (!anulado && puedeAnular) {
       acciones = e.id_cierre
         ? '<span class="text-muted small" title="El día ya está cerrado"><i class="fas fa-lock"></i> Día cerrado</span>'
         : `<button class="btn btn-accion btn-accion-peligro" title="Anular"
@@ -263,7 +266,9 @@ export async function abrirModalEgreso(tipo) {
     medios.map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('');
 
   // Cuenta: se llena una vez; el grupo se muestra solo si el medio elegido no es efectivo.
-  llenarSelectCuentas(document.getElementById('egreso-cuenta'), cuentasEgreso, null);
+  // El Encargado y el Dueño ven el saldo de cada cuenta para saber si alcanza (el Empleado no).
+  const saldosEgreso = await cargarSaldosCuentas();
+  llenarSelectCuentas(document.getElementById('egreso-cuenta'), cuentasEgreso, null, saldosEgreso);
   document.getElementById('egreso-medio').onchange = () => actualizarCuentaEgreso();
   actualizarCuentaEgreso();
 

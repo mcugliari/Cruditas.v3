@@ -1,4 +1,5 @@
 import { asegurarSesion } from './auth.js';
+import { iniciarRoles, puedeVerSeccion } from './roles.js';
 import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente, eliminarCliente, inicializarCrudClienteLista, guardarAsociacionClienteLista, editarAsociacion, eliminarAsociacion } from './clientes.js';
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial, permitirSalirDeListas } from './listas.js';
@@ -12,6 +13,7 @@ import { cargarEgresos, abrirModalEgreso, guardarEgreso, anularEgreso } from './
 import { cargarDeuda, renderizarDeuda, verDeudaProveedor, pagarCompraDeLaDeuda, pagarDeudaProveedorAbierto, pagarDeudaProveedor } from './deuda.js';
 import { abrirModalNuevaCompra, guardarCompra, agregarLinea, quitarLinea, alCambiarLinea, alCambiarPagarAhora } from './compraForm.js';
 import { cargarProveedores, abrirModalNuevoProveedor, abrirModalEditarProveedor, guardarProveedor, cambiarEstadoProveedor } from './proveedores.js';
+import { cargarUsuarios, cambiarRolUsuario } from './usuarios.js';   // pantalla Usuarios (solo Dueño)
 import { cargarInsumos, renderizarInsumos, abrirModalNuevoInsumo, abrirModalEditarInsumo, guardarInsumo, cambiarEstadoInsumo } from './insumos.js';
 import {
   cargarCuentas, abrirModalNuevaCuenta, abrirModalEditarCuenta, guardarCuenta, cambiarEstadoCuenta,
@@ -26,6 +28,9 @@ import { inicializarPreferencias } from './preferencias.js';
 
 // FUNCION DE NAVEGACIÓN
 export async function navegarA(seccionId, elementoMenu) {
+  // Si el rol del usuario no puede ver esta sección, no se navega (solo comodidad: la protección real está en la base).
+  if (!puedeVerSeccion(seccionId)) return;
+
   // Si se sale de Listas de precios con precios sin guardar, se pregunta antes.
   // Si la persona cancela, no se navega: la pantalla y el menú quedan como estaban.
   const secListas = document.getElementById('sec-listas');
@@ -87,6 +92,8 @@ export async function navegarA(seccionId, elementoMenu) {
     inicializarPreferencias();
   } else if (seccionId === 'reportes-compras') {
     inicializarReporteCompras();
+  } else if (seccionId === 'usuarios') {
+    cargarUsuarios();
   }
 }
 
@@ -95,6 +102,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 0. Sin sesión no se carga nada: muestra el login y espera
   await asegurarSesion();
+
+  // 0 bis. Rol del usuario: adapta el menú. Sin rol asignado no se carga el POS.
+  if (!(await iniciarRoles())) return;
 
   // 1. Navegación inicial a Pedidos
   const primerLink = document.querySelector('#menu-navegacion .nav-link[data-section="pedidos"]');
@@ -384,6 +394,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (action === 'cambiar-estado-proveedor') {
       cambiarEstadoProveedor(id);
     }
+  });
+
+  // Usuarios y roles (solo Dueño; la base lo verifica)
+  document.getElementById('btn-actualizar-usuarios')?.addEventListener('click', cargarUsuarios);
+  document.getElementById('tabla-usuarios-body')?.addEventListener('change', (e) => {
+    const select = e.target.closest('select[data-id]');
+    if (select) cambiarRolUsuario(select);
   });
 
   // 16. Cuentas y saldos

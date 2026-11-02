@@ -6,6 +6,7 @@ import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo } fro
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
 import { btnFila, itemMenuMas } from './menuMas.js';   // botones de la fila y menú "Más"
+import { puedeAlMenos } from './roles.js';   // el rol decide si se ve "Anular pedido"
 
 // Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
 // nombre_referencia y observaciones los escribe un cliente anónimo desde la web.
@@ -160,7 +161,8 @@ export async function cargarTablaPedidos() {
     }
     enMenu.push(itemMenuMas('fa-receipt', 'Comanda de cocina', `data-id="${idPed}"`, 'btn-print-cocina'));
     enMenu.push(itemMenuMas('fa-print', 'Ticket del cliente', `data-id="${idPed}"`, 'btn-print-cliente'));
-    if (p.estado !== 'ANULADO') {
+    // Anular un pedido: solo Encargado y Dueño (la base también lo verifica).
+    if (p.estado !== 'ANULADO' && puedeAlMenos('ENCARGADO')) {
       enMenu.push('<div class="menu-mas-sep" role="separator"></div>');
       enMenu.push(itemMenuMas('fa-ban', 'Anular pedido', cambiar('ANULADO'), 'menu-mas-peligro'));
     }

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from './config.js';
 import { mostrarNotificacion, confirmarAccion, esc } from './utils.js';
+import { puedeAlMenos } from './roles.js';   // el rol decide si se ve Eliminar y las acciones de listas
 
 export async function cargarClientes() {
   const tbody = document.getElementById('tabla-clientes-body');
@@ -27,9 +28,9 @@ export async function cargarClientes() {
         <button class="btn btn-accion btn-accion-editar mr-1" data-action="editar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}" data-telefono="${esc(cli.telefono || '')}" data-direccion="${esc(cli.direccion || '')}">
             <i class="fas fa-edit"></i> Editar
         </button>
-        <button class="btn btn-accion btn-accion-peligro" data-action="eliminar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}">
+        ${puedeAlMenos('ENCARGADO') ? `<button class="btn btn-accion btn-accion-peligro" data-action="eliminar-cliente" data-id="${cli.id}" data-nombre="${esc(cli.nombre)}">
             <i class="fas fa-trash-alt"></i> Eliminar
-        </button>
+        </button>` : ''}
         </td>
     </tr>
     `).join('');
@@ -126,8 +127,8 @@ export async function listarAsociacionesClienteLista() {
         ${item.m_predeterminada ? '<span class="badge badge-success px-2 py-1">Sí</span>' : '<span class="badge badge-secondary px-2 py-1">No</span>'}
       </td>
       <td class="text-right">
-        <button class="btn btn-accion btn-accion-editar mr-1" data-action="editar-asoc" data-id="${item.id}" data-cliente="${item.id_cliente}" data-lista="${item.id_lista_precio}" data-predeterminada="${item.m_predeterminada}">Editar</button>
-        <button class="btn btn-accion btn-accion-peligro" data-action="eliminar-asoc" data-id="${item.id}">Eliminar</button>
+        ${puedeAlMenos('ENCARGADO') ? `<button class="btn btn-accion btn-accion-editar mr-1" data-action="editar-asoc" data-id="${item.id}" data-cliente="${item.id_cliente}" data-lista="${item.id_lista_precio}" data-predeterminada="${item.m_predeterminada}">Editar</button>
+        <button class="btn btn-accion btn-accion-peligro" data-action="eliminar-asoc" data-id="${item.id}">Eliminar</button>` : ''}
       </td>
     </tr>
   `).join('');

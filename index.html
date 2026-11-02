@@ -82,26 +82,26 @@
           <!-- SECCIÓN CAJA -->
           <li class="nav-header">CAJA</li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="resumen-ventas">
+            <a href="#" class="nav-link" data-section="resumen-ventas" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-chart-pie"></i>
               <p>Resumen de Ventas</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-toggle="modal" data-target="#modalCierreCaja">
+            <a href="#" class="nav-link" data-toggle="modal" data-target="#modalCierreCaja" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-calculator"></i>
               <p>Cierre de Caja</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="historial-caja">
+            <a href="#" class="nav-link" data-section="historial-caja" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-history"></i>
               <p>Historial Cierres</p>
             </a>
           </li>
 
                     <li class="nav-item">
-            <a href="#" class="nav-link" data-section="cuentas">
+            <a href="#" class="nav-link" data-section="cuentas" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-wallet"></i>
               <p>Cuentas y Saldos</p>
             </a>
@@ -110,26 +110,26 @@
           <!-- SECCIÓN COMPRAS -->
           <li class="nav-header">COMPRAS</li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="compras">
+            <a href="#" class="nav-link" data-section="compras" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-shopping-basket"></i>
               <p>Compras</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="deuda">
+            <a href="#" class="nav-link" data-section="deuda" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-file-invoice-dollar"></i>
               <p>Deuda a Proveedores</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="egresos">
+            <a href="#" class="nav-link" data-section="egresos" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-money-bill-wave"></i>
               <p>Gastos y Retiros</p>
             </a>
           </li>
 
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="reportes-compras">
+            <a href="#" class="nav-link" data-section="reportes-compras" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-chart-line"></i>
               <p>Reportes de Compras</p>
             </a>
@@ -144,25 +144,25 @@
             </a>
           </li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="productos">
+            <a href="#" class="nav-link" data-section="productos" data-rol-min="DUENO">
               <i class="nav-icon fas fa-box"></i>
               <p>Productos</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="listas">
+            <a href="#" class="nav-link" data-section="listas" data-rol-min="DUENO">
               <i class="nav-icon fas fa-tags"></i>
               <p>Listas de Precios</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="proveedores">
+            <a href="#" class="nav-link" data-section="proveedores" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-truck"></i>
               <p>Proveedores</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="insumos">
+            <a href="#" class="nav-link" data-section="insumos" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-boxes-stacked"></i>
               <p>Insumos</p>
             </a>
@@ -171,6 +171,12 @@
             <a href="#" class="nav-link" data-section="impresion">
               <i class="nav-icon fas fa-print"></i>
               <p>Impresión</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="usuarios" data-rol-min="DUENO">
+              <i class="nav-icon fas fa-user-shield"></i>
+              <p>Usuarios</p>
             </a>
           </li>
 
@@ -454,7 +460,7 @@
           <div class="card card-outline card-info shadow-sm">
             <div class="card-header"><h3 class="card-title font-weight-bold">🏷️ Asignación de Listas de Precios por Cliente</h3></div>
             <div class="card-body">
-              <form id="form-cliente-lista" class="row align-items-end mb-3">
+              <form id="form-cliente-lista" class="row align-items-end mb-3" data-rol-min="ENCARGADO">
                 <input type="hidden" id="asoc-id" value="">
                 <div class="col-12 col-md-4 mb-2">
                   <label class="form-label font-weight-bold small">Cliente</label>
@@ -530,7 +536,7 @@
             <div class="col-sm-7 text-right">
               <button class="btn btn-outline-dark font-weight-bold mr-1" type="button" data-categorias="egreso"><i class="fas fa-folder-open mr-1"></i> Categorías</button>
               <button class="btn btn-warning font-weight-bold mr-1" id="btn-nuevo-gasto"><i class="fas fa-plus mr-1"></i> Nuevo Gasto</button>
-              <button class="btn btn-dark font-weight-bold" id="btn-nuevo-retiro"><i class="fas fa-hand-holding-usd mr-1"></i> Nuevo Retiro</button>
+              <button class="btn btn-dark font-weight-bold" id="btn-nuevo-retiro" data-rol-min="DUENO"><i class="fas fa-hand-holding-usd mr-1"></i> Nuevo Retiro</button>
             </div>
           </div>
         </div>
@@ -845,6 +851,48 @@
       </div>
     </section>
 
+    <!-- SECCIÓN: USUARIOS Y ROLES (solo Dueño) -->
+    <section id="sec-usuarios" class="modulo-app d-none">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-user-shield mr-2 text-warning"></i>Usuarios</h1></div>
+            <div class="col-sm-6 text-right">
+              <button class="btn btn-outline-dark font-weight-bold" id="btn-actualizar-usuarios"><i class="fas fa-sync-alt mr-1"></i> Actualizar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-warning mt-2">
+        <div class="card-header"><h3 class="card-title font-weight-bold">Usuarios y roles</h3></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="bg-light">
+                <tr><th>Usuario</th><th>Rol</th><th>Creado</th><th>Último ingreso</th><th class="text-center">Estado</th></tr>
+              </thead>
+              <tbody id="tabla-usuarios-body">
+                <tr><td colspan="5" class="text-center py-4">Cargando usuarios...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-info mt-3">
+        <div class="card-body small">
+          <p class="mb-2"><strong>Qué puede hacer cada rol</strong></p>
+          <ul class="mb-2 pl-3">
+            <li><strong>Empleado:</strong> cargar y cobrar pedidos, ver pedidos y clientes.</li>
+            <li><strong>Encargado:</strong> lo anterior, más anular pedidos, cierre de caja, compras, gastos, proveedores, insumos y ver cuentas y reportes.</li>
+            <li><strong>Dueño:</strong> todo, incluidos transferencias, ajustes, retiros, productos, listas de precios y usuarios.</li>
+          </ul>
+          <p class="mb-0"><strong>Para crear un usuario nuevo:</strong> en Supabase, Authentication &rarr; Users &rarr; Add user (con "Auto Confirm User"). Después aparece acá como "Sin rol" y le asignás el que corresponda. Un usuario sin rol no puede usar el sistema.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- SECCIÓN: CUENTAS Y SALDOS -->
     <section id="sec-cuentas" class="modulo-app d-none">
       <div class="content-header">
@@ -852,8 +900,8 @@
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-wallet mr-2 text-warning"></i>Cuentas y Saldos</h1></div>
             <div class="col-sm-6 text-right">
-              <button class="btn btn-outline-dark font-weight-bold mr-2" id="btn-transferir"><i class="fas fa-exchange-alt mr-1"></i> Transferir</button>
-              <button class="btn btn-warning font-weight-bold" id="btn-nueva-cuenta"><i class="fas fa-plus mr-1"></i> Nueva Cuenta</button>
+              <button class="btn btn-outline-dark font-weight-bold mr-2" id="btn-transferir" data-rol-min="DUENO"><i class="fas fa-exchange-alt mr-1"></i> Transferir</button>
+              <button class="btn btn-warning font-weight-bold" id="btn-nueva-cuenta" data-rol-min="DUENO"><i class="fas fa-plus mr-1"></i> Nueva Cuenta</button>
             </div>
           </div>
         </div>

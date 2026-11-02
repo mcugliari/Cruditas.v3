@@ -29,6 +29,7 @@
 // =============================================================================
 
 import { supabaseAdmin } from './config.js';
+import { cargarSaldosCuentas } from './roles.js';   // saldo de cada cuenta (solo Encargado y Dueño)
 import {
   mostrarNotificacion, esc, mensajeErrorBD, mensajeErrorFuncion, formatearMoneda, llenarSelectCuentas, confirmarAccion
 } from './utils.js';
@@ -130,7 +131,9 @@ export async function abrirModalPago(ctx) {
     (medios || []).map(m => `<option value="${m.id}">${esc(m.nombre)}</option>`).join('');
 
   // Cuenta: se llena una vez por apertura; el grupo queda oculto hasta elegir un medio no efectivo.
-  llenarSelectCuentas(document.getElementById('pago-cuenta'), cuentasPago, null);
+  // Con el saldo a la vista se sabe si la cuenta alcanza para pagar (el Empleado no lo ve).
+  const saldosPago = await cargarSaldosCuentas();
+  llenarSelectCuentas(document.getElementById('pago-cuenta'), cuentasPago, null, saldosPago);
   // Usamos "onchange =" (propiedad) y no addEventListener: asignarla de nuevo en cada
   // apertura REEMPLAZA a la anterior, así los avisos no se acumulan.
   document.getElementById('pago-medio').onchange = () => actualizarCuentaPago();

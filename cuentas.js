@@ -49,6 +49,7 @@ import {
   obtenerFechaActualISO, confirmarAccion
 } from './utils.js';
 import './menuMas.js';   // deja listo el botón "Más" de la tabla (abre / cierra el menú)
+import { puedeAlMenos } from './roles.js';   // el rol decide qué acciones se ven (solo el Dueño modifica cuentas y saldos)
 
 
 // Copia en memoria de las cuentas que se muestran (ver proveedores.js).
@@ -170,14 +171,15 @@ function renderizarCuentas() {
     // Opciones del menú "Más" (lo abre y lo cierra menuMas.js).
     // Solo las cuentas activas se pueden ajustar.
     const opcionesMas = [];
-    if (c.activo) {
+    const esDueno = puedeAlMenos('DUENO');   // el Encargado ve las cuentas pero no las modifica
+    if (c.activo && esDueno) {
       opcionesMas.push(`<button type="button" class="menu-mas-item" role="menuitem"
                  data-action="ajustar-cuenta" data-id="${c.id}"><i class="fas fa-sliders-h"></i> Ajustar saldo</button>`);
     }
-    opcionesMas.push(`<button type="button" class="menu-mas-item" role="menuitem"
+    if (esDueno) opcionesMas.push(`<button type="button" class="menu-mas-item" role="menuitem"
                  data-action="editar-cuenta" data-id="${c.id}"><i class="fas fa-edit"></i> Editar cuenta</button>`);
     // La cuenta Efectivo no se puede desactivar: esa opción directamente no aparece.
-    if (c.tipo !== 'EFECTIVO') {
+    if (c.tipo !== 'EFECTIVO' && esDueno) {
       opcionesMas.push('<div class="menu-mas-sep" role="separator"></div>');
       opcionesMas.push(`<button type="button" class="menu-mas-item ${c.activo ? 'menu-mas-peligro' : ''}" role="menuitem"
                  data-action="cambiar-estado-cuenta" data-id="${c.id}"><i class="fas ${c.activo ? 'fa-ban' : 'fa-check'}"></i> ${c.activo ? 'Desactivar cuenta' : 'Activar cuenta'}</button>`);
@@ -210,12 +212,12 @@ function renderizarCuentas() {
                     data-action="ver-movimientos-cuenta" data-id="${c.id}">
               <i class="fas fa-list"></i> Ver movimientos
             </button>
-            <div class="mas-wrap">
+            ${opcionesMas.length ? `<div class="mas-wrap">
               <button type="button" class="btn btn-accion btn-accion-mas" aria-haspopup="true" aria-expanded="false" title="Más acciones">
                 Más <i class="fas fa-chevron-down"></i>
               </button>
               <div class="menu-mas" role="menu">${opcionesMas.join('')}</div>
-            </div>
+            </div>` : ''}
           </div>
         </td>
       </tr>`;
@@ -691,7 +693,7 @@ async function cargarMovimientosCuenta() {
         acciones = '<span class="badge badge-light border" title="Lo generó un cierre de caja">auto</span>';
       } else if (m.id_cierre) {
         acciones = '<i class="fas fa-lock text-muted" title="El día ya está cerrado"></i>';
-      } else {
+      } else if (puedeAlMenos('DUENO')) {   // anular transferencias y ajustes: solo el Dueño
         acciones = `<button class="btn btn-accion btn-accion-peligro" title="Anular"
                             data-action="anular-movimiento-cuenta" data-id="${m.id_origen}">
                       <i class="fas fa-ban"></i> Anular

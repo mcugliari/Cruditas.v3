@@ -26,6 +26,7 @@
 // =============================================================================
 
 import { supabaseAdmin } from './config.js';
+import { puedeAlMenos } from './roles.js';   // el rol decide si se ve "Anular cierre"
 import {
   mostrarNotificacion, esc, mensajeErrorFuncion, mensajeErrorBD,
   formatearMoneda, formatearFechaAR, obtenerFechaActualISO, confirmarAccion
@@ -126,9 +127,9 @@ export async function cargarResumenVentasDia() {
             Total rendido: <strong>$${formatearMoneda(resumen.total_general)}</strong> |
             Dif. Efectivo: <strong>$${formatearMoneda(resumen.diferencia_efectivo)}</strong>
           </p>
-          <button type="button" class="btn btn-accion btn-accion-peligro mt-1" id="btn-anular-cierre">
+          ${puedeAlMenos('DUENO') ? `<button type="button" class="btn btn-accion btn-accion-peligro mt-1" id="btn-anular-cierre">
             <i class="fas fa-lock-open"></i> Anular cierre y reabrir caja
-          </button>
+          </button>` : ''}
         </div>
       `;
       alternarCamposFormulario(true);
@@ -605,9 +606,10 @@ export async function actualizarIndicadorCaja() {
 
   let estado = 'desconocida';
   try {
-    const { data, error } = await supabaseAdmin.rpc('resumen_caja', { p_fecha: obtenerFechaActualISO() });
+    // caja_cerrada devuelve solo true/false: sirve para cualquier rol (resumen_caja trae importes y es de Encargado).
+    const { data, error } = await supabaseAdmin.rpc('caja_cerrada', { p_fecha: obtenerFechaActualISO() });
     if (error) throw error;
-    estado = data.cerrada ? 'cerrada' : 'abierta';
+    estado = data ? 'cerrada' : 'abierta';
   } catch (err) {
     console.error('No se pudo consultar el estado de la caja:', err);
   }

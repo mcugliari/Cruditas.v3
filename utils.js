@@ -159,6 +159,10 @@ export function sumarDiasISO(fechaISO, dias) {
 // -----------------------------------------------------------------------------
 const MENSAJES_FUNCIONES = {
   no_autorizado:        'Tu sesión venció. Volvé a ingresar.',
+  sin_permiso:          'No tenés permiso para hacer esto con tu rol.',
+  usuario_inexistente:  'Ese usuario ya no existe.',
+  rol_invalido:         'Rol no válido.',
+  propio_rol:           'No podés cambiar tu propio rol. Pedile a otro Dueño que lo haga.',
   fecha_invalida:       'La fecha no es válida (no puede ser futura ni anterior a la compra).',
   vencimiento_invalido: 'El vencimiento no puede ser anterior a la fecha de la compra.',
   proveedor_invalido:   'El proveedor no existe o está inactivo.',
@@ -231,12 +235,17 @@ export function mensajeErrorFuncion(error, entidad = 'registro') {
 //   select           -> el elemento <select> a llenar
 //   cuentas          -> lista de cuentas [{ id, nombre, tipo }]
 //   idPreseleccion   -> (opcional) cuenta que debe quedar elegida
+//   saldos           -> (opcional) { idCuenta: saldo }; si viene, cada opción muestra el saldo
 // -----------------------------------------------------------------------------
-export function llenarSelectCuentas(select, cuentas, idPreseleccion = null) {
+export function llenarSelectCuentas(select, cuentas, idPreseleccion = null, saldos = null) {
   const lista = cuentas.filter(c => c.tipo !== 'EFECTIVO');
   select.innerHTML =
     '<option value="">— Elegí la cuenta —</option>' +
-    lista.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+    lista.map(c => {
+      const tieneSaldo = saldos && saldos[c.id] !== undefined;
+      const textoSaldo = tieneSaldo ? ` — $${formatearMoneda(saldos[c.id])}` : '';
+      return `<option value="${c.id}">${esc(c.nombre)}${textoSaldo}</option>`;
+    }).join('');
 
   // .some() responde si ALGÚN elemento cumple la condición
   if (idPreseleccion && lista.some(c => Number(c.id) === Number(idPreseleccion))) {
