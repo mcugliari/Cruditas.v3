@@ -7,6 +7,7 @@ import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
 import { btnFila, itemMenuMas } from './menuMas.js';   // botones de la fila y menú "Más"
 import { puedeAlMenos } from './roles.js';   // el rol decide si se ve "Anular pedido"
+import { telefonoParaWhatsApp } from './telefono.js';   // teléfono del cliente -> formato de WhatsApp
 import { esPedidoNuevoSinVer, marcarVistos, marcarTodosVistos } from './avisoPedidos.js';   // "NUEVO" / visto de los pedidos web
 
 // Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
@@ -22,27 +23,6 @@ function esc(valor) {
 // El botón abre WhatsApp (app o WhatsApp Web) con el chat del cliente y el mensaje ya escrito;
 // la persona del local toca "enviar". Es un link wa.me: no usa la API de Meta ni tiene costo.
 // -----------------------------------------------------------------------------
-
-// Pasa el teléfono que escribió el cliente al formato que pide wa.me para celulares argentinos:
-// 549 + característica + número (sin 0 ni 15). Devuelve '' si no se puede armar con seguridad
-// (en ese caso el botón de avisar no aparece). Acepta: 1122334455, 011 2233-4455, 011 15 2233 4455,
-// +54 9 11 2233 4455, 5491122334455.
-function telefonoParaWhatsApp(texto) {
-  let n = String(texto ?? '').replace(/\D/g, '');   // solo dígitos
-  n = n.replace(/^0+/, '');                          // 0 de la característica o 00 internacional
-  if (n.startsWith('54')) {                          // código de país: se saca (y el 9 de celular, si está)
-    n = n.slice(2);
-    if (n.startsWith('9') && n.length === 11) n = n.slice(1);
-  }
-  if (n.length === 12) {                             // con el 15 en el medio: se busca y se saca
-    for (const i of [2, 3, 4]) {                     // característica de 2, 3 o 4 dígitos
-      if (n.slice(i, i + 2) === '15') { n = n.slice(0, i) + n.slice(i + 2); break; }
-    }
-  }
-  // 10 dígitos y característica válida (11, o empieza con 2 o 3). Si no, no se arriesga un número equivocado.
-  if (n.length === 10 && /^(11|[23])/.test(n)) return '549' + n;
-  return '';
-}
 
 // Los pedidos web guardan el nombre como "Juan Pérez (Tel: 1122334455)". Para el saludo se saca el teléfono.
 function nombreSinTelefono(texto) {

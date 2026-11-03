@@ -197,6 +197,12 @@
               <p>Usuarios</p>
             </a>
           </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="ajustes" data-rol-min="DUENO">
+              <i class="nav-icon fas fa-cog"></i>
+              <p>Ajustes</p>
+            </a>
+          </li>
 
         </ul>
       </nav>
@@ -926,6 +932,46 @@
             <li><strong>Dueño:</strong> todo, incluidos transferencias, ajustes, retiros, productos, listas de precios y usuarios.</li>
           </ul>
           <p class="mb-0"><strong>Para crear un usuario nuevo:</strong> en Supabase, Authentication &rarr; Users &rarr; Add user (con "Auto Confirm User"). Después aparece acá como "Sin rol" y le asignás el que corresponda. Un usuario sin rol no puede usar el sistema.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN: AJUSTES DEL NEGOCIO (solo Dueño) -->
+    <section id="sec-ajustes" class="modulo-app d-none">
+      <div class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2 align-items-center">
+            <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-cog mr-2 text-warning"></i>Ajustes</h1></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-outline card-warning mt-2">
+        <div class="card-header"><h3 class="card-title font-weight-bold"><i class="fab fa-whatsapp mr-1"></i> WhatsApp del negocio</h3></div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">Es el número al que le escribe el cliente con el botón "Avisarnos por WhatsApp", cuando termina de cargar su pedido en el formulario. Si no hay número cargado, ese botón no se muestra.</p>
+
+          <p class="mb-3">Número actual: <strong id="ajuste-whatsapp-actual">Cargando...</strong></p>
+
+          <div class="form-group" style="max-width: 420px;">
+            <label class="font-weight-bold small" for="ajuste-whatsapp-input">Nuevo número</label>
+            <input type="tel" inputmode="tel" class="form-control" id="ajuste-whatsapp-input" placeholder="Ej: 11 2233 4455" autocomplete="off">
+            <small class="form-text text-muted" id="ajuste-whatsapp-vista"></small>
+          </div>
+
+          <div class="alert alert-danger py-2 small d-none" id="ajuste-whatsapp-error" role="alert"></div>
+
+          <div class="d-flex flex-wrap" style="gap: 8px;">
+            <button type="button" class="btn btn-warning font-weight-bold" id="btn-guardar-whatsapp" disabled>
+              <i class="fas fa-save mr-1"></i> Guardar
+            </button>
+            <a class="btn btn-outline-success font-weight-bold disabled" id="btn-probar-whatsapp" target="_blank" rel="noopener" aria-disabled="true">
+              <i class="fas fa-up-right-from-square mr-1"></i> Probar el link
+            </a>
+            <button type="button" class="btn btn-outline-danger font-weight-bold d-none" id="btn-quitar-whatsapp">
+              <i class="fas fa-power-off mr-1"></i> Desactivar
+            </button>
+          </div>
         </div>
       </div>
     </section>

@@ -16,6 +16,7 @@ import { cargarDeuda, renderizarDeuda, verDeudaProveedor, pagarCompraDeLaDeuda, 
 import { abrirModalNuevaCompra, guardarCompra, agregarLinea, quitarLinea, alCambiarLinea, alCambiarPagarAhora } from './compraForm.js';
 import { cargarProveedores, abrirModalNuevoProveedor, abrirModalEditarProveedor, guardarProveedor, cambiarEstadoProveedor } from './proveedores.js';
 import { cargarUsuarios, cambiarRolUsuario } from './usuarios.js';   // pantalla Usuarios (solo Dueño)
+import { cargarAjustes } from './ajustes.js';   // pantalla Ajustes: WhatsApp del negocio (solo Dueño)
 import { cargarInsumos, renderizarInsumos, abrirModalNuevoInsumo, abrirModalEditarInsumo, guardarInsumo, cambiarEstadoInsumo } from './insumos.js';
 import {
   cargarCuentas, abrirModalNuevaCuenta, abrirModalEditarCuenta, guardarCuenta, cambiarEstadoCuenta,
@@ -96,6 +97,8 @@ export async function navegarA(seccionId, elementoMenu) {
     inicializarReporteCompras();
   } else if (seccionId === 'usuarios') {
     cargarUsuarios();
+  } else if (seccionId === 'ajustes') {
+    cargarAjustes();
   }
 }
 
