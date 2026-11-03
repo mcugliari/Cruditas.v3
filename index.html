@@ -783,6 +783,8 @@
           <!-- Solapas: las atiende reporteCompras.js (data-rc-tab) -->
           <ul class="nav nav-pills mb-3">
             <li class="nav-item"><a class="nav-link active" href="#" data-rc-tab="gasto"><i class="fas fa-coins mr-1"></i> Gasto</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-rc-tab="ritmo"><i class="fas fa-boxes mr-1"></i> Cantidades y ritmo</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-rc-tab="comparativo"><i class="fas fa-balance-scale mr-1"></i> Comparativo</a></li>
             <li class="nav-item"><a class="nav-link" href="#" data-rc-tab="precios"><i class="fas fa-chart-line mr-1"></i> Evolución de precios</a></li>
           </ul>
 
@@ -838,6 +840,59 @@
               <tfoot id="rc-gasto-pie"></tfoot>
             </table>
           </div>
+        </div>
+
+        <!-- PANEL: CANTIDADES Y RITMO (script 42) -->
+        <div class="card-body p-0 d-none" id="rc-panel-ritmo">
+          <div id="rc-ritmo-resumen" class="small text-muted px-3 pt-2"></div>
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th style="width: 50px">#</th>
+                  <th>Insumo</th>
+                  <th class="text-center">Compras</th>
+                  <th class="text-right">Cantidad comprada</th>
+                  <th class="text-right">Por semana</th>
+                  <th class="text-right">Por mes</th>
+                  <th class="text-center">Compra cada</th>
+                  <th>Última compra</th>
+                  <th class="text-right">Gastado</th>
+                </tr>
+              </thead>
+              <tbody id="rc-ritmo-body">
+                <tr><td colspan="9" class="text-center text-muted py-3">Elegí un rango de fechas y apretá Generar.</td></tr>
+              </tbody>
+              <tfoot id="rc-ritmo-pie"></tfoot>
+            </table>
+          </div>
+          <div class="small text-muted px-3 py-2">"Por semana" y "Por mes" es lo comprado en el período dividido por sus semanas o meses (no es el consumo real). "Compra cada" es el promedio de días entre compras; necesita al menos 2 compras.</div>
+        </div>
+
+        <!-- PANEL: COMPARATIVO CONTRA EL PERÍODO ANTERIOR (script 42) -->
+        <div class="card-body p-0 d-none" id="rc-panel-comparativo">
+          <div id="rc-comp-resumen" class="small text-muted px-3 pt-2"></div>
+          <div class="table-responsive">
+            <table class="table table-hover table-striped mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th style="width: 50px">#</th>
+                  <th>Insumo</th>
+                  <th class="text-right">Cantidad anterior</th>
+                  <th class="text-right">Cantidad actual</th>
+                  <th class="text-center">Variación</th>
+                  <th class="text-right">Gasto anterior</th>
+                  <th class="text-right">Gasto actual</th>
+                  <th class="text-center">Variación</th>
+                </tr>
+              </thead>
+              <tbody id="rc-comp-body">
+                <tr><td colspan="8" class="text-center text-muted py-3">Elegí un rango de fechas y apretá Generar.</td></tr>
+              </tbody>
+              <tfoot id="rc-comp-pie"></tfoot>
+            </table>
+          </div>
+          <div class="small text-muted px-3 py-2">El período anterior tiene la misma cantidad de días y termina el día antes del "Desde". Si el gasto sube y la cantidad no, subió el precio.</div>
         </div>
 
         <!-- PANEL: EVOLUCIÓN DE PRECIOS -->

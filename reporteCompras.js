@@ -3,16 +3,22 @@
 // =============================================================================
 //
 // QUÉ HACE
-//   Pantalla con dos solapas:
+//   Pantalla con cuatro solapas:
 //     1) GASTO: cuánto se gastó en un período, agrupado por insumo, rubro
 //        (categoría del insumo) o proveedor, con porcentaje y barra.
-//     2) EVOLUCIÓN DE PRECIOS: historial de precios de compra de UN insumo, con
+//     2) CANTIDADES Y RITMO (script 42): por insumo, cuánto se compró, cuánto por
+//        semana / por mes, cada cuántos días se compra y cuándo fue la última vez.
+//     3) COMPARATIVO (script 42): el período elegido contra el anterior de igual
+//        duración, con cantidad, gasto y variación por insumo.
+//     4) EVOLUCIÓN DE PRECIOS: historial de precios de compra de UN insumo, con
 //        un gráfico de línea, precio mínimo / máximo / último y variación.
 //
 // DE DÓNDE SALEN LOS DATOS
-//   De dos funciones de la base (script 28) que agrupan y ordenan en el servidor:
-//     - reporte_compras_gasto(p_desde, p_hasta, p_agrupar)
-//     - reporte_compras_precios(p_id_insumo, p_desde, p_hasta)
+//   De funciones de la base que agrupan y ordenan en el servidor:
+//     - reporte_compras_gasto(p_desde, p_hasta, p_agrupar)          (script 28)
+//     - reporte_compras_precios(p_id_insumo, p_desde, p_hasta)      (script 28)
+//     - reporte_compras_ritmo(p_desde, p_hasta)                     (script 42)
+//     - reporte_compras_comparativo(p_desde, p_hasta)               (script 42)
 //   Solo cuentan las compras ACTIVAS (las anuladas no suman) y el gasto se mide
 //   por FECHA DE LA COMPRA, no por fecha de pago. Esta pantalla solo LEE.
 //
@@ -37,7 +43,7 @@ const AGRUPACIONES = {
   proveedor: 'Proveedor'
 };
 
-// Solapa que se está viendo: 'gasto' o 'precios'.
+// Solapa que se está viendo: 'gasto', 'ritmo', 'comparativo' o 'precios'.
 let pestanaActiva = 'gasto';
 
 // "Número de pedido": cada vez que se pide un reporte se sube. Si una respuesta
@@ -55,6 +61,24 @@ function formatearPorcentaje(n) {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1
   }) + ' %';
+}
+
+// Cantidad con hasta 3 decimales, formato argentino, sin ceros de más.
+// Ejemplo: 15 -> '15'  |  1.2857 -> '1,286'  |  2500.5 -> '2.500,5'
+function formatearCantidad(n) {
+  return Number(n || 0).toLocaleString('es-AR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3
+  });
+}
+
+// "hoy", "hace 1 día", "hace 12 días" a partir de la cantidad de días.
+function textoHace(dias) {
+  const d = Number(dias);
+  if (!isFinite(d)) return '';
+  if (d <= 0) return 'hoy';
+  if (d === 1) return 'hace 1 día';
+  return `hace ${d} días`;
 }
 
 // Variación con signo. Ejemplo: 12.34 -> '+12,3 %'  |  -5 -> '-5,0 %'
@@ -148,7 +172,7 @@ export async function inicializarReporteCompras() {
 
 // -----------------------------------------------------------------------------
 // cambiarPestana  (interna)
-//   Cambia entre Gasto y Precios: marca la solapa, muestra su panel y los filtros
+//   Cambia entre las solapas (Gasto, Ritmo, Comparativo, Precios): marca la solapa, muestra su panel y los filtros
 //   que le corresponden (Agrupar por / Insumo), y regenera el reporte.
 // -----------------------------------------------------------------------------
 function cambiarPestana(nombre) {
@@ -161,6 +185,8 @@ function cambiarPestana(nombre) {
 
   // classList.toggle('d-none', condición): oculta cuando la condición es verdadera.
   document.getElementById('rc-panel-gasto')?.classList.toggle('d-none', nombre !== 'gasto');
+  document.getElementById('rc-panel-ritmo')?.classList.toggle('d-none', nombre !== 'ritmo');
+  document.getElementById('rc-panel-comparativo')?.classList.toggle('d-none', nombre !== 'comparativo');
   document.getElementById('rc-panel-precios')?.classList.toggle('d-none', nombre !== 'precios');
   document.getElementById('rc-grupo-agrupar')?.classList.toggle('d-none', nombre !== 'gasto');
   document.getElementById('rc-grupo-insumo')?.classList.toggle('d-none', nombre !== 'precios');
@@ -178,6 +204,10 @@ function cambiarPestana(nombre) {
 async function generarReporte(avisar) {
   if (pestanaActiva === 'gasto') {
     await generarGasto();
+  } else if (pestanaActiva === 'ritmo') {
+    await generarRitmo();
+  } else if (pestanaActiva === 'comparativo') {
+    await generarComparativo();
   } else {
     await generarPrecios(avisar);
   }
@@ -185,7 +215,7 @@ async function generarReporte(avisar) {
 
 
 // =============================================================================
-// SOLAPA 1: GASTO
+// SOLAPA: GASTO
 // =============================================================================
 async function generarGasto() {
   const cuerpo = document.getElementById('rc-gasto-body');
@@ -266,7 +296,176 @@ async function generarGasto() {
 
 
 // =============================================================================
-// SOLAPA 2: EVOLUCIÓN DE PRECIOS
+// SOLAPA: CANTIDADES Y RITMO DE COMPRA  (script 42)
+// =============================================================================
+// Una fila por insumo comprado en el período. Las cantidades NO se suman entre
+// insumos (no se pueden sumar PAQ con KG), por eso el pie solo totaliza el gasto.
+async function generarRitmo() {
+  const cuerpo = document.getElementById('rc-ritmo-body');
+  const pie = document.getElementById('rc-ritmo-pie');
+  const resumen = document.getElementById('rc-ritmo-resumen');
+  if (!cuerpo) return;
+
+  const fechas = leerFiltroFechas();
+  if (!fechas) return;
+
+  cuerpo.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">Cargando...</td></tr>';
+  if (pie) pie.innerHTML = '';
+  if (resumen) resumen.innerHTML = '';
+
+  const miPedido = ++numeroPedido;
+  const { data, error } = await supabaseAdmin.rpc('reporte_compras_ritmo', {
+    p_desde: fechas.desde,
+    p_hasta: fechas.hasta
+  });
+  if (miPedido !== numeroPedido) return;
+
+  if (error) {
+    cuerpo.innerHTML = `<tr><td colspan="9" class="text-danger text-center">${esc(mensajeErrorFuncion(error, 'reporte'))}</td></tr>`;
+    return;
+  }
+
+  const filas = data || [];
+  if (filas.length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">No hay compras en ese período.</td></tr>';
+    return;
+  }
+
+  cuerpo.innerHTML = filas.map((f, i) => {
+    const unidad = esc(f.r_unidad);
+    // "Cada cuántos días": null cuando hubo una sola compra (no hay ritmo que medir).
+    const entre = f.r_dias_entre === null || f.r_dias_entre === undefined
+      ? '<span class="text-muted" title="Con una sola compra en el período no se puede calcular">-</span>'
+      : `${formatearCantidad(f.r_dias_entre)} días`;
+    return `
+      <tr>
+        <td class="text-muted">${i + 1}</td>
+        <td class="font-weight-bold">${esc(f.r_insumo)}</td>
+        <td class="text-center">${Number(f.r_compras)}</td>
+        <td class="text-right font-weight-bold">${formatearCantidad(f.r_cantidad)} ${unidad}</td>
+        <td class="text-right">${formatearCantidad(f.r_cant_por_semana)} ${unidad}</td>
+        <td class="text-right">${formatearCantidad(f.r_cant_por_mes)} ${unidad}</td>
+        <td class="text-center">${entre}</td>
+        <td>
+          ${esc(formatearFechaAR(f.r_ultima_compra))}
+          <div class="small text-muted">${esc(textoHace(f.r_dias_desde_ultima))} · ${formatearCantidad(f.r_ultima_cantidad)} ${unidad}</div>
+        </td>
+        <td class="text-right font-weight-bold">$${formatearMoneda(f.r_gasto)}</td>
+      </tr>`;
+  }).join('');
+
+  const totalGasto = filas.reduce((acc, f) => acc + Number(f.r_gasto || 0), 0);
+  if (pie) {
+    pie.innerHTML = `
+      <tr class="bg-light font-weight-bold">
+        <td colspan="8" class="text-right">TOTAL DEL PERÍODO:</td>
+        <td class="text-right text-success">$${formatearMoneda(totalGasto)}</td>
+      </tr>`;
+  }
+  if (resumen) {
+    resumen.innerHTML = `${filas.length} insumo(s) · del ${formatearFechaAR(fechas.desde)} al ${formatearFechaAR(fechas.hasta)}`;
+  }
+}
+
+
+// =============================================================================
+// SOLAPA: COMPARATIVO CONTRA EL PERÍODO ANTERIOR  (script 42)
+// =============================================================================
+
+// Días entre dos fechas AAAA-MM-DD, contando ambos extremos (igual que la base).
+function diasDelPeriodo(desde, hasta) {
+  const a = Date.UTC(...desde.split('-').map((n, i) => (i === 1 ? Number(n) - 1 : Number(n))));
+  const b = Date.UTC(...hasta.split('-').map((n, i) => (i === 1 ? Number(n) - 1 : Number(n))));
+  return Math.round((b - a) / 86400000) + 1;
+}
+
+// Variación porcentual de "actual" contra "anterior".
+// Devuelve null cuando no hay base de comparación (anterior en 0).
+function variacionPct(actual, anterior) {
+  const a = Number(actual), b = Number(anterior);
+  return b > 0 ? ((a - b) / b) * 100 : null;
+}
+
+// Celda de variación. Si antes no se compró nada y ahora sí, se muestra "Nuevo".
+function htmlVariacionComparada(actual, anterior) {
+  if (Number(anterior) <= 0 && Number(actual) > 0) return '<span class="badge badge-info">Nuevo</span>';
+  return htmlVariacion(variacionPct(actual, anterior));
+}
+
+async function generarComparativo() {
+  const cuerpo = document.getElementById('rc-comp-body');
+  const pie = document.getElementById('rc-comp-pie');
+  const resumen = document.getElementById('rc-comp-resumen');
+  if (!cuerpo) return;
+
+  const fechas = leerFiltroFechas();
+  if (!fechas) return;
+
+  // Período anterior de igual duración, terminando el día antes del "Desde".
+  const dias = diasDelPeriodo(fechas.desde, fechas.hasta);
+  const antHasta = sumarDiasISO(fechas.desde, -1);
+  const antDesde = sumarDiasISO(fechas.desde, -dias);
+
+  cuerpo.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Cargando...</td></tr>';
+  if (pie) pie.innerHTML = '';
+  if (resumen) resumen.innerHTML = '';
+
+  const miPedido = ++numeroPedido;
+  const { data, error } = await supabaseAdmin.rpc('reporte_compras_comparativo', {
+    p_desde: fechas.desde,
+    p_hasta: fechas.hasta
+  });
+  if (miPedido !== numeroPedido) return;
+
+  if (error) {
+    cuerpo.innerHTML = `<tr><td colspan="8" class="text-danger text-center">${esc(mensajeErrorFuncion(error, 'reporte'))}</td></tr>`;
+    return;
+  }
+
+  const filas = data || [];
+  if (resumen) {
+    resumen.innerHTML =
+      `<strong>Actual:</strong> ${formatearFechaAR(fechas.desde)} al ${formatearFechaAR(fechas.hasta)} ` +
+      `&nbsp;·&nbsp; <strong>Anterior:</strong> ${formatearFechaAR(antDesde)} al ${formatearFechaAR(antHasta)} ` +
+      `(${dias} días cada uno)`;
+  }
+  if (filas.length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No hay compras en ninguno de los dos períodos.</td></tr>';
+    return;
+  }
+
+  cuerpo.innerHTML = filas.map((f, i) => {
+    const unidad = esc(f.r_unidad);
+    return `
+      <tr>
+        <td class="text-muted">${i + 1}</td>
+        <td class="font-weight-bold">${esc(f.r_insumo)}</td>
+        <td class="text-right text-muted">${formatearCantidad(f.r_cant_anterior)} ${unidad}</td>
+        <td class="text-right font-weight-bold">${formatearCantidad(f.r_cant_actual)} ${unidad}</td>
+        <td class="text-center">${htmlVariacionComparada(f.r_cant_actual, f.r_cant_anterior)}</td>
+        <td class="text-right text-muted">$${formatearMoneda(f.r_gasto_anterior)}</td>
+        <td class="text-right font-weight-bold">$${formatearMoneda(f.r_gasto_actual)}</td>
+        <td class="text-center">${htmlVariacionComparada(f.r_gasto_actual, f.r_gasto_anterior)}</td>
+      </tr>`;
+  }).join('');
+
+  // Pie: solo se totaliza el gasto (las cantidades de insumos distintos no se suman).
+  const totActual = filas.reduce((acc, f) => acc + Number(f.r_gasto_actual || 0), 0);
+  const totAnterior = filas.reduce((acc, f) => acc + Number(f.r_gasto_anterior || 0), 0);
+  if (pie) {
+    pie.innerHTML = `
+      <tr class="bg-light font-weight-bold">
+        <td colspan="5" class="text-right">GASTO TOTAL:</td>
+        <td class="text-right text-muted">$${formatearMoneda(totAnterior)}</td>
+        <td class="text-right text-success">$${formatearMoneda(totActual)}</td>
+        <td class="text-center">${htmlVariacionComparada(totActual, totAnterior)}</td>
+      </tr>`;
+  }
+}
+
+
+// =============================================================================
+// SOLAPA: EVOLUCIÓN DE PRECIOS
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -449,7 +648,7 @@ async function generarPrecios(avisar) {
 // EVENTOS (delegación sobre document: el módulo se engancha solo al importarse)
 // =============================================================================
 document.addEventListener('click', (e) => {
-  // Solapas Gasto / Precios.
+  // Solapas (Gasto, Cantidades y ritmo, Comparativo, Precios).
   const solapa = e.target.closest('[data-rc-tab]');
   if (solapa) {
     e.preventDefault(); // los links son href="#": evitamos que la página salte
