@@ -17,6 +17,45 @@ function esc(valor) {
   ));
 }
 
+// -----------------------------------------------------------------------------
+// AVISO "PEDIDO LISTO" POR WHATSAPP (opcional, gratis)
+// El botón abre WhatsApp (app o WhatsApp Web) con el chat del cliente y el mensaje ya escrito;
+// la persona del local toca "enviar". Es un link wa.me: no usa la API de Meta ni tiene costo.
+// -----------------------------------------------------------------------------
+
+// Pasa el teléfono que escribió el cliente al formato que pide wa.me para celulares argentinos:
+// 549 + característica + número (sin 0 ni 15). Devuelve '' si no se puede armar con seguridad
+// (en ese caso el botón de avisar no aparece). Acepta: 1122334455, 011 2233-4455, 011 15 2233 4455,
+// +54 9 11 2233 4455, 5491122334455.
+function telefonoParaWhatsApp(texto) {
+  let n = String(texto ?? '').replace(/\D/g, '');   // solo dígitos
+  n = n.replace(/^0+/, '');                          // 0 de la característica o 00 internacional
+  if (n.startsWith('54')) {                          // código de país: se saca (y el 9 de celular, si está)
+    n = n.slice(2);
+    if (n.startsWith('9') && n.length === 11) n = n.slice(1);
+  }
+  if (n.length === 12) {                             // con el 15 en el medio: se busca y se saca
+    for (const i of [2, 3, 4]) {                     // característica de 2, 3 o 4 dígitos
+      if (n.slice(i, i + 2) === '15') { n = n.slice(0, i) + n.slice(i + 2); break; }
+    }
+  }
+  // 10 dígitos y característica válida (11, o empieza con 2 o 3). Si no, no se arriesga un número equivocado.
+  if (n.length === 10 && /^(11|[23])/.test(n)) return '549' + n;
+  return '';
+}
+
+// Los pedidos web guardan el nombre como "Juan Pérez (Tel: 1122334455)". Para el saludo se saca el teléfono.
+function nombreSinTelefono(texto) {
+  return String(texto ?? '').replace(/\s*\(\s*tel[^)]*\)\s*$/i, '').trim();
+}
+
+// Texto del mensaje de "pedido listo". Se puede cambiar libremente.
+function mensajePedidoListo(nombre, idPedido, total) {
+  const importe = Number(total || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  const saludo = nombre ? `Hola ${nombre}!` : 'Hola!';
+  return `${saludo} Tu pedido #${idPedido} de Cruditas ya está listo para retirar. Total: $${importe}. ¡Te esperamos!`;
+}
+
 // Variable para conservar el id del pedido que se está viendo en el modal
 let pedidoActualModalId = null;
 
@@ -25,7 +64,7 @@ let pedidoActualModalId = null;
 let modoPedidos = 'PENDIENTES';
 let numeroConsultaPendientes = 0;   // descarta respuestas viejas si se cambia de vista a mitad de carga
 const ESTADOS_PENDIENTES = ['PREPARACION', 'PREPARADO', 'ENTREGADO_IMPAGO'];   // los que NO son COMPLETADO ni ANULADO
-const COLUMNAS_PEDIDO = 'id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre)';
+const COLUMNAS_PEDIDO = 'id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, telefono, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre)';
 
 // Entrar al listado desde el menú (o desde la campana): siempre arranca en Pendientes.
 export function abrirListadoPedidos() {
@@ -75,7 +114,7 @@ export async function cargarTablaPedidos() {
 
   let query = supabaseAdmin
     .from('TB_TPEDIDOS')
-    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre)')
+    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, telefono, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre)')
     .gte('fecha', fechaDesde)
     .lte('fecha', fechaHasta)
     .order('id', { ascending: false });
@@ -205,6 +244,16 @@ function filaPedidoHtml(p) {
   }
 
   // Menú "Más" (el orden es el que se ve en pantalla)
+  // Pedido PREPARADO con teléfono válido: avisar al cliente por WhatsApp (opcional).
+  const telWS = telefonoParaWhatsApp(p.telefono);
+  if (p.estado === 'PREPARADO' && telWS) {
+    enMenu.push(itemMenuMas(
+      'fa-comment-dots',
+      'Avisar por WhatsApp',
+      `data-id="${idPed}" data-tel="${telWS}" data-nombre="${esc(nombreSinTelefono(p.nombre_referencia))}" data-total="${Number(p.importe_total || 0)}"`,
+      'btn-avisar-ws'
+    ));
+  }
   if (visibles.length > 0 && p.estado !== 'COMPLETADO' && p.estado !== 'ANULADO') {
     enMenu.push(itemMenuMas('fa-eye', 'Ver detalle', accionVer));
   }
@@ -588,6 +637,15 @@ export async function verDetallePedido(idPedido) {
 // ESCUCHADOR DE EVENTOS DE IMPRESIÓN DIRECTA EN LA TABLA
 // =========================================================================
 document.getElementById('tabla-pedidos-body')?.addEventListener('click', async (e) => {
+  // Avisar por WhatsApp: va primero y sin "await" antes, para que el navegador no bloquee la ventana nueva.
+  const btnAvisar = e.target.closest('.btn-avisar-ws');
+  if (btnAvisar) {
+    const d = btnAvisar.dataset;
+    const texto = mensajePedidoListo(d.nombre, d.id, d.total);
+    window.open(`https://wa.me/${d.tel}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
+    return;
+  }
+
   const btnCocina = e.target.closest('.btn-print-cocina');
   if (btnCocina) {
     const idPedido = btnCocina.dataset.id;

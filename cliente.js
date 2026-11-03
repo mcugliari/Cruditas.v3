@@ -19,6 +19,11 @@ const FOTOS_GRUPO = {
   pizza: 'img/pizza.jpg'
 };
 
+// WhatsApp del NEGOCIO al que apunta el botón "Avisarnos por WhatsApp" de la pantalla "Pedido recibido".
+// No está escrito acá: se lee de la base (función whatsapp_negocio, script 40) y se cambia con un UPDATE.
+// Solo dígitos, formato internacional (549 + característica + número). Si está vacío, el botón no se muestra.
+let whatsappNegocio = '';
+
 // Token opcional del link (?t=...). Lo genera el bot desde el servidor.
 // Cliente consumidor final, lista de precios y medio de pago se fijan en la base.
 const TOKEN_LINK = new URLSearchParams(window.location.search).get('t');
@@ -55,6 +60,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // desplegadas/cerradas se mantienen).
   document.getElementById('contenedor-productos-cliente')?.addEventListener('click', alTocarCantidad);
 
+  // El número del negocio se pide aparte y SIN esperar: si falla, solo no aparece el botón de WhatsApp.
+  cargarWhatsAppNegocio();
+
   await cargarDatosMenu();
 
   // Al abrir el modal: vuelve al paso de datos, autocompleta lo que vino en la URL y arma el desglose.
@@ -71,6 +79,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('btn-finalizar-pedido')?.addEventListener('click', enviarPedidoASupabase);
 });
+
+// Pide a la base el WhatsApp del negocio. Cualquier error se ignora (queda vacío y no se muestra el botón).
+async function cargarWhatsAppNegocio() {
+  try {
+    const { data, error } = await supabasePublic.rpc('whatsapp_negocio');
+    if (error) throw error;
+    whatsappNegocio = String(data ?? '').replace(/\D/g, '');
+  } catch (err) {
+    console.warn('No se pudo leer el WhatsApp del negocio (el botón no se mostrará):', err);
+  }
+}
 
 async function cargarDatosMenu() {
   const contenedor = document.getElementById('contenedor-productos-cliente');
@@ -599,6 +618,19 @@ function mostrarPasoExito(idPedido, total, nombre, telefono) {
   const paso = document.getElementById('cliente-paso-exito');
   if (!paso) return;
 
+  // Botón OPCIONAL: abre WhatsApp con el mensaje ya escrito hacia el negocio. Es un simple link (wa.me):
+  // no usa la API de Meta, no cuesta nada y el cliente decide si lo manda.
+  const numeroNegocio = whatsappNegocio;
+  let htmlWhatsApp = '';
+  if (numeroNegocio) {
+    const mensajeWS = `Hola! Envié mi pedido *#${idPedido}* por *${formatoPesos(total)}* a nombre de *${nombre}*. Quedo atento a la confirmación!`;
+    const urlWS = `https://wa.me/${numeroNegocio}?text=${encodeURIComponent(mensajeWS)}`;
+    htmlWhatsApp = `
+      <a class="btn btn-success btn-block font-weight-bold py-2 mb-2" href="${urlWS}" target="_blank" rel="noopener">
+        <i class="fa-brands fa-whatsapp mr-1" aria-hidden="true"></i> AVISARNOS POR WHATSAPP
+      </a>`;
+  }
+
   paso.innerHTML = `
     <div class="modal-body text-center py-4">
       <div class="mb-2" style="font-size: 3.2rem; color: #198754;"><i class="fas fa-circle-check" aria-hidden="true"></i></div>
@@ -610,7 +642,8 @@ function mostrarPasoExito(idPedido, total, nombre, telefono) {
         <small class="text-secondary d-block">Teléfono: <strong>${esc(telefono)}</strong></small>
       </div>
       <p class="small text-muted mb-4">Podés cerrar esta ventana.</p>
-      <button type="button" class="btn btn-success btn-block font-weight-bold py-2" id="btn-exito-aceptar">
+      ${htmlWhatsApp}
+      <button type="button" class="btn ${htmlWhatsApp ? 'btn-outline-secondary' : 'btn-success'} btn-block font-weight-bold py-2" id="btn-exito-aceptar">
         ACEPTAR
       </button>
     </div>
@@ -654,9 +687,6 @@ async function enviarPedidoASupabase() {
   enviando = true;
   ponerBotonConfirmar(true, '<span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>Enviando pedido...');
 
-  // true cuando se manda al cliente a WhatsApp: ahí el botón queda bloqueado hasta que la página cambie.
-  let redirigiendo = false;
-
   try {
     const { data: resultado, error: errPedido } = await supabasePublic.rpc('crear_pedido_cliente', {
       p_nombre: nombre,
@@ -682,25 +712,7 @@ async function enviarPedidoASupabase() {
     if (inputTelefono) inputTelefono.value = '';
     if (inputObservaciones) inputObservaciones.value = '';
 
-    // =========================================================================
-    // DETECCIÓN DE ORIGEN: ¿Viene desde el bot de WhatsApp?
-    // =========================================================================
-    const urlParams = new URLSearchParams(window.location.search);
-    const vieneDeWhatsApp = urlParams.has('tel') && urlParams.get('tel').trim() !== '';
-
-    if (vieneDeWhatsApp) {
-      // OPCIÓN 1: Redirección automática a WhatsApp
-      const mensajeWS = `Hola! Envié mi Pedido *#${pedidoCreado.id}* por *${formatoPesos(totalServidor)}* a nombre de *${nombre}*. Quedo a la espera de la confirmación!`;
-
-      // Podés usar el teléfono del negocio o reenviar al mismo número
-      const urlWhatsApp = `https://wa.me/549${telefono}?text=${encodeURIComponent(mensajeWS)}`;
-
-      redirigiendo = true;
-      window.location.href = urlWhatsApp;
-      return;
-    }
-
-    // OPCIÓN 2: Pantalla "Pedido recibido" dentro del modal
+    // Pantalla "Pedido recibido" dentro del modal (con el botón opcional de WhatsApp)
     mostrarPasoExito(pedidoCreado.id, totalServidor, nombre, telefono);
 
     // Se vuelve a pedir el menú por si cambiaron precios o productos.
@@ -710,10 +722,7 @@ async function enviarPedidoASupabase() {
     console.error('Error al procesar el pedido:', err);
     mostrarErrorModal('Ocurrió un error inesperado. Intentá de nuevo.');
   } finally {
-    // Se libera el envío salvo que la página esté yéndose a WhatsApp.
-    if (!redirigiendo) {
-      enviando = false;
-      ponerBotonConfirmar(false);
-    }
+    enviando = false;
+    ponerBotonConfirmar(false);
   }
 }
