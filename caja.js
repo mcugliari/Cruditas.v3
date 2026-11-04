@@ -8,6 +8,12 @@
 //      permite cerrar comparándolo con el efectivo realmente contado.
 //   2) Anular el cierre de hoy (reabre la caja).
 //   3) Historial: lista de cierres por fechas y su detalle.
+//   4) Arqueo de turno (script 43): contar el efectivo del cajón y registrarlo SIN
+//      cerrar la caja ni mover plata (cambio de turno). Es una solapa de la ventana de
+//      cierre, con el historial de arqueos del día. El detalle de cada cierre del
+//      historial también muestra los arqueos de ese día (solo lectura).
+//   La ventana muestra arriba el efectivo esperado (una sola vez), el detalle del día
+//   plegado y dos solapas: "Cerrar caja" y "Arqueo de turno".
 //
 // QUÉ CAMBIÓ RESPECTO DE LA VERSIÓN ANTERIOR
 //   - Los números ya NO se calculan en el navegador: los calcula la base de datos
@@ -43,6 +49,15 @@ let resumenCierreActual = null;
 // a consultar (antes se guardaba en "window", una variable global; es más
 // prolijo que sea una variable de este módulo).
 let cierresCache = [];
+
+// Arqueos de turno del rango consultado en el historial, agrupados por fecha ('AAAA-MM-DD' -> lista).
+// null = no se pudieron cargar: en ese caso el detalle de un cierre simplemente no muestra la sección.
+let arqueosPorFecha = null;
+
+// Arqueo de turno: efectivo que el sistema espera en el cajón según el último resumen
+// cargado (null = no se puede arquear: caja cerrada o error) y los arqueos de hoy.
+let esperadoArqueo = null;
+let contadorCargaArqueos = 0;   // evita que una carga lenta pise a una más nueva
 
 // -----------------------------------------------------------------------------
 // htmlMovimientoCuentas  (interna)
@@ -84,6 +99,21 @@ function htmlMovimientoCuentas(filas) {
 }
 
 
+// -----------------------------------------------------------------------------
+// htmlBannerEsperado  (interna)
+//   El efectivo que el sistema espera en el cajón. Se muestra UNA sola vez, arriba de las
+//   solapas "Cerrar caja" y "Arqueo de turno", porque las dos lo usan para comparar.
+// -----------------------------------------------------------------------------
+function htmlBannerEsperado(efectivoEsperado) {
+  return `
+    <div class="d-flex justify-content-between align-items-center p-3 mb-2 rounded border border-warning" style="background:#fff8e1;">
+      <span><strong>EFECTIVO ESPERADO EN CAJA</strong><br>
+        <small class="text-muted">lo que debería haber en el cajón según el sistema</small></span>
+      <strong class="h4 mb-0">$${formatearMoneda(efectivoEsperado)}</strong>
+    </div>`;
+}
+
+
 // =============================================================================
 // 1. CIERRE DEL DÍA
 // =============================================================================
@@ -110,6 +140,7 @@ export async function cargarResumenVentasDia() {
   const fechaISO = obtenerFechaActualISO();
   const fechaTextoAR = formatearFechaAR(fechaISO);
   resumenCierreActual = null;
+  esperadoArqueo = null;
 
   try {
     // .rpc('nombre', { parámetros }) ejecuta una función de la base y devuelve lo
@@ -117,6 +148,12 @@ export async function cargarResumenVentasDia() {
     // resumen.total_ventas o resumen.efectivo_esperado (ver script 07).
     const { data: resumen, error } = await supabaseAdmin.rpc('resumen_caja', { p_fecha: fechaISO });
     if (error) throw error;
+
+    // Panel de arqueo: con la caja abierta se puede arquear contra el esperado; con la caja
+    // cerrada solo se ve el historial. Se prepara antes de los casos A/B/C (que pueden salir temprano).
+    esperadoArqueo = resumen.cerrada ? null : (Number(resumen.efectivo_esperado) || 0);
+    prepararPanelArqueo(!!resumen.cerrada);
+    cargarArqueosDia();   // sin await: no frena el dibujo del resumen
 
     // ---- CASO A: la caja de hoy ya está cerrada ----
     if (resumen.cerrada) {
@@ -148,7 +185,7 @@ export async function cargarResumenVentasDia() {
           No hay ventas cobradas, egresos ni traspasos registrados hoy (${fechaTextoAR}).<br>
           <small>Las ventas se cuentan el día en que se cobran (pedidos completados).</small>
         </div>
-      `;
+      ` + htmlBannerEsperado(esperadoArqueo);   // el arqueo se puede hacer igual, aun sin movimientos
       alternarCamposFormulario(true);
       return;
     }
@@ -158,6 +195,8 @@ export async function cargarResumenVentasDia() {
     alternarCamposFormulario(false);
 
     // Armamos el HTML sumando trozos de texto con "+=" (agrega al final del texto).
+    // "html" es el DETALLE DEL DÍA (ventas, egresos, movimiento por cuenta): va plegado, porque quien
+    // cierra solo necesita el efectivo esperado (banner de arriba) y contar el cajón.
     let html = '<div class="list-group mb-2">';
 
     // VENTAS COBRADAS, una línea por medio de pago.
@@ -213,16 +252,20 @@ export async function cargarResumenVentasDia() {
         </div>`;
     }
 
-    // EFECTIVO ESPERADO en la caja física.
+    // Cómo se llega al efectivo esperado (el importe está en el banner de arriba).
     html += `
-      <div class="list-group-item d-flex justify-content-between align-items-center py-2 border-warning" style="background:#fff8e1;">
-        <span><strong>EFECTIVO ESPERADO EN CAJA</strong><br>
-          <small class="text-muted">ventas en efectivo − gastos en efectivo − retiros ± traspasos de efectivo</small></span>
-        <strong class="h5 mb-0">$${formatearMoneda(resumen.efectivo_esperado)}</strong>
+      <div class="list-group-item py-2 small text-muted">
+        <strong>Efectivo esperado</strong> = ventas en efectivo − gastos en efectivo − retiros ± traspasos de efectivo
       </div>
     </div>`;
 
-    contenedor.innerHTML = html;
+    // Banner con el efectivo esperado (siempre visible) + botón que despliega el detalle.
+    contenedor.innerHTML = htmlBannerEsperado(resumen.efectivo_esperado) + `
+      <button type="button" class="btn btn-link btn-sm p-0 mb-2" data-toggle="collapse"
+              data-target="#detalle-dia-cierre" aria-expanded="false" aria-controls="detalle-dia-cierre">
+        <i class="fas fa-chevron-down"></i> Ver detalle del día
+      </button>
+      <div class="collapse" id="detalle-dia-cierre">${html}</div>`;
 
     // Reinicia el formulario y muestra el efectivo esperado como pista.
     const inputEf = document.getElementById('input-efectivo-real');
@@ -233,6 +276,7 @@ export async function cargarResumenVentasDia() {
     console.error('Error al cargar el resumen de caja:', err);
     contenedor.innerHTML = `<div class="alert alert-danger">Error: ${esc(mensajeErrorFuncion(err, 'cierre'))}</div>`;
     alternarCamposFormulario(true);
+    prepararPanelArqueo(true);
   }
 }
 
@@ -272,7 +316,7 @@ function actualizarDiferenciaEfectivo() {
   const textoContado = inputEf.value.trim();
 
   if (textoContado === '') {
-    contDif.innerHTML = `<span class="text-muted">Efectivo esperado por sistema: $${formatearMoneda(esperado)}</span>`;
+    contDif.innerHTML = '';   // el esperado ya se ve arriba: no se repite acá
     return;
   }
 
@@ -322,6 +366,240 @@ export async function anularCierreCaja(idCierre) {
 }
 
 
+// =============================================================================
+// 1b. ARQUEO DE TURNO  (script 43)
+// =============================================================================
+// Sirve para el cambio de turno: se cuenta el efectivo del cajón y se registra cuánto
+// había contra cuánto esperaba el sistema. NO cierra la caja, NO mueve plata y NO bloquea
+// nada: se puede seguir cobrando y cargando gastos. Los arqueos no se borran: el Dueño
+// puede anular uno (con motivo). La diferencia que importa para el cierre es la del cierre.
+//
+// Funciones de la base: registrar_arqueo (Encargado y Dueño) y anular_arqueo (solo Dueño).
+// La lista se lee directo de TB_TARQUEOS_CAJA (solo lectura para Encargado y Dueño).
+
+const ZONA_HORARIA_AR = 'America/Argentina/Buenos_Aires';
+
+// Hora (HH:MM) de un momento guardado en la base, siempre en hora de Argentina.
+function horaDeArqueo(momentoISO) {
+  const d = new Date(momentoISO);
+  if (isNaN(d)) return '';
+  return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: ZONA_HORARIA_AR });
+}
+
+// Importe con signo: +$1.500,00 / -$500,00 / $0,00 (redondeado a centavos).
+function importeConSigno(n) {
+  const v = Math.round(Number(n) * 100) / 100;
+  if (v === 0) return '$' + formatearMoneda(0);
+  return (v > 0 ? '+$' : '-$') + formatearMoneda(Math.abs(v));
+}
+
+// Texto con color para una diferencia (contado - esperado).
+function htmlDiferenciaArqueo(dif) {
+  const v = Math.round(Number(dif) * 100) / 100;
+  if (v === 0) return '<span class="text-success">✔ sin diferencia</span>';
+  if (v > 0) return `<span class="text-info">sobrante ${importeConSigno(v)}</span>`;
+  return `<span class="text-danger">faltante ${importeConSigno(v)}</span>`;
+}
+
+// Habilita o bloquea el formulario del arqueo. Con la caja cerrada no hay nada que verificar.
+function prepararPanelArqueo(cajaCerrada) {
+  const input = document.getElementById('input-arqueo-efectivo');
+  const obs = document.getElementById('arqueo-observaciones');
+  const btn = document.getElementById('btn-registrar-arqueo');
+  const aviso = document.getElementById('arqueo-aviso');
+  const contDif = document.getElementById('contenedor-diferencia-arqueo');
+
+  if (input) input.disabled = cajaCerrada;
+  if (obs) obs.disabled = cajaCerrada;
+  if (btn) btn.disabled = cajaCerrada;
+  if (aviso) {
+    aviso.innerHTML = cajaCerrada
+      ? '<div class="alert alert-warning small py-2 mb-2">La caja de hoy está cerrada: ya no se pueden registrar arqueos. Abajo queda el historial del día.</div>'
+      : '';
+  }
+  if (contDif && cajaCerrada) contDif.innerHTML = '';
+  if (!cajaCerrada) actualizarDiferenciaArqueo();
+}
+
+// Mientras se escribe el efectivo contado, muestra la diferencia contra lo esperado.
+function actualizarDiferenciaArqueo() {
+  const input = document.getElementById('input-arqueo-efectivo');
+  const contDif = document.getElementById('contenedor-diferencia-arqueo');
+  if (!input || !contDif || input.disabled || esperadoArqueo === null) return;
+
+  const texto = input.value.trim();
+  if (texto === '') {
+    contDif.innerHTML = '';   // el esperado ya se ve arriba: no se repite acá
+    return;
+  }
+  const dif = Math.round((Number(texto) - esperadoArqueo) * 100) / 100;
+  contDif.innerHTML = htmlDiferenciaArqueo(dif);
+}
+
+// Dibuja la lista de arqueos (la usan la solapa "Arqueo de turno" y el detalle de un cierre del historial).
+//   arqueos        -> filas de TB_TARQUEOS_CAJA ya ordenadas de más viejo a más nuevo (activos y anulados)
+//   permitirAnular -> true muestra el botón "Anular" en los activos (solo en la solapa y solo para el Dueño)
+// La "variación" compara la diferencia de cada arqueo con la del arqueo ACTIVO anterior: muestra
+// cuánto cambió entre un turno y otro.
+function htmlListaArqueos(arqueos, { permitirAnular = false } = {}) {
+  let difAnterior = null;       // diferencia del último arqueo activo ya dibujado
+  let horaAnterior = '';
+
+  return '<div class="list-group">' + arqueos.map(a => {
+    const anulado = a.estado !== 'ACTIVO';
+    const hora = horaDeArqueo(a.created_at);
+    const dif = Number(a.diferencia);
+
+    // Variación contra el arqueo activo anterior (solo para los activos).
+    let lineaVariacion = '';
+    if (!anulado) {
+      if (difAnterior !== null) {
+        const v = Math.round((dif - difAnterior) * 100) / 100;
+        const clase = v === 0 ? 'text-muted' : (v > 0 ? 'text-success' : 'text-danger');
+        lineaVariacion = `<div class="small ${clase}" title="Cuánto cambió la diferencia respecto del arqueo anterior">Variación desde el arqueo de las ${esc(horaAnterior)}: <strong>${importeConSigno(v)}</strong></div>`;
+      }
+      difAnterior = dif;
+      horaAnterior = hora;
+    }
+
+    return `
+      <div class="list-group-item py-2 ${anulado ? 'text-muted' : ''}">
+        <div class="d-flex justify-content-between align-items-center">
+          <span><strong>${esc(hora)}</strong>
+            <small class="text-muted">${a.usuario ? '· ' + esc(a.usuario) : ''}</small>
+            ${anulado ? '<span class="badge badge-danger ml-1">ANULADO</span>' : ''}</span>
+          ${!anulado && permitirAnular ? `<button type="button" class="btn btn-sm btn-outline-danger py-0" data-arqueo-anular="${a.id}" title="Anular este arqueo"><i class="fas fa-ban"></i> Anular</button>` : ''}
+        </div>
+        <div class="small" style="${anulado ? 'text-decoration: line-through;' : ''}">
+          Esperado <strong>$${formatearMoneda(a.efectivo_sistema)}</strong> ·
+          Contado <strong>$${formatearMoneda(a.efectivo_real)}</strong> ·
+          ${htmlDiferenciaArqueo(dif)}
+        </div>
+        ${lineaVariacion}
+        ${a.observaciones ? `<div class="small text-muted" style="white-space: pre-line;">${esc(a.observaciones)}</div>` : ''}
+        ${anulado && a.motivo_anulacion ? `<div class="small text-danger">Motivo de anulación: ${esc(a.motivo_anulacion)}</div>` : ''}
+      </div>`;
+  }).join('') + '</div>';
+}
+
+
+// Trae los arqueos de hoy y los dibuja (del más viejo al más nuevo: orden de turnos).
+async function cargarArqueosDia() {
+  const lista = document.getElementById('lista-arqueos');
+  const contador = document.getElementById('arqueo-contador');
+  if (!lista) return;
+
+  const miCarga = ++contadorCargaArqueos;
+  lista.innerHTML = '<div class="text-center text-muted small py-2"><span class="spinner-border spinner-border-sm"></span> Cargando arqueos...</div>';
+
+  const { data, error } = await supabaseAdmin
+    .from('TB_TARQUEOS_CAJA')
+    .select('id, efectivo_sistema, efectivo_real, diferencia, observaciones, estado, motivo_anulacion, usuario, created_at')
+    .eq('fecha', obtenerFechaActualISO())
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (miCarga !== contadorCargaArqueos) return;   // llegó una carga más nueva
+
+  if (error) {
+    lista.innerHTML = `<div class="text-danger small py-2">No se pudieron cargar los arqueos: ${esc(mensajeErrorBD(error))}</div>`;
+    return;
+  }
+
+  const arqueos = data || [];
+  const activos = arqueos.filter(a => a.estado === 'ACTIVO');
+  if (contador) contador.innerText = String(activos.length);
+
+  if (arqueos.length === 0) {
+    lista.innerHTML = '<div class="text-muted small py-2">Todavía no se registró ningún arqueo hoy.</div>';
+    return;
+  }
+
+  lista.innerHTML = htmlListaArqueos(arqueos, { permitirAnular: puedeAlMenos('DUENO') });
+}
+
+// Botón "Registrar arqueo".
+async function registrarArqueo() {
+  const input = document.getElementById('input-arqueo-efectivo');
+  const obsInput = document.getElementById('arqueo-observaciones');
+  const btn = document.getElementById('btn-registrar-arqueo');
+  if (!input || !btn || input.disabled) return;
+
+  const texto = input.value.trim();
+  const contado = Number(texto);
+  if (texto === '' || !isFinite(contado) || contado < 0) {
+    mostrarNotificacion('Ingresá el efectivo contado en el cajón (un importe válido, sin negativos).', 'warning');
+    input.focus();
+    return;
+  }
+
+  // El esperado que se muestra es el de cuando se abrió la ventana; la base lo recalcula al registrar.
+  const detalleDif = esperadoArqueo === null ? '' :
+    ` El sistema esperaba $${formatearMoneda(esperadoArqueo)}.`;
+  const ok = await confirmarAccion({
+    titulo: 'Registrar arqueo',
+    mensaje: `Vas a registrar un arqueo con $${formatearMoneda(contado)} contados.${detalleDif} No cierra la caja ni mueve plata.`,
+    textoConfirmar: 'Registrar arqueo'
+  });
+  if (!ok) return;
+
+  btn.disabled = true;
+  btn.innerText = 'Registrando...';
+  try {
+    const { data, error } = await supabaseAdmin.rpc('registrar_arqueo', {
+      p_efectivo_real: contado,
+      p_observaciones: obsInput?.value.trim() || null
+    });
+    if (error) {
+      mostrarNotificacion(mensajeErrorFuncion(error, 'arqueo'), 'danger');
+      // Si la caja se cerró mientras tanto, se refresca para que el panel quede bloqueado.
+      if ((error.message || '').includes('caja_ya_cerrada')) await cargarResumenVentasDia();
+      return;
+    }
+
+    // Lo que cuenta es lo que calculó la base.
+    const dif = Number(data.diferencia);
+    let mensaje = 'Arqueo registrado: ' + (dif === 0 ? 'sin diferencia'
+      : (dif > 0 ? `sobrante de $${formatearMoneda(dif)}` : `faltante de $${formatearMoneda(Math.abs(dif))}`));
+    const variacion = data.variacion === null || data.variacion === undefined ? null : Number(data.variacion);
+    if (variacion !== null && variacion !== 0) {
+      mensaje += `. Cambió ${importeConSigno(variacion)} desde el arqueo anterior`;
+    }
+    mostrarNotificacion(mensaje);
+
+    input.value = '';
+    if (obsInput) obsInput.value = '';
+    await cargarResumenVentasDia();   // refresca el esperado y la lista de arqueos
+  } catch (err) {
+    console.error('Error al registrar el arqueo:', err);
+    mostrarNotificacion('No se pudo registrar el arqueo. Revisá tu conexión e intentá de nuevo.', 'danger');
+  } finally {
+    btn.innerText = 'Registrar arqueo';
+    // Si la caja se cerró mientras tanto, cargarResumenVentasDia ya lo dejó bloqueado.
+    if (esperadoArqueo !== null) btn.disabled = false;
+  }
+}
+
+// Anular un arqueo (solo Dueño): pide motivo. No se borra, queda marcado como ANULADO.
+async function anularArqueo(idArqueo) {
+  const motivo = await confirmarAccion({
+    titulo: 'Anular arqueo',
+    mensaje: '¿Anular este arqueo? Queda en el historial como ANULADO y deja de contar para la variación entre turnos.',
+    pedirMotivo: true,
+    textoConfirmar: 'Anular arqueo',
+    peligro: true
+  });
+  if (!motivo) return;
+
+  const { error } = await supabaseAdmin.rpc('anular_arqueo', { p_id: idArqueo, p_motivo: motivo });
+  if (error) {
+    mostrarNotificacion(mensajeErrorFuncion(error, 'arqueo'), 'danger');
+    return;
+  }
+  mostrarNotificacion('Arqueo anulado.');
+  await cargarArqueosDia();
+}
+
+
 // -----------------------------------------------------------------------------
 // inicializarCierreCaja
 //   Conecta los eventos de la ventana de cierre. main.js la ejecuta una sola vez
@@ -330,7 +608,21 @@ export async function anularCierreCaja(idCierre) {
 export function inicializarCierreCaja() {
   // Cada vez que la ventana empieza a abrirse, se recalcula el resumen del día.
   $('#modalCierreCaja').on('show.bs.modal', function () {
+    // El formulario del arqueo arranca limpio (el panel queda cerrado, como en el HTML).
+    const inputArq = document.getElementById('input-arqueo-efectivo');
+    const obsArq = document.getElementById('arqueo-observaciones');
+    if (inputArq) inputArq.value = '';
+    if (obsArq) obsArq.value = '';
+    $('#tab-link-cierre').tab('show');   // la ventana siempre abre en "Cerrar caja"
     cargarResumenVentasDia();
+  });
+
+  // Arqueo de turno: diferencia en vivo, botón registrar y botón anular (uno por fila de la lista).
+  document.getElementById('input-arqueo-efectivo')?.addEventListener('input', actualizarDiferenciaArqueo);
+  document.getElementById('btn-registrar-arqueo')?.addEventListener('click', registrarArqueo);
+  document.getElementById('lista-arqueos')?.addEventListener('click', (e) => {
+    const boton = e.target.closest('[data-arqueo-anular]');
+    if (boton) anularArqueo(Number(boton.dataset.arqueoAnular));
   });
 
   // Mientras se escribe el efectivo contado, se muestra la diferencia.
@@ -479,6 +771,7 @@ export async function cargarTablaHistorialCierres() {
     if (error) throw error;
 
     cierresCache = cierres || [];
+    arqueosPorFecha = null;
 
     if (cierresCache.length === 0) {
       contenedor.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No se encontraron cierres entre ${esc(formatearFechaAR(desde))} y ${esc(formatearFechaAR(hasta))}.</td></tr>`;
@@ -508,9 +801,39 @@ export async function cargarTablaHistorialCierres() {
         </tr>`;
     }).join('');
 
+    // Arqueos del mismo rango, para mostrarlos en el detalle de cada cierre. Va aparte y sin frenar la
+    // tabla: si falla, el historial se ve igual (solo sin esa sección).
+    cargarArqueosDelRango(desde, hasta);
+
   } catch (err) {
     console.error('Error al cargar historial:', err);
     contenedor.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-3">Error al obtener historial: ${esc(mensajeErrorBD(err))}</td></tr>`;
+  }
+}
+
+
+// -----------------------------------------------------------------------------
+// cargarArqueosDelRango  (interna)
+//   Trae los arqueos de turno entre dos fechas y los guarda agrupados por fecha en "arqueosPorFecha".
+//   Si falla (por ejemplo, sin permiso o sin conexión), deja null y el detalle no muestra la sección.
+// -----------------------------------------------------------------------------
+async function cargarArqueosDelRango(desde, hasta) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('TB_TARQUEOS_CAJA')
+      .select('id, fecha, efectivo_sistema, efectivo_real, diferencia, observaciones, estado, motivo_anulacion, usuario, created_at')
+      .gte('fecha', desde)
+      .lte('fecha', hasta)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
+    if (error) throw error;
+
+    const porFecha = {};
+    (data || []).forEach(a => { (porFecha[a.fecha] = porFecha[a.fecha] || []).push(a); });
+    arqueosPorFecha = porFecha;
+  } catch (err) {
+    console.error('No se pudieron cargar los arqueos del historial:', err);
+    arqueosPorFecha = null;
   }
 }
 
@@ -544,6 +867,13 @@ export function verDetalleCierre(idCierre) {
     }));
   const bloqueCuentas = filasCuenta.length > 0
     ? `<div class="list-group mb-3">${htmlMovimientoCuentas(filasCuenta)}</div>` : '';
+
+  // ARQUEOS DE TURNO del día (script 43). Solo en el cierre vigente (CERRADO): si el cierre se anuló,
+  // el día se reabrió y los arqueos se ven en el cierre nuevo. Solo lectura: acá no se anula nada.
+  const arqueosDelDia = (cierre.estado === 'CERRADO' && arqueosPorFecha) ? (arqueosPorFecha[cierre.fecha] || []) : [];
+  const bloqueArqueos = arqueosDelDia.length > 0
+    ? `<div class="small font-weight-bold text-uppercase text-muted mb-1">Arqueos de turno del día</div>
+       <div class="mb-3">${htmlListaArqueos(arqueosDelDia, { permitirAnular: false })}</div>` : '';
 
   // Una línea por medio de pago: ventas, y si hubo egresos, cuánto salió y el neto.
   let html = '<div class="list-group mb-3">';
@@ -582,6 +912,8 @@ export function verDetalleCierre(idCierre) {
         <span class="${dif < 0 ? 'text-danger' : 'text-success'} font-weight-bold">$${formatearMoneda(dif)}</span></small>
       <small class="d-block text-muted" style="white-space: pre-line;"><strong>Observaciones:</strong> ${esc(cierre.observaciones) || 'Sin observaciones'}</small>
     </div>
+
+    ${bloqueArqueos}
   `;
 
   document.getElementById('body-modal-detalle-cierre').innerHTML = html;

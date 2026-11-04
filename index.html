@@ -2117,7 +2117,7 @@
     </div>
   </div>
 
-  <!-- Modal Cierre de Caja con Arqueo de Efectivo -->
+  <!-- Modal Cierre de Caja: efectivo esperado arriba, detalle plegado y dos solapas (Cerrar caja / Arqueo de turno) -->
   <div class="modal fade" id="modalCierreCaja" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
@@ -2128,8 +2128,7 @@
           </button>
         </div>
         <div class="modal-body">
-          <p class="text-muted small mb-2">Resumen de ventas calculadas por el sistema:</p>
-          
+          <!-- Efectivo esperado (siempre visible) + "Ver detalle del día" plegado. Lo dibuja caja.js -->
           <div id="contenedor-resumen-cierre">
             <div class="text-center py-3">
               <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -2137,26 +2136,59 @@
             </div>
           </div>
 
-          <div class="card bg-light border p-3 my-3">
-            <div class="form-group mb-2">
-              <label for="input-efectivo-real" class="font-weight-bold text-dark mb-1">
-                💵 Efectivo Real en Caja ($):
-              </label>
-              <input type="number" step="0.01" class="form-control form-control-lg font-weight-bold text-success" id="input-efectivo-real" placeholder="0.00">
-            </div>
-            <div id="contenedor-diferencia-efectivo" class="small font-weight-bold"></div>
-          </div>
+          <ul class="nav nav-pills nav-fill mt-3" role="tablist">
+            <li class="nav-item">
+              <a class="nav-link active font-weight-bold" id="tab-link-cierre" data-toggle="pill" href="#tab-cierre" role="tab" aria-controls="tab-cierre" aria-selected="true">🔒 Cerrar caja</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link font-weight-bold" id="tab-link-arqueo" data-toggle="pill" href="#tab-arqueo" role="tab" aria-controls="tab-arqueo" aria-selected="false">📋 Arqueo de turno
+                <span class="badge badge-secondary" id="arqueo-contador" title="Arqueos registrados hoy">0</span></a>
+            </li>
+          </ul>
 
-          <div class="form-group mb-0">
-            <label for="cierre-observaciones"><strong>Observaciones (Opcional):</strong></label>
-            <textarea id="cierre-observaciones" class="form-control" rows="2" placeholder="Ej: Faltante de $200 por vueltos, retiro a las 18hs..."></textarea>
+          <div class="tab-content pt-3">
+            <!-- SOLAPA: CERRAR CAJA -->
+            <div class="tab-pane fade show active" id="tab-cierre" role="tabpanel" aria-labelledby="tab-link-cierre">
+              <div class="card bg-light border p-3 mb-3">
+                <div class="form-group mb-2">
+                  <label for="input-efectivo-real" class="font-weight-bold text-dark mb-1">
+                    💵 Efectivo real en caja ($):
+                  </label>
+                  <input type="number" step="0.01" class="form-control form-control-lg font-weight-bold text-success" id="input-efectivo-real" placeholder="0.00">
+                </div>
+                <div id="contenedor-diferencia-efectivo" class="small font-weight-bold"></div>
+              </div>
+
+              <div class="form-group">
+                <label for="cierre-observaciones"><strong>Observaciones (opcional):</strong></label>
+                <textarea id="cierre-observaciones" class="form-control" rows="2" placeholder="Ej: Faltante de $200 por vueltos, retiro a las 18hs..."></textarea>
+              </div>
+
+              <button type="button" class="btn btn-danger btn-block font-weight-bold" id="btn-confirmar-cierre">
+                CONFIRMAR Y CERRAR CAJA
+              </button>
+            </div>
+
+            <!-- SOLAPA: ARQUEO DE TURNO (script 43): cuenta el cajón y lo registra SIN cerrar la caja -->
+            <div class="tab-pane fade" id="tab-arqueo" role="tabpanel" aria-labelledby="tab-link-arqueo">
+              <p class="small text-muted mb-2">Contá el efectivo del cajón y registralo en el cambio de turno. Solo deja constancia: no cierra la caja ni mueve plata.</p>
+              <div id="arqueo-aviso"></div>
+              <div class="form-group mb-2">
+                <label for="input-arqueo-efectivo" class="font-weight-bold mb-1">💵 Efectivo contado en el cajón ($):</label>
+                <input type="number" step="0.01" min="0" class="form-control" id="input-arqueo-efectivo" placeholder="0.00">
+              </div>
+              <div id="contenedor-diferencia-arqueo" class="small font-weight-bold mb-2"></div>
+              <div class="form-group mb-2">
+                <input type="text" class="form-control form-control-sm" id="arqueo-observaciones" maxlength="500" placeholder="Observación (opcional). Ej: cambio de turno, entrega María">
+              </div>
+              <button type="button" class="btn btn-dark btn-block font-weight-bold" id="btn-registrar-arqueo">Registrar arqueo</button>
+              <div class="small font-weight-bold text-uppercase text-muted mt-3 mb-1">Arqueos de hoy</div>
+              <div id="lista-arqueos"><div class="text-muted small py-2">Todavía no se registró ningún arqueo hoy.</div></div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-danger font-weight-bold" id="btn-confirmar-cierre">
-            CONFIRMAR Y CERRAR CAJA
-          </button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar ventana</button>
         </div>
       </div>
     </div>

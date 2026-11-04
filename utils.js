@@ -178,6 +178,8 @@ const MENSAJES_FUNCIONES = {
   efectivo_invalido:    'El efectivo contado no es válido.',
   cierre_inexistente:   'El cierre de caja no existe.',
   cierre_ya_anulado:    'Ese cierre de caja ya estaba anulado.',
+  arqueo_inexistente:   'El arqueo no existe.',
+  arqueo_ya_anulado:    'Ese arqueo ya estaba anulado.',
   compra_inexistente:   'La compra no existe.',
   compra_anulada:       'La compra está anulada.',
   compra_ya_anulada:    'La compra ya estaba anulada.',
@@ -357,4 +359,4 @@ export function confirmarAccion({
 
     $(modal).modal('show');
   });
-}
+}
