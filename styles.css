@@ -66,13 +66,6 @@
   background-color: #eef2ff !important;
 }
 
-/* Título de Producto */
-.pos-prod-title {
-  margin-bottom: 2px;
-}
-
-/* Precio en Tono Neutro Elegante (No Azulea) */
-
 /* Pastilla Central de Contador (- 0 +) */
 .pos-qty-pill {
   background-color: #f8fafc;
@@ -594,18 +587,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* Etiqueta de categoría (solo en búsquedas): centrada y sin el margen negativo viejo */
 .pos-card-producto .pos-prod-cat { margin: 0; justify-content: center; }
 
-/* Nombre del gusto: más grande y en negrita; 2 líneas reservadas para alinear tarjetas */
-.pos-card-producto .pos-prod-title {
-  min-height: 2.6em;
-  display: -webkit-box;
-  color: #1b2a3d;
-  font-size: 1.05rem;
-  font-weight: 800;
-  line-height: 1.3;
-  letter-spacing: -.005em;
-}
-.pos-card-producto .pos-prod-price { color: #96680a; font-size: 1.05rem; font-weight: 800; }
-.pos-card-activa .pos-prod-price { color: #7a5408; }
+/* Nombre y precio de la tarjeta: ver bloque "TARJETAS DEL CATÁLOGO · versión sobria" (al final). */
 
 /* Botón "+" dorado, "-" claro */
 .pos-card-producto .pos-qty-pill .btn-pos-add { background: #e9b83f; color: #1b2a3d; }
@@ -792,7 +774,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 }
 @media (max-width: 767.98px) {
   .pos-order-dark .card-body { padding: 0 12px 14px; }
-  .pos-card-producto .pos-prod-title { font-size: 1rem; }
 }
 
 /* ---------- 4. FOTO DEL PRODUCTO (pantalla Productos) ---------- */
@@ -1440,7 +1421,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   #sec-pedidos .pos-main-card-header .text-muted.small { display: none; }
   #sec-pedidos .pos-category-tabs { padding: 8px 14px; }
   #sec-pedidos .pos-card-producto { padding: 9px; gap: 6px; }
-  #sec-pedidos .pos-card-producto .pos-prod-title { min-height: 0; }
   #sec-pedidos .pos-prod-img { aspect-ratio: 16 / 9; }
   #sec-pedidos .pos-order-card .form-group { margin-bottom: 6px; }
 }
@@ -1517,7 +1497,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
    Va al FINAL a propósito: con igual especificidad gana lo último.
    ============================================================================= */
 .pos-card-producto {
-  gap: 8px;
+  gap: 6px;
   padding: 10px 10px 12px;
   border: 1px solid #e3e7ed !important;
   border-radius: 12px;
@@ -1532,23 +1512,26 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   box-shadow: 0 0 0 1px #e9b83f !important;
 }
 
-/* Nombre y precio: oscuros y con buen contraste (el precio ya no es dorado) */
+/* Nombre y precio: el nombre manda (más grande, bold, más oscuro) y el precio acompaña (más chico,
+   semibold, gris azulado). Sin altura reservada: el nombre ocupa solo las líneas que necesita y el
+   precio queda pegado debajo. La alineación entre tarjetas de una misma fila la da el bloque de
+   cantidad (- 0 +), que se ancla al fondo con margin-top:auto (ver .pos-qty-pill más abajo). */
 .pos-card-producto .pos-prod-title,
 .pos-card-producto.pos-card-activa .pos-prod-title {
-  min-height: 2.6em;            /* 2 líneas reservadas: todos los precios quedan alineados */
-  margin: 0;
+  margin: 2px 0 0;              /* foto → nombre: 6px (gap) + 2px */
   color: #111d2e;
-  font-size: 1.12rem;
-  font-weight: 800;
-  line-height: 1.3;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.22;
   letter-spacing: -.01em;
 }
 .pos-card-producto .pos-prod-price,
 .pos-card-producto.pos-card-activa .pos-prod-price {
-  margin: 0;
-  color: #3d4d61;
-  font-size: 1.08rem;
-  font-weight: 700;
+  margin: -2px 0 2px;           /* nombre → precio: 4px (gap 6px − 2px) */
+  color: #556579;
+  font-size: .98rem;
+  font-weight: 600;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1576,6 +1559,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 .pos-badge-top > i { font-size: .62rem; }
 
 .pos-card-producto .pos-qty-pill {
+  margin-top: auto;             /* ancla "- 0 +" y "+6 / +12" al fondo: quedan alineados en toda la fila */
   grid-template-columns: 46px minmax(22px, 1fr) 46px;
   min-height: 52px;
   background: #f4f6f8; border: 1px solid #dce1e8;
@@ -1621,7 +1605,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 @media (max-width: 767.98px) {
   /* 2 columnas: tarjetas angostas, así que los botones se achican un poco (siguen en 42px) */
   .pos-card-producto { padding: 9px 8px 10px; }
-  .pos-card-producto .pos-prod-title, .pos-card-producto.pos-card-activa .pos-prod-title { font-size: 1.08rem; }
+  .pos-card-producto .pos-prod-title, .pos-card-producto.pos-card-activa .pos-prod-title { font-size: 1.08rem; }  /* celular: 2 columnas angostas */
   .pos-btn-quitar { right: 5px; bottom: 5px; }
   .pos-card-producto .pos-qty-pill { grid-template-columns: 42px minmax(18px, 1fr) 42px; }
   .pos-card-producto .btn-pos-sq { width: 42px; height: 42px; }
