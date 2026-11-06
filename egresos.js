@@ -47,7 +47,7 @@ let cuentasEgreso = [];
 // -----------------------------------------------------------------------------
 // actualizarCuentaEgreso  (interna)
 //   Muestra la cuenta solo en un GASTO con medio NO efectivo. Un retiro es siempre
-//   en efectivo, así que nunca la pide.
+//   en efectivo, así que nunca la pide (de dónde sale se elige en "Sale de").
 // -----------------------------------------------------------------------------
 function actualizarCuentaEgreso() {
   const idMedio = document.getElementById('egreso-medio').value;
@@ -272,6 +272,30 @@ export async function abrirModalEgreso(tipo) {
   document.getElementById('egreso-medio').onchange = () => actualizarCuentaEgreso();
   actualizarCuentaEgreso();
 
+  // Retiro (script 44): el Dueño puede sacar el efectivo del cajón o de una cuenta de reserva.
+  // "Sale de" aparece solo si hay alguna reserva; si no hay (o la consulta falla), el retiro sale del
+  // cajón como siempre. Va aparte del resto de las consultas para que un error acá no bloquee el gasto.
+  let origenesRetiro = [];
+  if (esRetiro) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('TB_BCUENTAS')
+        .select('id, nombre, es_caja_operativa')
+        .eq('tipo', 'EFECTIVO').eq('activo', true)
+        .order('es_caja_operativa', { ascending: false }).order('nombre', { ascending: true });
+      if (!error) origenesRetiro = data || [];
+    } catch (err) {
+      console.error('No se pudieron cargar las cuentas de efectivo:', err);
+    }
+  }
+  const hayReservas = origenesRetiro.some(o => !o.es_caja_operativa);
+  document.getElementById('egreso-grupo-origen').classList.toggle('d-none', !hayReservas);
+  // El cajón va con valor vacío: la base lo usa solo cuando no llega cuenta.
+  document.getElementById('egreso-origen').innerHTML = origenesRetiro.map(o => {
+    const saldo = saldosEgreso && saldosEgreso[o.id] !== undefined ? ` — $${formatearMoneda(saldosEgreso[o.id])}` : '';
+    return `<option value="${o.es_caja_operativa ? '' : o.id}">${esc(o.nombre)} (${o.es_caja_operativa ? 'cajón' : 'reserva'})${saldo}</option>`;
+  }).join('');
+
   // Categoría: solo para gastos. En un retiro se oculta todo el grupo.
   document.getElementById('egreso-categoria').innerHTML =
     '<option value="">-- Sin categoría --</option>' +
@@ -310,6 +334,7 @@ export async function guardarEgreso(event) {
   const fecha = document.getElementById('egreso-fecha').value;
   const observaciones = document.getElementById('egreso-observaciones').value.trim();
   const idCuentaElegida = document.getElementById('egreso-cuenta').value;
+  const idOrigenRetiro = document.getElementById('egreso-origen').value;   // '' = cajón
 
   // Controles rápidos para avisar claro; la base vuelve a validar todo.
   if (concepto.length < 3) {
@@ -320,14 +345,16 @@ export async function guardarEgreso(event) {
     mostrarNotificacion('Elegí el medio de pago.', 'warning');
     return;
   }
-  // La cuenta se pide solo en un GASTO con medio no efectivo. El retiro la ignora.
+  // La cuenta se pide solo en un GASTO con medio no efectivo. El retiro sale del cajón, salvo que se elija una reserva.
   const medioElegido = mediosEgreso.find(m => String(m.id) === idMedio);
   const pideCuenta = tipo === 'GASTO' && !!medioElegido && !medioElegido.es_efectivo;
   if (pideCuenta && idCuentaElegida === '') {
     mostrarNotificacion('Elegí la cuenta desde la que se paga.', 'warning');
     return;
   }
-  const idCuenta = pideCuenta ? Number(idCuentaElegida) : null;
+  // Cuenta: la elegida (gasto no efectivo), o la reserva elegida en un retiro; null = la base usa el cajón.
+  const retiroDeReserva = tipo === 'RETIRO' && idOrigenRetiro !== '';
+  const idCuenta = pideCuenta ? Number(idCuentaElegida) : (retiroDeReserva ? Number(idOrigenRetiro) : null);
 
   if (isNaN(monto) || monto <= 0) {
     mostrarNotificacion('El monto debe ser mayor a cero.', 'warning');

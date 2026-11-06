@@ -543,52 +543,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 
 /* =============================================================================
-   VENTANA DE COBRO: botones de medio de pago (los arma cobro.js)
-   ============================================================================= */
-/* Grilla: tantas columnas como entren, mínimo 100px cada una */
-.cobro-medios {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: .6rem;
-}
-
-.cobro-medio-btn {
-  position: relative;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: .35rem;
-  min-height: 78px; padding: .75rem .4rem;
-  font-family: var(--cruditas-font, inherit); font-size: .85rem; font-weight: 600; color: #3b4658;
-  background: linear-gradient(180deg, #ffffff 0%, #eef1f6 100%);
-  border: 1.5px solid #dbe2ec; border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(20, 30, 50, .06);
-  -webkit-appearance: none; appearance: none; cursor: pointer;
-  transition: transform .12s, box-shadow .12s, border-color .12s;
-}
-.cobro-medio-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(20, 30, 50, .12); }
-.cobro-medio-btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(233, 184, 63, .35); }
-
-/* Ícono (hijo directo del botón: no toca la tilde) y degradé suave según el tipo de medio */
-.cobro-medio-btn > i { font-size: 1.5rem; }
-.cobro-medio-btn.tipo-efectivo      { background: linear-gradient(180deg, #fffdf6 0%, #fbf1d8 100%); }
-.cobro-medio-btn.tipo-efectivo > i  { color: #b9770e; }
-.cobro-medio-btn.tipo-transferencia      { background: linear-gradient(180deg, #ffffff 0%, #e9eff8 100%); }
-.cobro-medio-btn.tipo-transferencia > i  { color: #3d5a80; }
-.cobro-medio-btn.tipo-qr      { background: linear-gradient(180deg, #ffffff 0%, #e3f0fd 100%); }
-.cobro-medio-btn.tipo-qr > i  { color: #1c7ed6; }
-.cobro-medio-btn.tipo-tarjeta > i,
-.cobro-medio-btn.tipo-otro > i { color: #5f6b7a; }
-
-/* Medio elegido: ámbar con tilde (va DESPUÉS de los tipos para ganarles) */
-.cobro-medio-btn.activo {
-  background: linear-gradient(180deg, #fff8e3 0%, #ffe39a 100%);
-  border-color: var(--cruditas-brand, #ffc43d);
-  color: #6b4a00;
-  box-shadow: 0 0 0 2px rgba(233, 184, 63, .35), 0 4px 10px rgba(233, 184, 63, .25);
-}
-.cobro-medio-check { display: none; position: absolute; top: 6px; right: 8px; font-size: .85rem; color: #e09f00; }
-.cobro-medio-btn.activo .cobro-medio-check { display: block; }
-
-/* =============================================================================
    POS: botón "Limpiar todo" del encabezado del pedido (coral suave, como el resto)
    ============================================================================= */
 .btn-limpiar-todo {
@@ -660,37 +614,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* Botones +6 / +12 */
 .pos-card-producto .pos-dozen-controls { margin-top: 2px; }
-
-/* "X": reseteo del ítem (aparece solo con cantidad > 0, lo controla pos.js con d-none) */
-.pos-btn-reset {
-  position: absolute; top: 8px; right: 8px; z-index: 2;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; padding: 0;
-  border: 0; border-radius: 50%;
-  background: rgba(17, 24, 39, .88); color: #fff;
-  font-size: .8rem; line-height: 1;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
-}
-.pos-btn-reset:hover { background: #b91c1c; color: #fff; }
-.pos-btn-reset:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: 2px; }
-
-/* Con cantidad: tono claro (menos de 12 u.) */
-.pos-card-producto.pos-card-activa {
-  border: 1.5px solid #e2c15b !important;
-  background: #fffbee !important;
-  box-shadow: 0 3px 9px rgba(150, 112, 18, .08) !important;
-}
-/* Una docena o más (>= 12 u.): tono más oscuro e intenso */
-.pos-card-producto.pos-card-activa.pos-card-docena {
-  border: 2px solid #b8860b !important;
-  background: #f2d98d !important;
-  box-shadow: 0 4px 12px rgba(150, 105, 10, .22) !important;
-}
-.pos-card-docena .pos-prod-title { color: #2a1f05; }
-.pos-card-docena .pos-prod-price { color: #5e4004; }
-.pos-card-docena .pos-qty-pill { background: #fff; border-color: #c99a1e; }
-.pos-card-docena .pos-cant-num { color: #4a3303; }
-.pos-card-docena .pos-prod-img { background: #fbf3dc; }
 
 /* ---------- 2. PANEL DERECHO OSCURO ---------- */
 .pos-order-card.pos-order-dark {
@@ -1406,13 +1329,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 #sec-pedidos .pos-main-card-header .input-group .form-control,
 #sec-pedidos .pos-main-card-header .input-group .input-group-text { height: 44px; font-size: 1rem; }
 
-/* Tarjetas de producto: botones − / + de 44 px (para el dedo) y +6 / +12 más altos */
-#sec-pedidos .pos-qty-pill { grid-template-columns: 46px minmax(24px, 1fr) 46px; min-height: 52px; }
-#sec-pedidos .btn-pos-sq { width: 44px; height: 44px; font-size: 1.3rem; }
-#sec-pedidos .pos-cant-num { font-size: 1.1rem; }
-#sec-pedidos .pos-prod-price { font-size: 1.1rem; }
-#sec-pedidos .btn-docena-pill { min-height: 42px; font-size: .95rem; }
-#sec-pedidos .pos-btn-reset { width: 34px; height: 34px; }
+/* Tarjetas de producto: sus tamaños están en el bloque "TARJETAS DEL CATÁLOGO · versión sobria" (más abajo). */
 
 /* Panel del pedido: etiquetas, campos y avisos legibles */
 #sec-pedidos .pos-order-card label { font-size: .9rem; margin-bottom: 3px; }
@@ -1589,3 +1506,224 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 #tabla-productos-body > tr > td:last-child:not([colspan]),
 #tabla-deuda-body > tr > td:last-child:not([colspan]),
 #tabla-proveedores-body > tr > td:last-child:not([colspan]) { text-align: right !important; }
+
+
+/* =============================================================================
+   TARJETAS DEL CATÁLOGO · versión sobria
+   Un solo estado "con unidades" (.pos-card-activa): fondo amarillo muy suave y borde
+   amarillo. La cantidad se lee en el número y en la insignia sobre la foto, por eso no hay
+   tonos distintos según cuántas unidades haya. El amarillo se reserva para: la tarjeta
+   cargada, la insignia de cantidad y el botón "+". Todo lo demás es neutro.
+   Va al FINAL a propósito: con igual especificidad gana lo último.
+   ============================================================================= */
+.pos-card-producto {
+  gap: 8px;
+  padding: 10px 10px 12px;
+  border: 1px solid #e3e7ed !important;
+  border-radius: 12px;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.pos-card-producto:hover { border-color: #cfd6df !important; box-shadow: none !important; }
+/* El borde sigue midiendo 1px: el segundo píxel del marco es una sombra, así la tarjeta no "salta" */
+.pos-card-producto.pos-card-activa {
+  border: 1px solid #e9b83f !important;
+  background: #fffaeb !important;
+  box-shadow: 0 0 0 1px #e9b83f !important;
+}
+
+/* Nombre y precio: oscuros y con buen contraste (el precio ya no es dorado) */
+.pos-card-producto .pos-prod-title,
+.pos-card-producto.pos-card-activa .pos-prod-title {
+  min-height: 2.6em;            /* 2 líneas reservadas: todos los precios quedan alineados */
+  margin: 0;
+  color: #111d2e;
+  font-size: 1.12rem;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -.01em;
+}
+.pos-card-producto .pos-prod-price,
+.pos-card-producto.pos-card-activa .pos-prod-price {
+  margin: 0;
+  color: #3d4d61;
+  font-size: 1.08rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Insignia con la cantidad, sobre la esquina de la foto */
+.pos-qty-badge {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px; height: 30px; padding: 0 8px;
+  border-radius: 999px;
+  background: #e9b83f; color: #1b2a3d;
+  font-size: .95rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgba(17, 24, 39, .28);
+  pointer-events: none;
+}
+
+/* "Más vendido": más chica y discreta, para no competir con la foto ni con la cantidad */
+.pos-badge-top {
+  top: 8px; left: 8px;
+  padding: 2px 8px 2px 6px;
+  background: rgba(17, 24, 39, .78);
+  font-size: .62rem; font-weight: 700;
+  box-shadow: none;
+}
+.pos-badge-top > i { font-size: .62rem; }
+
+.pos-card-producto .pos-qty-pill {
+  grid-template-columns: 46px minmax(22px, 1fr) 46px;
+  min-height: 52px;
+  background: #f4f6f8; border: 1px solid #dce1e8;
+}
+.pos-card-producto.pos-card-activa .pos-qty-pill { background: #fff; border-color: #e9b83f; }
+.pos-card-producto .btn-pos-sq { width: 44px; height: 44px; font-size: 1.3rem; background: #fff; color: #35465a; box-shadow: 0 1px 2px rgba(15, 30, 50, .12); }
+.pos-card-producto .btn-pos-sq:not(.btn-pos-add):hover { background: #eef1f5; color: #1b2a3d; }
+.pos-card-producto .btn-pos-sq:active { transform: scale(.94); }
+.pos-card-producto .pos-qty-pill .btn-pos-add { background: #e9b83f; color: #1b2a3d; }
+.pos-card-producto .pos-qty-pill .btn-pos-add:hover { background: #d9a526; color: #1b2a3d; }
+.pos-card-producto .pos-qty-pill .pos-cant-num,
+.pos-card-producto.pos-card-activa .pos-qty-pill .pos-cant-num { color: #1b2a3d; font-size: 1.05rem; }
+
+/* Papelera: círculo blanco chico en la esquina inferior derecha de la foto (lejos del precio).
+   Sin unidades se oculta. El área de toque es mayor que el dibujo (::after). */
+.pos-btn-quitar {
+  position: absolute; right: 7px; bottom: 7px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, .94); color: #4a5565;
+  font-size: .9rem; line-height: 1;
+  box-shadow: 0 1px 4px rgba(17, 24, 39, .30);
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.pos-btn-quitar::after { content: ""; position: absolute; inset: -6px; }
+.pos-btn-quitar:hover { background: #fdecec; color: #b91c1c; }
+.pos-btn-quitar:active { background: #fbd9d9; color: #b91c1c; }
+.pos-btn-quitar:disabled { visibility: hidden; }
+.pos-btn-quitar:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: 1px; }
+
+/* +6 / +12: neutros y parejos, con área de toque de 44px */
+.pos-card-producto .pos-dozen-controls { margin-top: 0; gap: 8px; }
+.pos-card-producto .btn-docena-pill {
+  min-height: 44px; padding: 0 4px;
+  background: #fff; border: 1px solid #d5dbe4; border-radius: 10px;
+  color: #3d4d61; font-size: .88rem; font-weight: 700;
+}
+.pos-card-producto .btn-docena-pill:hover { background: #f3f5f8; border-color: #b9c3d0; color: #1b2a3d; }
+.pos-card-producto .btn-docena-pill:active { background: #fff3cc; border-color: #e9b83f; color: #1b2a3d; }
+
+@media (max-width: 767.98px) {
+  /* 2 columnas: tarjetas angostas, así que los botones se achican un poco (siguen en 42px) */
+  .pos-card-producto { padding: 9px 8px 10px; }
+  .pos-card-producto .pos-prod-title, .pos-card-producto.pos-card-activa .pos-prod-title { font-size: 1.08rem; }
+  .pos-btn-quitar { right: 5px; bottom: 5px; }
+  .pos-card-producto .pos-qty-pill { grid-template-columns: 42px minmax(18px, 1fr) 42px; }
+  .pos-card-producto .btn-pos-sq { width: 42px; height: 42px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pos-btn-quitar, .pos-card-producto .btn-pos-sq { transition: none; }
+}
+
+
+/* =============================================================================
+   VENTANA DE COBRO (modal-cobro-pedido) · maneja cobro.js
+   Tres partes: encabezado fijo, cuerpo con scroll interno y pie fijo. Así el botón
+   "Confirmar cobro" nunca queda tapado, aunque haya muchas cuentas o la pantalla sea chica.
+   Efectivo y cuentas son botones (no hay desplegables que se salgan de la ventana).
+   ============================================================================= */
+#modal-cobro-pedido .modal-dialog { max-width: 480px; }
+#modal-cobro-pedido .modal-content {
+  width: 100%;
+  /* Bootstrap deja .5rem de margen arriba y abajo en pantallas chicas y 1.75rem desde 576px */
+  max-height: calc(100vh - 1rem);
+  max-height: calc(100dvh - 1rem);
+}
+@media (min-width: 576px) {
+  #modal-cobro-pedido .modal-content { max-height: calc(100vh - 3.5rem); max-height: calc(100dvh - 3.5rem); }
+}
+#modal-cobro-pedido .modal-header,
+#modal-cobro-pedido .modal-footer { flex: 0 0 auto; }
+#modal-cobro-pedido form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+#modal-cobro-pedido .modal-body {
+  flex: 1 1 auto; min-height: 0;
+  padding: 16px 20px 20px;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+#modal-cobro-pedido .modal-footer { gap: 10px; }
+#modal-cobro-pedido .modal-footer .btn-secondary { background: #fff; border: 1px solid #d5dbe3; color: #46566b; }
+#modal-cobro-pedido .modal-footer .btn-success { flex: 1 1 auto; min-height: 48px; font-size: 1.05rem; }
+
+/* Total: el dato principal, en una sola línea */
+.cobro-total-box {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #dfe9e2; border-radius: 12px; background: #f6faf7;
+}
+.cobro-total-etiqueta { color: #5b6878; font-size: .88rem; font-weight: 600; }
+.cobro-total-importe {
+  color: var(--cruditas-green, #168647);
+  font-size: clamp(2rem, 9vw, 2.6rem); font-weight: 800; line-height: 1.05;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.cobro-total-unidades { color: #5b6878; font-size: .95rem; font-weight: 600; white-space: nowrap; padding-bottom: 4px; }
+
+.cobro-seccion-titulo { margin: 18px 0 8px; color: #46566b; font-size: .9rem; font-weight: 700; }
+
+/* Medios de pago: dos botones grandes y parejos */
+.cobro-medios { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.cobro-medio-btn {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 88px; padding: 12px 8px;
+  background: #fff; border: 2px solid #dbe2ec; border-radius: 12px;   /* 2px siempre: al elegir no se mueve nada */
+  color: #3b4658; font-family: var(--cruditas-font, inherit); font-size: 1rem; font-weight: 700;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.cobro-medio-btn > i { font-size: 1.6rem; color: #5f6b7a; }
+.cobro-medio-btn.tipo-efectivo > i { color: #168647; }
+.cobro-medio-btn.tipo-transferencia > i { color: #2f5d9e; }
+.cobro-medio-btn.tipo-qr > i { color: #1c7ed6; }
+@media (hover: hover) { .cobro-medio-btn:not(.activo):hover { border-color: #b9c3d0; background: #fafbfc; } }
+.cobro-medio-btn:focus-visible, .cobro-cuenta-btn:focus-visible { outline: 3px solid rgba(233, 184, 63, .55); outline-offset: 2px; }
+.cobro-medio-btn.activo, .cobro-cuenta-btn.activo { border-color: #e9b83f; background: #fff8e3; color: #1b2a3d; }
+.cobro-medio-check { display: none; position: absolute; top: 7px; right: 9px; font-size: 1.05rem; line-height: 1; color: #d9a526; }
+.cobro-medio-btn.activo .cobro-medio-check { display: block; }
+
+/* Cuentas: lista de botones en dos columnas, con su propio scroll si son muchas */
+.cobro-cuentas {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  max-height: 232px; overflow-y: auto; overscroll-behavior: contain;
+  padding: 3px; margin: -3px;                      /* lugar para que el borde y el foco no se recorten */
+  border-radius: 12px;
+}
+.cobro-cuentas.es-invalido { outline: 2px solid #dc3545; outline-offset: 1px; }
+.cobro-cuenta-btn {
+  position: relative; display: flex; align-items: center; justify-content: flex-start;
+  min-height: 52px; padding: 8px 30px 8px 12px;
+  background: #fff; border: 2px solid #dbe2ec; border-radius: 10px;
+  color: #2d3b4f; font-family: var(--cruditas-font, inherit); font-size: .95rem; font-weight: 600; line-height: 1.25; text-align: left;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+@media (hover: hover) { .cobro-cuenta-btn:not(.activo):hover { border-color: #b9c3d0; background: #fafbfc; } }
+.cobro-cuenta-nombre { overflow-wrap: anywhere; }
+.cobro-cuenta-check { display: none; position: absolute; top: 50%; right: 9px; transform: translateY(-50%); color: #d9a526; font-size: 1.05rem; }
+.cobro-cuenta-btn.activo .cobro-cuenta-check { display: block; }
+.cobro-cuenta-error { margin-top: 8px; color: #b42318; font-size: .88rem; font-weight: 600; }
+
+/* "Paga con" y vuelto */
+#cobro-paga-con { min-height: 48px; font-size: 1.1rem; }
+.cobro-vuelto { min-height: 1.6em; margin-top: 8px; font-size: 1.15rem; font-weight: 700; }
+
+@media (max-width: 575.98px) {
+  #modal-cobro-pedido .modal-body { padding: 14px 14px 16px; }
+  .cobro-cuentas { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .cobro-medio-btn, .cobro-cuenta-btn { transition: none; } }

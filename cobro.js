@@ -4,8 +4,9 @@
 //
 // QUÉ HACE
 //   Maneja UNA sola ventana (modal-cobro-pedido) para cobrar: muestra el total y
-//   las unidades, deja elegir el medio de pago con botones, pide la cuenta si el
-//   medio NO es efectivo y, en efectivo, calcula el vuelto ("Paga con $").
+//   las unidades, deja elegir el medio de pago con botones, pide la cuenta (también con
+//   botones, no con un desplegable) si el medio NO es efectivo y, en efectivo, calcula el
+//   vuelto ("Paga con $").
 //   El "Paga con $" es solo una ayuda en pantalla: NO se guarda en la base.
 //
 // IDEA CLAVE: CALLBACK (la misma que en pagos.js)
@@ -21,7 +22,7 @@
 
 import { supabaseAdmin } from './config.js';
 import {
-  mostrarNotificacion, esc, mensajeErrorBD, formatearMoneda, llenarSelectCuentas
+  mostrarNotificacion, esc, mensajeErrorBD, formatearPesos
 } from './utils.js';
 
 
@@ -86,17 +87,25 @@ export async function abrirModalCobro(ctx) {
   // textContent escribe texto plano (no hace falta esc()).
   document.getElementById('cobro-titulo').textContent = ctx.titulo || 'Cobrar y Entregar';
   document.getElementById('cobro-subtitulo').textContent = ctx.subtitulo || '';
-  document.getElementById('cobro-total').textContent = formatearMoneda(ctx.total);
+  document.getElementById('cobro-total').textContent = formatearPesos(ctx.total);
   document.getElementById('cobro-unidades').textContent =
     `${ctx.unidades} unidad${Number(ctx.unidades) === 1 ? '' : 'es'}`;
   document.getElementById('cobro-paga-con').value = '';
+  document.getElementById('cobro-cuenta').value = '';   // sin cuenta elegida al abrir
+
+  // Clics sobre la lista de cuentas. Se asigna con "onclick" (no addEventListener) para que,
+  // aunque la ventana se abra muchas veces, quede UN solo oyente.
+  document.getElementById('cobro-cuentas-lista').onclick = (e) => {
+    const btn = e.target.closest('.cobro-cuenta-btn');
+    if (btn) elegirCuenta(btn.dataset.id);
+  };
 
   // Un botón por medio de pago. El nombre viene de la base, por eso pasa por esc().
   // "icono" y "tipo" salen de estiloMedio (textos fijos del código), no hace falta esc().
   document.getElementById('cobro-medios').innerHTML = mediosCobro.map(m => {
     const { icono, tipo } = estiloMedio(m);
     return `
-    <button type="button" class="cobro-medio-btn tipo-${tipo}" data-id="${m.id}">
+    <button type="button" class="cobro-medio-btn tipo-${tipo}" data-id="${m.id}" role="radio" aria-checked="false">
       <span class="cobro-medio-check"><i class="fas fa-check-circle"></i></span>
       <i class="fas ${icono}"></i>
       <span>${esc(m.nombre)}</span>
@@ -122,7 +131,9 @@ function seleccionarMedio(idMedio) {
 
   // El botón elegido lleva la clase "activo" (el estilo está en styles.css).
   document.querySelectorAll('#cobro-medios [data-id]').forEach(btn => {
-    btn.classList.toggle('activo', Number(btn.dataset.id) === idMedioElegido);
+    const activo = Number(btn.dataset.id) === idMedioElegido;
+    btn.classList.toggle('activo', activo);
+    btn.setAttribute('aria-checked', String(activo));
   });
 
   const medio = mediosCobro.find(m => Number(m.id) === idMedioElegido);
@@ -130,13 +141,60 @@ function seleccionarMedio(idMedio) {
 
   // Cuenta: solo si NO es efectivo (en efectivo la base usa la cuenta Efectivo sola).
   document.getElementById('cobro-grupo-cuenta').classList.toggle('d-none', esEfectivo);
-  if (!esEfectivo) {
-    llenarSelectCuentas(document.getElementById('cobro-cuenta'), cuentasCobro, null);
-  }
+  if (!esEfectivo) dibujarCuentasCobro();
 
   // "Paga con $": solo tiene sentido en efectivo.
   document.getElementById('cobro-grupo-efectivo').classList.toggle('d-none', !esEfectivo);
   actualizarVueltoCobro();
+}
+
+
+// -----------------------------------------------------------------------------
+// dibujarCuentasCobro  (interna)
+//   Arma la lista de cuentas como botones (una por botón, una elegida a la vez).
+//   Solo se ofrecen cuentas que NO son de efectivo: el efectivo va solo al cajón, y las
+//   reservas de efectivo no cobran. Si hay una sola cuenta, queda elegida. Si ya había una
+//   elegida y sigue en la lista (por ejemplo al cambiar de medio), se conserva.
+//   La cuenta elegida se guarda en el campo oculto #cobro-cuenta, que lee confirmarCobro.
+// -----------------------------------------------------------------------------
+function dibujarCuentasCobro() {
+  const lista = document.getElementById('cobro-cuentas-lista');
+  const campo = document.getElementById('cobro-cuenta');
+  const cuentas = cuentasCobro.filter(c => c.tipo !== 'EFECTIVO');
+
+  let elegida = cuentas.some(c => String(c.id) === campo.value) ? campo.value : '';
+  if (!elegida && cuentas.length === 1) elegida = String(cuentas[0].id);
+  campo.value = elegida;
+
+  lista.innerHTML = cuentas.length === 0
+    ? '<p class="text-muted small mb-0">No hay cuentas cargadas para este medio de pago.</p>'
+    : cuentas.map(c => {
+        const activa = String(c.id) === elegida;
+        return `
+    <button type="button" class="cobro-cuenta-btn ${activa ? 'activo' : ''}" data-id="${c.id}" role="radio" aria-checked="${activa}">
+      <span class="cobro-cuenta-nombre">${esc(c.nombre)}</span>
+      <i class="fas fa-check-circle cobro-cuenta-check" aria-hidden="true"></i>
+    </button>`;
+      }).join('');
+
+  marcarErrorCuenta(false);
+}
+
+// Marca la cuenta elegida (clic en un botón de la lista).
+function elegirCuenta(idCuenta) {
+  document.getElementById('cobro-cuenta').value = String(idCuenta);
+  document.querySelectorAll('#cobro-cuentas-lista .cobro-cuenta-btn').forEach(btn => {
+    const activa = btn.dataset.id === String(idCuenta);
+    btn.classList.toggle('activo', activa);
+    btn.setAttribute('aria-checked', String(activa));
+  });
+  marcarErrorCuenta(false);
+}
+
+// Resalta en rojo la lista cuando se intenta confirmar sin elegir cuenta.
+function marcarErrorCuenta(hayError) {
+  document.getElementById('cobro-cuentas-lista').classList.toggle('es-invalido', hayError);
+  document.getElementById('cobro-cuenta-error').classList.toggle('d-none', !hayError);
 }
 
 
@@ -168,11 +226,11 @@ export function actualizarVueltoCobro() {
 
   const diferencia = pagaCon - Number(contexto.total);
   if (diferencia >= 0) {
-    salida.textContent = `Vuelto: $${formatearMoneda(diferencia)}`;
-    salida.className = 'small mt-1 font-weight-bold text-success';
+    salida.textContent = `Vuelto: ${formatearPesos(diferencia)}`;
+    salida.className = 'cobro-vuelto text-success';
   } else {
-    salida.textContent = `Faltan $${formatearMoneda(-diferencia)}`;
-    salida.className = 'small mt-1 font-weight-bold text-danger';
+    salida.textContent = `Faltan ${formatearPesos(-diferencia)}`;
+    salida.className = 'cobro-vuelto text-danger';
   }
 }
 
@@ -197,6 +255,8 @@ export async function confirmarCobro(e) {
   const valorCuenta = document.getElementById('cobro-cuenta').value;
   const idCuenta = (pideCuenta && valorCuenta) ? Number(valorCuenta) : null;
   if (pideCuenta && !idCuenta) {
+    marcarErrorCuenta(true);
+    document.getElementById('cobro-cuentas-lista').scrollIntoView({ block: 'nearest' });
     mostrarNotificacion('Elegí a qué cuenta entra el cobro.', 'warning');
     return;
   }

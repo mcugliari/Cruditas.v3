@@ -21,7 +21,10 @@
 //   la cuenta empieza después del cierre) se muestra "-".
 //
 // REGLAS (las hace cumplir la base)
-//   - Hay una sola cuenta de Efectivo y no se puede desactivar, borrar ni cambiar de tipo.
+//   - Efectivo = CAJÓN (cuenta operativa, marcada es_caja_operativa): recibe las ventas en efectivo y
+//     paga los gastos. No se puede desactivar, borrar ni cambiar de tipo. Es única.
+//   - RESERVAS DE EFECTIVO (script 44): cuentas de tipo EFECTIVO que no son el cajón (puede haber varias).
+//     No cobran ni pagan: se usan con Transferir (de/hacia el cajón) y con Retiros del Dueño.
 //   - El nombre de una cuenta no se puede repetir.
 //   - Las cuentas no se borran: se desactivan (el historial queda intacto).
 //
@@ -103,11 +106,13 @@ export async function cargarCuentas() {
 
   // Las dos consultas salen AL MISMO TIEMPO (Promise.all). La segunda devuelve una sola
   // fila: maybeSingle() la entrega como objeto (en vez de una lista de un elemento).
-  const [resSaldos, resSinCuenta, resCierre] = await Promise.all([
+  const [resSaldos, resSinCuenta, resCierre, resMarca] = await Promise.all([
     supabaseAdmin.from('VW_SALDOS_CUENTAS').select('*'),
     supabaseAdmin.from('VW_MOV_SIN_CUENTA').select('*').maybeSingle(),
     // NUEVO (script 18): saldo de cada cuenta al último cierre de caja
-    supabaseAdmin.from('VW_SALDOS_ULTIMO_CIERRE').select('*')
+    supabaseAdmin.from('VW_SALDOS_ULTIMO_CIERRE').select('*'),
+    // NUEVO (script 44): cuál es el cajón (la vista de saldos no trae la marca)
+    supabaseAdmin.from('TB_BCUENTAS').select('id, es_caja_operativa')
   ]);
 
   if (resSaldos.error) {
@@ -115,11 +120,17 @@ export async function cargarCuentas() {
     return;
   }
 
-  // Orden: Efectivo primero, después las activas y, dentro de cada grupo, por nombre.
-  // Los true/false se pueden restar (true = 1, false = 0): sirve para que el sort ponga
-  // primero a los que cumplen la condición.
-  cuentasCache = (resSaldos.data || []).sort((a, b) =>
-    (b.tipo === 'EFECTIVO') - (a.tipo === 'EFECTIVO')
+  // NUEVO (script 44): se agrega a cada cuenta si es el cajón (operativa). Si esa consulta fallara,
+  // se asume que la cuenta de tipo EFECTIVO es el cajón (como antes de las reservas).
+  const operativas = new Set((resMarca.error ? [] : (resMarca.data || [])).filter(f => f.es_caja_operativa).map(f => f.id));
+  const datosSaldos = (resSaldos.data || []);
+  datosSaldos.forEach(cu => { cu.operativa = resMarca.error ? cu.tipo === 'EFECTIVO' : operativas.has(cu.id); });
+
+  // Orden: el cajón primero, después las reservas de efectivo, luego las activas y, dentro de cada
+  // grupo, por nombre. (true/false se pueden restar: sirve para que el sort ponga primero a los que cumplen.)
+  cuentasCache = datosSaldos.sort((a, b) =>
+    (b.operativa) - (a.operativa)
+    || (b.tipo === 'EFECTIVO') - (a.tipo === 'EFECTIVO')
     || b.activo - a.activo
     || a.nombre.localeCompare(b.nombre));
 
@@ -164,7 +175,11 @@ function renderizarCuentas() {
   }
 
   tbody.innerHTML = cuentasCache.map(c => {
-    const tipo = TIPOS[c.tipo] || { texto: c.tipo, clase: 'badge-light', icono: 'fa-wallet' };
+    const esReserva = c.tipo === 'EFECTIVO' && !c.operativa;
+    const tipo = esReserva
+      ? { texto: 'Reserva de efectivo', clase: 'badge-info', icono: 'fa-piggy-bank' }
+      : (c.operativa ? { texto: 'Efectivo · cajón', clase: 'badge-success', icono: 'fa-money-bill-wave' }
+                     : (TIPOS[c.tipo] || { texto: c.tipo, clase: 'badge-light', icono: 'fa-wallet' }));
     const saldo = Number(c.saldo_actual);
     const traspasos = Number(c.traspasos || 0);   // transferencias y ajustes (suman o restan)
 
@@ -178,8 +193,8 @@ function renderizarCuentas() {
     }
     if (esDueno) opcionesMas.push(`<button type="button" class="menu-mas-item" role="menuitem"
                  data-action="editar-cuenta" data-id="${c.id}"><i class="fas fa-edit"></i> Editar cuenta</button>`);
-    // La cuenta Efectivo no se puede desactivar: esa opción directamente no aparece.
-    if (c.tipo !== 'EFECTIVO' && esDueno) {
+    // El cajón no se puede desactivar: esa opción directamente no aparece (las reservas sí se pueden desactivar).
+    if (!c.operativa && esDueno) {
       opcionesMas.push('<div class="menu-mas-sep" role="separator"></div>');
       opcionesMas.push(`<button type="button" class="menu-mas-item ${c.activo ? 'menu-mas-peligro' : ''}" role="menuitem"
                  data-action="cambiar-estado-cuenta" data-id="${c.id}"><i class="fas ${c.activo ? 'fa-ban' : 'fa-check'}"></i> ${c.activo ? 'Desactivar cuenta' : 'Activar cuenta'}</button>`);
@@ -282,7 +297,7 @@ export function abrirModalEditarCuenta(id) {
   document.getElementById('cuenta-nombre').value = cuenta.nombre;
   document.getElementById('cuenta-saldo').value = cuenta.saldo_inicial;
   document.getElementById('modal-cuenta-title').innerText = 'Editar Cuenta';
-  armarSelectTipo(cuenta.tipo);
+  armarSelectTipo(cuenta.tipo, cuenta.operativa);
 
   const inputFecha = document.getElementById('cuenta-fecha');
   inputFecha.value = cuenta.fecha_saldo_inicial;
@@ -294,16 +309,18 @@ export function abrirModalEditarCuenta(id) {
 
 // -----------------------------------------------------------------------------
 // armarSelectTipo  (interna)
-//   Llena el desplegable "Tipo". La cuenta Efectivo es única y fija: si se está editando,
-//   se muestra solo "Efectivo" y no se puede cambiar. Para una cuenta nueva o una de banco
-//   o billetera, solo se ofrecen Banco y Billetera.
-//   Recibe: tipoActual -> '' (cuenta nueva) o el tipo de la cuenta que se edita.
+//   Llena el desplegable "Tipo". El cajón es único y fijo, y una cuenta de efectivo no puede cambiar de
+//   tipo: si se está editando una, se muestra solo su tipo. Para una cuenta nueva se ofrece Banco,
+//   Billetera o Reserva de efectivo (el cajón no se puede crear: ya existe).
+//   Recibe: tipoActual -> '' (cuenta nueva) o el tipo de la cuenta que se edita;
+//           esCajon    -> true si la cuenta que se edita es el cajón.
 // -----------------------------------------------------------------------------
-function armarSelectTipo(tipoActual) {
+function armarSelectTipo(tipoActual, esCajon = false) {
   const select = document.getElementById('cuenta-tipo');
 
+  // Una cuenta de efectivo (el cajón o una reserva) no puede cambiar de tipo.
   if (tipoActual === 'EFECTIVO') {
-    select.innerHTML = '<option value="EFECTIVO">Efectivo</option>';
+    select.innerHTML = `<option value="EFECTIVO">${esCajon ? 'Efectivo (cajón)' : 'Reserva de efectivo'}</option>`;
     select.disabled = true;      // un campo deshabilitado no se puede cambiar, pero su valor se puede leer
     return;
   }
@@ -312,7 +329,8 @@ function armarSelectTipo(tipoActual) {
   select.innerHTML =
     '<option value="">-- Seleccionar tipo --</option>' +
     '<option value="BANCO">Banco (cuenta bancaria)</option>' +
-    '<option value="BILLETERA">Billetera (Mercado Pago, etc.)</option>';
+    '<option value="BILLETERA">Billetera (Mercado Pago, etc.)</option>' +
+    '<option value="EFECTIVO">Reserva de efectivo (plata guardada fuera del cajón)</option>';
   select.value = tipoActual;
 }
 
@@ -377,7 +395,7 @@ export async function guardarCuenta(event) {
 // -----------------------------------------------------------------------------
 export async function cambiarEstadoCuenta(id) {
   const cuenta = cuentasCache.find(c => c.id === id);
-  if (!cuenta || cuenta.tipo === 'EFECTIVO') return;   // la de efectivo es fija
+  if (!cuenta || cuenta.operativa) return;   // el cajón es fijo
 
   const nuevoEstado = !cuenta.activo;
 
@@ -462,8 +480,8 @@ export function abrirModalTransferencia() {
 
   document.getElementById('form-transferencia').reset();
 
-  // Por defecto sale de Efectivo y entra a otra cuenta: es el caso más común (depositar).
-  const origen = activas.find(c => c.tipo === 'EFECTIVO') || activas[0];
+  // Por defecto sale del cajón (Efectivo) y entra a otra cuenta: es el caso más común (depositar).
+  const origen = activas.find(c => c.operativa) || activas[0];
   const destino = activas.find(c => c.id !== origen.id);
 
   const selectOrigen = document.getElementById('transf-origen');

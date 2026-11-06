@@ -8,7 +8,7 @@ import {
   pedidoEditandoEstado, setPedidoEditandoEstado
 } from './state.js';
 
-import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion } from './utils.js';
+import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion, formatearPesos } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
 import { leerPreferenciasImpresion } from './preferencias.js';
 import { imprimirAutomatico } from './impresion.js';
@@ -350,7 +350,7 @@ export function renderizarGrillaPOS() {
     const botonesDocenaHTML = permiteDocena ? `
       <div class="pos-dozen-controls">
         <button type="button" class="btn btn-docena-pill" data-action="alterar-cant" data-id="${p.id}" data-delta="6">+6</button>
-        <button type="button" class="btn btn-docena-pill btn-docena-add" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12</button>
+        <button type="button" class="btn btn-docena-pill" data-action="alterar-cant" data-id="${p.id}" data-delta="12">+12</button>
       </div>
     ` : '';
 
@@ -358,34 +358,36 @@ export function renderizarGrillaPOS() {
     // <img> se dibuja encima; si la imagen no carga (onerror), se quita sola y se ve el ícono.
     const catProd = cacheCategorias.find(c => Number(c.id) === Number(idCatProd));
     const urlFoto = urlImagenSegura(p.imagen_url);
+    // Sobre la foto van dos insignias: "Más vendido" (izquierda, chica y discreta) y la cantidad
+    // cargada (derecha, solo si hay unidades). La cantidad se actualiza en sincronizarTarjeta.
     const fotoHTML = `
       <div class="pos-prod-img">
         <i class="fas ${iconoCategoria(catProd ? catProd.nombre : '')} pos-prod-ph" aria-hidden="true"></i>
         ${urlFoto ? `<img src="${esc(urlFoto)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+        ${idsMasVendidos.has(Number(p.id)) ? '<span class="pos-badge-top"><i class="fas fa-medal" aria-hidden="true"></i> Más vendido</span>' : ''}
+        <span class="pos-qty-badge ${cant > 0 ? '' : 'd-none'}" aria-label="${cant} en el pedido">${cant}</span>
+        <button type="button" class="pos-btn-quitar" ${cant > 0 ? '' : 'disabled'} data-action="alterar-cant" data-id="${p.id}" data-delta="-100000" title="Quitar del pedido" aria-label="Quitar ${esc(p.nombre)} del pedido">
+          <i class="fas fa-trash-alt" aria-hidden="true"></i>
+        </button>
       </div>
     `;
 
-    // Una docena o más (>= 12 u.) pinta la tarjeta con un tono más intenso.
-    const claseDocena = cant >= 12 ? 'pos-card-docena' : '';
-
+    // Un solo estado "con unidades" (clase pos-card-activa): la cantidad ya se lee en el número,
+    // así que no hay tonos distintos según cuántas unidades haya.
+    // La papelera (esquina inferior derecha de la foto) quita TODAS las unidades de un toque: reusa
+    // "alterar-cant" con un delta enorme negativo (alterarCantidad nunca baja de 0). Sin unidades
+    // queda deshabilitada y oculta; está fuera de la fila - / + para que esos botones no se muevan.
     htmlCompleto += `
-      <div class="card h-100 pos-card-producto border-0 ${claseActiva} ${claseDocena}">
-        <!-- "X": vuelve el ítem a 0 de un toque. Solo se ve con cantidad > 0.
-             Reusa la acción "alterar-cant" con un delta enorme negativo: alterarCantidad
-             nunca baja de 0, así que el resultado es siempre 0. -->
-        <button type="button" class="pos-btn-reset ${cant > 0 ? '' : 'd-none'}" data-action="alterar-cant" data-id="${p.id}" data-delta="-100000" title="Quitar del pedido" aria-label="Quitar ${esc(p.nombre)} del pedido">
-          <i class="fas fa-times" aria-hidden="true"></i>
-        </button>
-        ${idsMasVendidos.has(Number(p.id)) ? '<span class="pos-badge-top"><i class="fas fa-medal" aria-hidden="true"></i> Más vendido</span>' : ''}
+      <div class="card h-100 pos-card-producto border-0 ${claseActiva}">
         ${fotoHTML}
         ${etiquetaCategoria}
         <strong class="pos-prod-title" title="${esc(p.nombre)}">${esc(p.nombre)}</strong>
-        <span class="pos-prod-price">$${precios.unidad.toLocaleString('es-AR')}</span>
+        <span class="pos-prod-price">${formatearPesos(precios.unidad)}</span>
 
         <div class="pos-qty-pill">
-          <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="-1">-</button>
+          <button type="button" class="btn btn-pos-sq" data-action="alterar-cant" data-id="${p.id}" data-delta="-1" aria-label="Quitar una unidad de ${esc(p.nombre)}">-</button>
           <span class="pos-cant-num" id="cant-prod-${p.id}">${cant}</span>
-          <button type="button" class="btn btn-pos-sq btn-pos-add" data-action="alterar-cant" data-id="${p.id}" data-delta="1">+</button>
+          <button type="button" class="btn btn-pos-sq btn-pos-add" data-action="alterar-cant" data-id="${p.id}" data-delta="1" aria-label="Agregar una unidad de ${esc(p.nombre)}">+</button>
         </div>
 
         ${botonesDocenaHTML}
@@ -455,9 +457,9 @@ export function alterarCantidad(idProducto, delta) {
 
 // -----------------------------------------------------------------------------
 // sincronizarTarjeta  (interna)
-//   Deja la tarjeta del catálogo al día con la cantidad: número, estado "activa",
-//   tono de "docena" (>= 12 u.) y botón "X". Devuelve false si la tarjeta no está
-//   en pantalla (por ejemplo, está en otra solapa).
+//   Deja la tarjeta del catálogo al día con la cantidad: número, insignia sobre la foto,
+//   estado "activa" y papelera. Devuelve false si la tarjeta no está en pantalla (por
+//   ejemplo, está en otra solapa).
 //   La usan alterarCantidad y eliminarItemCarrito, así hay UNA sola lógica.
 // -----------------------------------------------------------------------------
 function sincronizarTarjeta(idProducto, cant) {
@@ -469,9 +471,17 @@ function sincronizarTarjeta(idProducto, cant) {
   if (tarjeta) {
     // classList.toggle(clase, condicion): agrega la clase si es true, la quita si es false.
     tarjeta.classList.toggle('pos-card-activa', cant > 0);
-    tarjeta.classList.toggle('pos-card-docena', cant >= 12);
-    const botonX = tarjeta.querySelector('.pos-btn-reset');
-    if (botonX) botonX.classList.toggle('d-none', cant <= 0);
+
+    const insignia = tarjeta.querySelector('.pos-qty-badge');
+    if (insignia) {
+      insignia.textContent = cant;
+      insignia.setAttribute('aria-label', `${cant} en el pedido`);
+      insignia.classList.toggle('d-none', cant <= 0);
+    }
+
+    // Un botón deshabilitado no recibe toques ni foco; el CSS lo oculta pero conserva su lugar.
+    const botonQuitar = tarjeta.querySelector('.pos-btn-quitar');
+    if (botonQuitar) botonQuitar.disabled = cant <= 0;
   }
   return true;
 }
@@ -518,9 +528,9 @@ export function actualizarResumenCarrito() {
     if (contenedorItems) contenedorItems.innerHTML = `<p class="pos-cart-empty">El carrito está vacío</p>`;
     poner('cant-total-items', '0');
     poner('badge-carrito', '0');
-    poner('subtotal-pedido', '$0');
-    poner('monto-total-pedido', '$0');
-    poner('monto-descuento', '-$0');
+    poner('subtotal-pedido', formatearPesos(0));
+    poner('monto-total-pedido', formatearPesos(0));
+    poner('monto-descuento', formatearPesos(0));
     document.getElementById('pos-desglose')?.classList.add('d-none');
     totalCarritoActual = 0;
     unidadesCarritoActual = 0;
@@ -578,7 +588,7 @@ export function actualizarResumenCarrito() {
           <strong class="pos-cart-name" title="${esc(nombreCat)} ${esc(p.nombre)}">${esc(p.nombre)}</strong>
           <span class="pos-cart-sub">
             <span class="pos-cart-cat">${esc(nombreCat)}</span>
-            <span>$${precioUnidad.toLocaleString('es-AR')} c/u</span>
+            <span>${formatearPesos(precioUnidad)} c/u</span>
           </span>
         </div>
         <div class="pos-cart-qty">
@@ -586,7 +596,7 @@ export function actualizarResumenCarrito() {
           <span class="pos-cart-n">${cant}</span>
           <button type="button" class="pos-cart-btn pos-cart-btn-add" data-action="alterar-cant" data-id="${idProd}" data-delta="1" aria-label="Agregar una unidad de ${esc(p.nombre)}"><i class="fas fa-plus" aria-hidden="true"></i></button>
         </div>
-        <strong class="pos-cart-total">$${subTotalProducto.toLocaleString('es-AR')}</strong>
+        <strong class="pos-cart-total">${formatearPesos(subTotalProducto)}</strong>
         <button type="button" class="pos-cart-del" data-action="eliminar-item-carrito" data-id="${idProd}" title="Eliminar ítem" aria-label="Eliminar ${esc(p.nombre)} del pedido">
           <i class="fas fa-trash-alt" aria-hidden="true"></i>
         </button>
@@ -601,12 +611,12 @@ export function actualizarResumenCarrito() {
   html += '</ul>';
   if (contenedorItems) contenedorItems.innerHTML = html;
 
-  const textoTotal = `$${montoTotalFinal.toLocaleString('es-AR')}`;
+  const textoTotal = formatearPesos(montoTotalFinal);
   poner('cant-total-items', totalItems);
   poner('badge-carrito', totalItems);
   // Desglose (solo si hay descuento): primero el Subtotal, después el Descuento, y recién abajo el total.
-  poner('subtotal-pedido', `$${subtotalSinDescuento.toLocaleString('es-AR')}`);
-  poner('monto-descuento', `-$${descuentoTotal.toLocaleString('es-AR')}`);
+  poner('subtotal-pedido', formatearPesos(subtotalSinDescuento));
+  poner('monto-descuento', formatearPesos(-descuentoTotal));
   poner('detalle-descuento', `(${docenasCompletas} doc.)`);
   document.getElementById('pos-desglose')?.classList.toggle('d-none', descuentoTotal <= 0);
   poner('monto-total-pedido', textoTotal);

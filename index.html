@@ -547,6 +547,7 @@
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-boxes mr-2 text-warning"></i>Gestión de Productos</h1></div>
             <div class="col-sm-6 text-right">
+              <button class="btn btn-outline-warning font-weight-bold mr-2" id="btn-categorias-productos" title="Crear categorías y definir sus grupos"><i class="fas fa-tags mr-1"></i> Categorías</button>
               <button class="btn btn-warning font-weight-bold" id="btn-nuevo-producto"><i class="fas fa-plus mr-1"></i> Nuevo Producto</button>
             </div>
           </div>
@@ -1489,6 +1490,12 @@
                 <select class="form-control" id="egreso-cuenta"></select>
               </div>
             </div>
+            <!-- Solo en retiros y si hay reservas (lo muestra egresos.js): de dónde sale el efectivo -->
+            <div class="form-group d-none" id="egreso-grupo-origen">
+              <label for="egreso-origen">Sale de *</label>
+              <select class="form-control" id="egreso-origen"></select>
+              <small class="form-text text-muted">Del cajón o de una cuenta de reserva de efectivo.</small>
+            </div>
             <div class="form-group">
               <label for="egreso-fecha">Fecha *</label>
               <input type="date" class="form-control" id="egreso-fecha" required>
@@ -1972,6 +1979,60 @@
     </div>
   </div>
 
+  <!-- Modal Categorías de PRODUCTOS (TB_BCATEGORIAS) · lo maneja categoriasProductos.js · solo Dueño (pantalla Productos) -->
+  <div class="modal fade" id="modal-categorias-producto" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold">Categorías de productos</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <form id="form-categoria-producto" class="form-row align-items-end mb-1">
+            <input type="hidden" id="catprod-id">
+            <div class="col-md-4 mb-2">
+              <label class="small font-weight-bold mb-1" for="catprod-nombre" id="catprod-label">Nueva categoría</label>
+              <input type="text" class="form-control form-control-sm" id="catprod-nombre" maxlength="80" required>
+            </div>
+            <div class="col-md-3 mb-2">
+              <label class="small font-weight-bold mb-1" for="catprod-grupo">Grupo (pestañas del pedido)</label>
+              <input type="text" class="form-control form-control-sm" id="catprod-grupo" maxlength="50" list="catprod-sugerencias" autocomplete="off" required>
+            </div>
+            <div class="col-md-3 mb-2">
+              <label class="small font-weight-bold mb-1" for="catprod-grupo-caja">Grupo para el recuento <span class="text-muted font-weight-normal">(opcional)</span></label>
+              <input type="text" class="form-control form-control-sm" id="catprod-grupo-caja" maxlength="50" list="catprod-sugerencias" autocomplete="off">
+            </div>
+            <div class="col-md-2 mb-2">
+              <button type="submit" class="btn btn-sm btn-warning btn-block font-weight-bold" id="btn-guardar-catprod">Agregar</button>
+            </div>
+            <datalist id="catprod-sugerencias"></datalist>
+            <div class="col-12 mb-2 d-none" id="catprod-cancelar-wrap">
+              <button type="button" class="btn btn-link btn-sm p-0" id="btn-cancelar-edicion-catprod">Cancelar edición</button>
+            </div>
+          </form>
+          <small class="form-text text-muted mb-3">
+            El <strong>grupo</strong> arma las pestañas de la toma de pedidos. El <strong>grupo para el recuento</strong> solo se usa en
+            "Ventas por grupo" del cierre de caja: si lo dejás vacío se usa el grupo de las pestañas, y las categorías con el mismo
+            grupo de recuento se suman en una sola fila.
+          </small>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="bg-light">
+                <tr><th>Categoría</th><th>Grupo (pestañas)</th><th>Grupo para el recuento</th><th class="text-center" style="width: 110px">Acciones</th></tr>
+              </thead>
+              <tbody id="tabla-catprod-body">
+                <tr><td colspan="4" class="text-center py-3">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Precio Especial -->
   <div class="modal fade" id="modal-precio-especial" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -2011,9 +2072,10 @@
   </div>  
 
     <!-- MODAL: ventana de cobro. La usan el POS ("Cobrar y Entregar") y el listado de pedidos; la maneja cobro.js -->
-  <div class="modal fade" id="modal-cobro-pedido" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+  <div class="modal fade" id="modal-cobro-pedido" tabindex="-1" role="dialog" aria-labelledby="cobro-titulo" aria-hidden="true" data-backdrop="static">
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
+        <!-- Encabezado: fijo -->
         <div class="modal-header">
           <div>
             <h5 class="modal-title font-weight-bold"><i class="fas fa-credit-card mr-2"></i><span id="cobro-titulo">Cobrar y Entregar</span></h5>
@@ -2022,33 +2084,38 @@
           <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
         </div>
         <form id="form-cobro-pedido">
+          <!-- Cuerpo: si no entra en pantalla, hace scroll por dentro (el pie queda siempre a la vista) -->
           <div class="modal-body">
-            <!-- Total y unidades -->
-            <div class="border rounded p-3 mb-3 bg-light d-flex justify-content-between align-items-end">
+            <!-- Total: el dato principal -->
+            <div class="cobro-total-box">
               <div>
-                <div class="text-muted">Total a cobrar</div>
-                <div class="h2 font-weight-bold text-success mb-0">$<span id="cobro-total"></span></div>
+                <div class="cobro-total-etiqueta">Total a cobrar</div>
+                <div class="cobro-total-importe" id="cobro-total"></div>
               </div>
-              <span class="text-muted font-weight-bold" id="cobro-unidades"></span>
+              <span class="cobro-total-unidades" id="cobro-unidades"></span>
             </div>
 
             <!-- Medios de pago: los botones los arma cobro.js -->
-            <label class="font-weight-bold mb-2">Medio de pago</label>
-            <div class="cobro-medios" id="cobro-medios"></div>
+            <div class="cobro-seccion-titulo" id="cobro-medios-titulo">Medio de pago</div>
+            <div class="cobro-medios" id="cobro-medios" role="radiogroup" aria-labelledby="cobro-medios-titulo"></div>
 
-            <!-- Cuenta: solo si el medio NO es efectivo -->
-            <div class="form-group mt-2 d-none" id="cobro-grupo-cuenta">
-              <label for="cobro-cuenta" class="font-weight-bold">Cuenta</label>
-              <select class="form-control" id="cobro-cuenta"></select>
+            <!-- Cuenta: solo si el medio NO es efectivo. Lista de botones (los arma cobro.js);
+                 la elegida queda en el campo oculto #cobro-cuenta -->
+            <div class="d-none" id="cobro-grupo-cuenta">
+              <div class="cobro-seccion-titulo" id="cobro-cuentas-titulo">Cuenta donde entra el cobro</div>
+              <input type="hidden" id="cobro-cuenta">
+              <div class="cobro-cuentas" id="cobro-cuentas-lista" role="radiogroup" aria-labelledby="cobro-cuentas-titulo"></div>
+              <div class="cobro-cuenta-error d-none" id="cobro-cuenta-error">Elegí la cuenta para poder confirmar.</div>
             </div>
 
             <!-- Paga con $: solo en efectivo; calcula el vuelto en pantalla y NO se guarda -->
-            <div class="form-group mt-2 mb-0" id="cobro-grupo-efectivo">
-              <label for="cobro-paga-con" class="font-weight-bold">Paga con $ <span class="text-muted font-weight-normal">(opcional, para calcular el vuelto)</span></label>
-              <input type="number" class="form-control" id="cobro-paga-con" min="0" step="0.01" placeholder="Ej: 10000">
-              <div class="small mt-1" id="cobro-vuelto"></div>
+            <div id="cobro-grupo-efectivo">
+              <label for="cobro-paga-con" class="cobro-seccion-titulo d-block">Paga con <span class="text-muted font-weight-normal">(opcional, para calcular el vuelto)</span></label>
+              <input type="number" class="form-control" id="cobro-paga-con" min="0" step="0.01" inputmode="decimal" placeholder="Ej: 50000">
+              <div class="cobro-vuelto" id="cobro-vuelto"></div>
             </div>
           </div>
+          <!-- Pie: fijo -->
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
             <button type="submit" class="btn btn-success font-weight-bold" id="btn-confirmar-cobro"><i class="fas fa-check mr-1"></i> Confirmar cobro</button>
@@ -2157,6 +2224,18 @@
                   <input type="number" step="0.01" class="form-control form-control-lg font-weight-bold text-success" id="input-efectivo-real" placeholder="0.00">
                 </div>
                 <div id="contenedor-diferencia-efectivo" class="small font-weight-bold"></div>
+
+                <!-- Solo si hay cuentas de reserva (lo muestra caja.js): cuánto queda en el cajón y a qué reserva(s) va el resto -->
+                <div id="bloque-queda-cierre" class="d-none mt-3 pt-3 border-top">
+                  <div class="form-group mb-2">
+                    <label for="input-efectivo-queda" class="font-weight-bold text-dark mb-1">
+                      🧾 Queda en caja para mañana ($):
+                    </label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="input-efectivo-queda" placeholder="Vacío = queda todo lo contado">
+                    <small class="form-text text-muted">Lo que sale del cajón se pasa a una reserva de efectivo.</small>
+                  </div>
+                  <div id="contenedor-reparto-cierre"></div>
+                </div>
               </div>
 
               <div class="form-group">

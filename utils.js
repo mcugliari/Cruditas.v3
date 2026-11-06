@@ -127,6 +127,29 @@ export function formatearMoneda(valor) {
 }
 
 // -----------------------------------------------------------------------------
+// formatearPesos: ÚNICO formato de importes para mostrar en pantalla.
+//   formatearPesos(43000)   -> '$ 43.000'
+//   formatearPesos(1234.5)  -> '$ 1.234,50'   (decimales solo si los hay)
+//   formatearPesos(-2000)   -> '-$ 2.000'
+//   formatearPesos(null)    -> '$ 0'
+// Usa un espacio de no separación entre el $ y el número para que nunca se
+// corte en dos renglones. Para escribir en un <input> o comparar, no se usa:
+// ahí van los números sin formato.
+// -----------------------------------------------------------------------------
+export function formatearPesos(valor) {
+  const n = Number(valor);
+  // Redondea a centavos; así 0,004 no se muestra como "-$ 0" ni 1,999 como "1,999".
+  const centavos = Math.round((Number.isFinite(n) ? n : 0) * 100);
+  const absoluto = Math.abs(centavos) / 100;
+  const cuerpo = absoluto.toLocaleString('es-AR', {
+    minimumFractionDigits: Number.isInteger(absoluto) ? 0 : 2,
+    maximumFractionDigits: 2,
+    useGrouping: true
+  });
+  return `${centavos < 0 ? '-' : ''}$\u00A0${cuerpo}`;
+}
+
+// -----------------------------------------------------------------------------
 // sumarDiasISO: suma (o resta, con un número negativo) días a una fecha.
 // Recibe y devuelve fechas en formato 'AAAA-MM-DD'.
 // Ejemplo: sumarDiasISO('2026-10-13', -30) -> '2026-09-13'
@@ -178,6 +201,13 @@ const MENSAJES_FUNCIONES = {
   efectivo_invalido:    'El efectivo contado no es válido.',
   cierre_inexistente:   'El cierre de caja no existe.',
   cierre_ya_anulado:    'Ese cierre de caja ya estaba anulado.',
+  cierre_posterior_existe: 'Hay cajas cerradas en días posteriores. No se puede cerrar ni anular un día anterior: primero anulá los cierres más nuevos (del último hacia atrás).',
+  // Cajón y reservas de efectivo (script 44)
+  cuenta_reserva_no_paga: 'Una cuenta de reserva no cobra ni paga. Si hace falta efectivo en el cajón, primero transferí desde la reserva a Efectivo (Cuentas y Saldos → Transferir).',
+  queda_invalido:       'Lo que queda en caja no es válido: no puede ser negativo ni mayor al efectivo contado.',
+  reparto_no_coincide:  'Lo que sale del cajón tiene que repartirse completo entre las reservas (la suma de los importes debe ser exacta).',
+  reparto_invalido:     'El reparto a reservas no es válido: cada reserva una sola vez y con un importe mayor a cero.',
+  destino_no_es_reserva: 'El destino del reparto tiene que ser una cuenta de reserva activa (no el cajón).',
   arqueo_inexistente:   'El arqueo no existe.',
   arqueo_ya_anulado:    'Ese arqueo ya estaba anulado.',
   compra_inexistente:   'La compra no existe.',
@@ -195,7 +225,7 @@ const MENSAJES_FUNCIONES = {
   egreso_ya_anulado:    'El movimiento ya estaba anulado.',
   egreso_cerrado:       'El movimiento pertenece a un día con la caja cerrada: no se puede anular.',
   cuenta_invalida:      'La cuenta no existe o está inactiva.',
-  cuenta_incompatible:  'La cuenta no corresponde al medio de pago (el efectivo va a la cuenta Efectivo; la transferencia, a una cuenta bancaria o billetera).',
+  cuenta_incompatible:  'La cuenta no corresponde al medio de pago (el efectivo va a una cuenta de efectivo; la transferencia, a una cuenta bancaria o billetera).',
   cuenta_requerida:     'Elegí a qué cuenta corresponde el movimiento.',
   monto_traspaso_invalido: 'El monto debe ser mayor a cero.',
   cuentas_iguales:         'La cuenta de origen y la de destino no pueden ser la misma.',
@@ -205,7 +235,7 @@ const MENSAJES_FUNCIONES = {
   movimiento_ya_anulado:   'El movimiento ya estaba anulado.',
   movimiento_cerrado:      'El movimiento pertenece a un día con la caja cerrada: no se puede anular. Anulá primero el cierre de caja de ese día.',
   ajuste_de_cierre:        'Este ajuste lo generó un cierre de caja (diferencia de arqueo). Para deshacerlo, anulá ese cierre.',
-  cuenta_efectivo_fija: 'La cuenta Efectivo es fija: no se puede desactivar, borrar ni cambiar de tipo.',
+  cuenta_efectivo_fija: 'El cajón (cuenta Efectivo) es fijo: no se puede desactivar, borrar ni cambiar de tipo, y las cuentas de efectivo no pueden cambiar de tipo.',
   medio_requerido:      'Para cobrar hay que elegir el medio de pago.',
   // Pedidos (guardar_pedido y cambiar_estado_pedido, scripts 23 y 24)
   estado_invalido:      'El estado del pedido no es válido.',
@@ -309,7 +339,7 @@ export function confirmarAccion({
             </h5>
           </div>
           <div class="modal-body">
-            <p class="mb-0">${esc(mensaje)}</p>
+            <p class="mb-0" style="white-space: pre-line;">${esc(mensaje)}</p>
             ${pedirMotivo ? `
             <div class="form-group mt-3 mb-0">
               <textarea class="form-control" id="confirmar-motivo" rows="2" maxlength="300" placeholder="Escribí el motivo..."></textarea>
@@ -359,4 +389,4 @@ export function confirmarAccion({
 
     $(modal).modal('show');
   });
-}
+}

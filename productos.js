@@ -1,6 +1,8 @@
 import { supabaseAdmin } from './config.js';
 import { cacheCategorias, setCacheCategorias } from './state.js';
 import { mostrarNotificacion, confirmarAccion, esc } from './utils.js';
+// Ventana "Categorías" de esta pantalla: se engancha sola; solo le pasamos qué refrescar al guardar.
+import { registrarAlCambiarCategoriasProductos } from './categoriasProductos.js';
 
 // Bucket público de Supabase Storage donde viven las fotos (lo crea el script 19).
 const BUCKET_FOTOS = 'productos';
@@ -331,3 +333,6 @@ export async function eliminarProducto(id, nombre) {
     }
   }
 }
+
+// Al crear o editar una categoría, esta pantalla se refresca (select de categorías y tabla de productos).
+registrarAlCambiarCategoriasProductos(() => cargarProductos());

@@ -14,6 +14,14 @@
 //      historial también muestra los arqueos de ese día (solo lectura).
 //   La ventana muestra arriba el efectivo esperado (una sola vez), el detalle del día
 //   plegado y dos solapas: "Cerrar caja" y "Arqueo de turno".
+//   5) Cajón y reservas (script 44): si hay cuentas de reserva, al cerrar se indica cuánto QUEDA
+//      en el cajón para mañana y a qué reserva(s) va el resto. La base valida que el reparto sume
+//      exacto y crea las transferencias automáticas del cierre. Sin reservas, la ventana es la de siempre.
+//   6) Ventas por grupo (script 45): dentro del "Ver detalle del día", una tabla con las ventas del día
+//      por grupo de producto (Empanada, Pizza...) y el neto cobrado en efectivo de cada uno, para decidir
+//      cuánto va a cada reserva. Es solo informativa y se carga aparte: si falla, el cierre no se afecta.
+//   7) Historial de cierres: el detalle muestra efectivo inicial, lo que quedó en caja y a qué reserva
+//      pasó cada importe (sale de las transferencias automáticas del cierre).
 //
 // QUÉ CAMBIÓ RESPECTO DE LA VERSIÓN ANTERIOR
 //   - Los números ya NO se calculan en el navegador: los calcula la base de datos
@@ -58,6 +66,20 @@ let arqueosPorFecha = null;
 // cargado (null = no se puede arquear: caja cerrada o error) y los arqueos de hoy.
 let esperadoArqueo = null;
 let contadorCargaArqueos = 0;   // evita que una carga lenta pise a una más nueva
+
+// Cuentas de reserva de efectivo activas (a dónde puede ir lo que sale del cajón al cerrar) y las filas del
+// reparto que se está armando. Cada fila: { id_cuenta: '' | 'id', monto: 'texto del importe' }.
+let reservasCierre = [];
+let filasReparto = [];
+
+// Evita que la respuesta lenta de una carga anterior de "Ventas por grupo" pise a una más nueva.
+let contadorCargaGrupos = 0;
+
+// Igual para el detalle del reparto a reservas en el historial de cierres.
+let contadorCargaReparto = 0;
+
+// Redondea a centavos (evita 0.30000000000000004 al sumar o restar decimales).
+const redondear2 = (n) => Math.round(Number(n) * 100) / 100;
 
 // -----------------------------------------------------------------------------
 // htmlMovimientoCuentas  (interna)
@@ -104,11 +126,14 @@ function htmlMovimientoCuentas(filas) {
 //   El efectivo que el sistema espera en el cajón. Se muestra UNA sola vez, arriba de las
 //   solapas "Cerrar caja" y "Arqueo de turno", porque las dos lo usan para comparar.
 // -----------------------------------------------------------------------------
-function htmlBannerEsperado(efectivoEsperado) {
+function htmlBannerEsperado(efectivoEsperado, efectivoInicial = 0) {
+  // Si el día arrancó con efectivo en el cajón (lo que quedó del cierre anterior), se aclara que ya está incluido.
+  const textoInicial = Number(efectivoInicial) > 0
+    ? `<br><small class="text-muted">incluye $${formatearMoneda(efectivoInicial)} que había al empezar el día</small>` : '';
   return `
     <div class="d-flex justify-content-between align-items-center p-3 mb-2 rounded border border-warning" style="background:#fff8e1;">
       <span><strong>EFECTIVO ESPERADO EN CAJA</strong><br>
-        <small class="text-muted">lo que debería haber en el cajón según el sistema</small></span>
+        <small class="text-muted">lo que debería haber en el cajón según el sistema</small>${textoInicial}</span>
       <strong class="h4 mb-0">$${formatearMoneda(efectivoEsperado)}</strong>
     </div>`;
 }
@@ -185,7 +210,7 @@ export async function cargarResumenVentasDia() {
           No hay ventas cobradas, egresos ni traspasos registrados hoy (${fechaTextoAR}).<br>
           <small>Las ventas se cuentan el día en que se cobran (pedidos completados).</small>
         </div>
-      ` + htmlBannerEsperado(esperadoArqueo);   // el arqueo se puede hacer igual, aun sin movimientos
+      ` + htmlBannerEsperado(esperadoArqueo, resumen.efectivo_inicial);   // el arqueo se puede hacer igual, aun sin movimientos
       alternarCamposFormulario(true);
       return;
     }
@@ -198,6 +223,16 @@ export async function cargarResumenVentasDia() {
     // "html" es el DETALLE DEL DÍA (ventas, egresos, movimiento por cuenta): va plegado, porque quien
     // cierra solo necesita el efectivo esperado (banner de arriba) y contar el cajón.
     let html = '<div class="list-group mb-2">';
+
+    // NUEVO (script 44): efectivo con el que arrancó el día en el cajón (lo que quedó en el cierre anterior).
+    const efectivoInicial = Number(resumen.efectivo_inicial || 0);
+    if (efectivoInicial !== 0) {
+      html += `
+        <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+          <span>Efectivo en caja al empezar el día <small class="text-muted">(lo que quedó del cierre anterior)</small></span>
+          <span class="font-weight-bold">$${formatearMoneda(efectivoInicial)}</span>
+        </div>`;
+    }
 
     // VENTAS COBRADAS, una línea por medio de pago.
     // .filter() se queda con los medios que tuvieron ventas (los que solo tuvieron
@@ -231,7 +266,7 @@ export async function cargarResumenVentasDia() {
 
       html += lineaEgreso('Gastos y pagos en efectivo', resumen.gastos_efectivo);
       html += lineaEgreso('Gastos y pagos por banco / otros medios <small class="text-muted">(no salen de la caja)</small>', resumen.gastos_banco);
-      html += lineaEgreso('Retiros de efectivo', resumen.retiros_efectivo);
+      html += lineaEgreso('Retiros de efectivo <small class="text-muted">(del cajón)</small>', resumen.retiros_efectivo);
     }
 
     // MOVIMIENTO POR CUENTA: dónde quedó la plata del día.
@@ -252,25 +287,33 @@ export async function cargarResumenVentasDia() {
         </div>`;
     }
 
+    // VENTAS POR GRUPO (script 45): el contenido se carga aparte, sin frenar el dibujo del resumen.
+    html += `<div class="list-group-item py-2" id="ventas-por-grupo-cierre"><small class="text-muted">Cargando ventas por grupo...</small></div>`;
+
     // Cómo se llega al efectivo esperado (el importe está en el banner de arriba).
     html += `
       <div class="list-group-item py-2 small text-muted">
-        <strong>Efectivo esperado</strong> = ventas en efectivo − gastos en efectivo − retiros ± traspasos de efectivo
+        <strong>Efectivo esperado</strong> = efectivo al empezar el día + ventas en efectivo − gastos en efectivo − retiros del cajón ± traspasos de efectivo
       </div>
     </div>`;
 
     // Banner con el efectivo esperado (siempre visible) + botón que despliega el detalle.
-    contenedor.innerHTML = htmlBannerEsperado(resumen.efectivo_esperado) + `
+    contenedor.innerHTML = htmlBannerEsperado(resumen.efectivo_esperado, resumen.efectivo_inicial) + `
       <button type="button" class="btn btn-link btn-sm p-0 mb-2" data-toggle="collapse"
               data-target="#detalle-dia-cierre" aria-expanded="false" aria-controls="detalle-dia-cierre">
         <i class="fas fa-chevron-down"></i> Ver detalle del día
       </button>
       <div class="collapse" id="detalle-dia-cierre">${html}</div>`;
 
+    cargarVentasPorGrupo(fechaISO);   // sin await: es informativo y no debe demorar el cierre
+
     // Reinicia el formulario y muestra el efectivo esperado como pista.
     const inputEf = document.getElementById('input-efectivo-real');
     if (inputEf) inputEf.value = '';
     actualizarDiferenciaEfectivo();
+
+    // NUEVO (script 44): "queda en caja" y reparto a reservas (solo si hay reservas).
+    await prepararBloqueQueda();
 
   } catch (err) {
     console.error('Error al cargar el resumen de caja:', err);
@@ -294,6 +337,16 @@ function alternarCamposFormulario(deshabilitar) {
   if (inputEf) inputEf.disabled = deshabilitar;
   if (inputObs) inputObs.disabled = deshabilitar;
   if (btnConf) btnConf.disabled = deshabilitar;
+
+  // "Queda en caja": con la caja cerrada o sin nada para cerrar, el bloque se oculta y se limpia.
+  const inputQueda = document.getElementById('input-efectivo-queda');
+  if (inputQueda) inputQueda.disabled = deshabilitar;
+  if (deshabilitar) {
+    document.getElementById('bloque-queda-cierre')?.classList.add('d-none');
+    const contReparto = document.getElementById('contenedor-reparto-cierre');
+    if (contReparto) contReparto.innerHTML = '';
+    filasReparto = [];
+  }
 
   const contDif = document.getElementById('contenedor-diferencia-efectivo');
   if (contDif && deshabilitar) contDif.innerHTML = '';
@@ -331,6 +384,341 @@ function actualizarDiferenciaEfectivo() {
   } else {
     contDif.innerHTML = `<span class="text-danger">⚠️ Faltante de efectivo: -$${formatearMoneda(Math.abs(dif))}</span>`;
   }
+}
+
+
+// -----------------------------------------------------------------------------
+// nombreGrupo  (interna)
+//   El grupo llega en mayúsculas desde la base ("EMPANADA"): se muestra con solo la primera en mayúscula.
+// -----------------------------------------------------------------------------
+function nombreGrupo(grupo) {
+  const t = String(grupo || '');
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+
+// -----------------------------------------------------------------------------
+// htmlVentasPorGrupo  (interna)
+//   Arma la tabla de ventas por grupo. Recibe: datos -> lo que devuelve ventas_por_grupo (script 45).
+//   Columnas: Grupo | Unidades | Ventas brutas | Descuento docena | Neto | Neto cobrado en efectivo.
+//   Esta última es la útil para decidir el reparto a reservas. Si la suma de los grupos no da el total
+//   (pedidos viejos o editados), se agrega la fila "Otros / ajustes" con la diferencia.
+// -----------------------------------------------------------------------------
+function htmlVentasPorGrupo(datos) {
+  const dinero = (n) => '$' + formatearMoneda(n);
+  const grupos = datos.grupos || [];
+
+  const filas = grupos.map(g => {
+    const desc = Number(g.descuento_docena);
+    return `
+      <tr>
+        <td class="font-weight-bold">${esc(nombreGrupo(g.grupo))}</td>
+        <td class="text-right">${Number(g.unidades)}</td>
+        <td class="text-right">${dinero(g.ventas_brutas)}</td>
+        <td class="text-right ${desc > 0 ? 'text-danger' : 'text-muted'}">${desc > 0 ? '-' + dinero(desc) : '-'}</td>
+        <td class="text-right">${dinero(g.neto)}</td>
+        <td class="text-right font-weight-bold" style="background:#fff8e1;">${dinero(g.neto_efectivo)}</td>
+      </tr>`;
+  }).join('');
+
+  // Diferencia que no se pudo asignar a un grupo (solo si existe).
+  const otros = Number(datos.otros_neto || 0);
+  const otrosEf = Number(datos.otros_neto_efectivo || 0);
+  const filaOtros = (otros !== 0 || otrosEf !== 0) ? `
+      <tr class="text-muted">
+        <td>Otros / ajustes<br><small>pedidos sin detalle o editados</small></td>
+        <td class="text-right">-</td><td class="text-right">-</td><td class="text-right">-</td>
+        <td class="text-right">${dinero(otros)}</td>
+        <td class="text-right" style="background:#fff8e1;">${dinero(otrosEf)}</td>
+      </tr>` : '';
+
+  // Totales de la tabla: unidades, brutas y descuentos suman los grupos; el neto es el total vendido.
+  const sumar = (campo) => grupos.reduce((acc, g) => acc + Number(g[campo] || 0), 0);
+  const descTotal = sumar('descuento_docena');
+
+  return `
+    <div class="small font-weight-bold text-uppercase mb-1">Ventas por grupo</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-borderless mb-1 small">
+        <thead class="text-muted">
+          <tr>
+            <th>Grupo</th><th class="text-right">Unid.</th><th class="text-right">Ventas brutas</th>
+            <th class="text-right">Desc. docena</th><th class="text-right">Neto</th>
+            <th class="text-right" style="background:#fff8e1;">Neto en efectivo</th>
+          </tr>
+        </thead>
+        <tbody>${filas}${filaOtros}</tbody>
+        <tfoot class="border-top font-weight-bold">
+          <tr>
+            <td>Total</td>
+            <td class="text-right">${sumar('unidades')}</td>
+            <td class="text-right">${dinero(sumar('ventas_brutas'))}</td>
+            <td class="text-right ${descTotal > 0 ? 'text-danger' : 'text-muted'}">${descTotal > 0 ? '-' + dinero(descTotal) : '-'}</td>
+            <td class="text-right">${dinero(datos.total)}</td>
+            <td class="text-right" style="background:#fff8e1;">${dinero(datos.total_efectivo)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <small class="text-muted">Solo informativo. El neto en efectivo sirve para decidir cuánto va a cada reserva.</small>`;
+}
+
+
+// -----------------------------------------------------------------------------
+// cargarVentasPorGrupo  (interna)
+//   Pide a la base las ventas por grupo del día (función ventas_por_grupo, script 45) y las dibuja en el
+//   lugar reservado dentro del detalle del día. Es informativo: si falla (por ejemplo, si todavía no se
+//   ejecutó el script 45), muestra un aviso discreto y el cierre sigue funcionando.
+//   Recibe: fechaISO -> día a consultar ('AAAA-MM-DD').
+// -----------------------------------------------------------------------------
+async function cargarVentasPorGrupo(fechaISO) {
+  const miCarga = ++contadorCargaGrupos;
+  const lugar = document.getElementById('ventas-por-grupo-cierre');
+  if (!lugar) return;
+
+  try {
+    const { data, error } = await supabaseAdmin.rpc('ventas_por_grupo', { p_fecha: fechaISO });
+    if (error) throw error;
+    if (miCarga !== contadorCargaGrupos) return;   // llegó una carga más nueva: esta se descarta
+
+    const destino = document.getElementById('ventas-por-grupo-cierre');
+    if (!destino) return;   // la ventana cambió mientras tanto
+    if (Number(data.cantidad_pedidos) === 0) {
+      destino.classList.add('d-none');   // un día solo de egresos no tiene ventas que desglosar
+      return;
+    }
+    destino.innerHTML = htmlVentasPorGrupo(data);
+  } catch (err) {
+    console.error('No se pudieron cargar las ventas por grupo:', err);
+    if (miCarga !== contadorCargaGrupos) return;
+    const destino = document.getElementById('ventas-por-grupo-cierre');
+    if (destino) destino.innerHTML = '<small class="text-muted">No se pudieron cargar las ventas por grupo.</small>';
+  }
+}
+
+
+// -----------------------------------------------------------------------------
+// prepararBloqueQueda  (interna)
+//   Muestra el campo "Queda en caja" y el reparto a reservas SOLO si existen cuentas de reserva
+//   (efectivo activo que no es el cajón). Si no hay (o la consulta falla, por ejemplo si todavía no se
+//   ejecutó el script 44), el bloque queda oculto y el cierre funciona como siempre.
+// -----------------------------------------------------------------------------
+async function prepararBloqueQueda() {
+  const bloque = document.getElementById('bloque-queda-cierre');
+  const inputQueda = document.getElementById('input-efectivo-queda');
+  if (!bloque || !inputQueda) return;
+
+  inputQueda.value = '';
+  filasReparto = [];
+  reservasCierre = [];
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('TB_BCUENTAS')
+      .select('id, nombre')
+      .eq('tipo', 'EFECTIVO').eq('es_caja_operativa', false).eq('activo', true)
+      .order('nombre', { ascending: true });
+    if (error) throw error;
+    reservasCierre = data || [];
+  } catch (err) {
+    console.error('No se pudieron cargar las cuentas de reserva:', err);
+  }
+
+  bloque.classList.toggle('d-none', reservasCierre.length === 0);
+  dibujarReparto();
+}
+
+
+// -----------------------------------------------------------------------------
+// datosSalidaCajon  (interna)
+//   Lee lo escrito en pantalla: efectivo contado, lo que queda en caja y, de ahí, lo que sale del cajón.
+//   Devuelve { real, queda, salida, estado }:
+//     estado 'sin_queda' -> no se escribió "queda" (queda todo en el cajón, no hay reparto)
+//     estado 'sin_real'  -> se escribió "queda" pero todavía no el efectivo contado
+//     estado 'invalido'  -> falta el contado o "queda" es negativo o mayor al contado
+//     estado 'ok'        -> salida = contado - queda (puede ser 0)
+// -----------------------------------------------------------------------------
+function datosSalidaCajon() {
+  const textoQueda = (document.getElementById('input-efectivo-queda')?.value || '').trim();
+  const textoReal = (document.getElementById('input-efectivo-real')?.value || '').trim();
+  if (textoQueda === '') return { real: null, queda: null, salida: 0, estado: 'sin_queda' };
+  // Todavía no se escribió el efectivo contado: no hay con qué comparar (no se avisa nada).
+  if (textoReal === '') return { real: null, queda: null, salida: 0, estado: 'sin_real' };
+
+  const real = Number(textoReal);
+  const queda = Number(textoQueda);
+  if (isNaN(real) || isNaN(queda) || queda < 0 || queda > real + 0.004) {
+    return { real, queda, salida: 0, estado: 'invalido' };
+  }
+  return { real, queda, salida: redondear2(real - queda), estado: 'ok' };
+}
+
+
+// -----------------------------------------------------------------------------
+// autocompletarUltimaFila  (interna)
+//   La última fila del reparto siempre se completa con lo que falta: salida - lo de las otras filas.
+//   Con una sola fila, es toda la salida.
+// -----------------------------------------------------------------------------
+function autocompletarUltimaFila(salida) {
+  if (filasReparto.length === 0) return;
+  const ultima = filasReparto.length - 1;
+  const otras = filasReparto.slice(0, ultima).reduce((acc, f) => acc + (Number(f.monto) || 0), 0);
+  filasReparto[ultima].monto = String(Math.max(0, redondear2(salida - otras)));
+}
+
+
+// -----------------------------------------------------------------------------
+// opcionesReservas  (interna)
+//   <option> de las reservas para el desplegable de una fila del reparto.
+// -----------------------------------------------------------------------------
+function opcionesReservas(idElegida) {
+  return reservasCierre.map(r =>
+    `<option value="${r.id}" ${String(r.id) === String(idElegida) ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('');
+}
+
+
+// -----------------------------------------------------------------------------
+// dibujarReparto  (interna)
+//   Dibuja las filas del reparto (reserva + importe) según lo que sale del cajón. Se llama al
+//   cambiar el contado o el "queda", y al agregar o quitar una fila. Al escribir un importe NO se
+//   redibuja (para no perder el foco): ahí solo se actualiza la última fila y el estado.
+// -----------------------------------------------------------------------------
+function dibujarReparto() {
+  const cont = document.getElementById('contenedor-reparto-cierre');
+  if (!cont) return;
+
+  if (reservasCierre.length === 0) { cont.innerHTML = ''; filasReparto = []; return; }
+
+  const d = datosSalidaCajon();
+  if (d.estado === 'sin_queda' || d.estado === 'sin_real') { cont.innerHTML = ''; filasReparto = []; return; }
+  if (d.estado === 'invalido') {
+    filasReparto = [];
+    cont.innerHTML = `<div class="small text-danger font-weight-bold">⚠️ Lo que queda en caja tiene que estar entre $0 y el efectivo contado.</div>`;
+    return;
+  }
+  if (d.salida <= 0) {
+    filasReparto = [];
+    cont.innerHTML = `<div class="small text-success font-weight-bold">✔ No sale efectivo del cajón: queda todo.</div>`;
+    return;
+  }
+
+  // Hay plata que sale: tiene que haber al menos una fila.
+  if (filasReparto.length === 0) filasReparto = [{ id_cuenta: String(reservasCierre[0].id), monto: '' }];
+  autocompletarUltimaFila(d.salida);
+
+  const filas = filasReparto.map((f, i) => `
+    <div class="form-row align-items-center mb-1">
+      <div class="col-7">
+        <select class="form-control form-control-sm reparto-cuenta" data-fila="${i}" aria-label="Reserva de destino">${opcionesReservas(f.id_cuenta)}</select>
+      </div>
+      <div class="col-4">
+        <input type="number" step="0.01" min="0" class="form-control form-control-sm reparto-monto" data-fila="${i}" value="${esc(f.monto)}" aria-label="Importe">
+      </div>
+      <div class="col-1 text-right">
+        ${filasReparto.length > 1 ? `<button type="button" class="btn btn-link btn-sm text-danger p-0 reparto-quitar" data-fila="${i}" title="Quitar">&times;</button>` : ''}
+      </div>
+    </div>`).join('');
+
+  const puedeDividir = reservasCierre.length > filasReparto.length;
+  cont.innerHTML = `
+    <div class="small font-weight-bold mb-1">Pasan a reserva: <span class="text-primary">$${formatearMoneda(d.salida)}</span></div>
+    ${filas}
+    ${puedeDividir ? '<button type="button" class="btn btn-link btn-sm p-0 reparto-dividir">+ Repartir entre otra reserva</button>' : ''}
+    <div class="small font-weight-bold mt-1" id="estado-reparto"></div>`;
+  actualizarEstadoReparto();
+}
+
+
+// -----------------------------------------------------------------------------
+// actualizarEstadoReparto  (interna)
+//   Debajo del reparto: "Reparto completo" o cuánto falta / sobra repartir.
+// -----------------------------------------------------------------------------
+function actualizarEstadoReparto() {
+  const estado = document.getElementById('estado-reparto');
+  if (!estado) return;
+  const { salida } = datosSalidaCajon();
+  const repartido = redondear2(filasReparto.reduce((acc, f) => acc + (Number(f.monto) || 0), 0));
+  const falta = redondear2(salida - repartido);
+  if (falta === 0) {
+    estado.className = 'small font-weight-bold mt-1 text-success';
+    estado.textContent = '✔ Reparto completo.';
+  } else {
+    estado.className = 'small font-weight-bold mt-1 text-danger';
+    estado.textContent = falta > 0
+      ? `Falta repartir $${formatearMoneda(falta)}.`
+      : `Te pasaste por $${formatearMoneda(Math.abs(falta))}.`;
+  }
+}
+
+
+// -----------------------------------------------------------------------------
+// validarReparto  (interna)
+//   Controla el reparto antes de enviarlo (la base lo vuelve a validar).
+//   Recibe: salida -> lo que sale del cajón.
+//   Devuelve { error } con un texto, o { reparto } con la lista [{ id_cuenta, monto }] lista para la base.
+// -----------------------------------------------------------------------------
+function validarReparto(salida) {
+  if (filasReparto.length === 0) return { error: 'Elegí a qué reserva va el efectivo que sale del cajón.' };
+  const usadas = new Set();
+  const reparto = [];
+  for (const f of filasReparto) {
+    const monto = redondear2(f.monto);
+    if (f.id_cuenta === '' || isNaN(monto) || monto <= 0) {
+      return { error: 'Cada reserva del reparto necesita un importe mayor a cero.' };
+    }
+    if (usadas.has(f.id_cuenta)) return { error: 'No repitas la misma reserva en el reparto.' };
+    usadas.add(f.id_cuenta);
+    reparto.push({ id_cuenta: Number(f.id_cuenta), monto });
+  }
+  const suma = redondear2(reparto.reduce((acc, r) => acc + r.monto, 0));
+  if (suma !== redondear2(salida)) {
+    return { error: `El reparto suma $${formatearMoneda(suma)} y tienen que ser $${formatearMoneda(salida)}.` };
+  }
+  return { reparto };
+}
+
+
+// -----------------------------------------------------------------------------
+// conectarRepartoCierre  (interna)
+//   Eventos del reparto. Las filas se redibujan, así que los eventos se conectan UNA vez en el
+//   contenedor y se resuelve con e.target (delegación de eventos).
+// -----------------------------------------------------------------------------
+function conectarRepartoCierre() {
+  const cont = document.getElementById('contenedor-reparto-cierre');
+  if (!cont) return;
+
+  cont.addEventListener('change', (e) => {
+    const select = e.target.closest('.reparto-cuenta');
+    if (select) filasReparto[Number(select.dataset.fila)].id_cuenta = select.value;
+  });
+
+  cont.addEventListener('input', (e) => {
+    const input = e.target.closest('.reparto-monto');
+    if (!input) return;
+    const i = Number(input.dataset.fila);
+    filasReparto[i].monto = input.value;
+    // Si se tocó una fila que no es la última, la última se completa sola con lo que falta.
+    if (i < filasReparto.length - 1) {
+      autocompletarUltimaFila(datosSalidaCajon().salida);
+      const ultimo = cont.querySelector(`.reparto-monto[data-fila="${filasReparto.length - 1}"]`);
+      if (ultimo) ultimo.value = filasReparto[filasReparto.length - 1].monto;
+    }
+    actualizarEstadoReparto();
+  });
+
+  cont.addEventListener('click', (e) => {
+    if (e.target.closest('.reparto-dividir')) {
+      const libre = reservasCierre.find(r => !filasReparto.some(f => f.id_cuenta === String(r.id)));
+      if (libre) filasReparto.push({ id_cuenta: String(libre.id), monto: '' });
+      dibujarReparto();
+      return;
+    }
+    const quitar = e.target.closest('.reparto-quitar');
+    if (quitar) {
+      filasReparto.splice(Number(quitar.dataset.fila), 1);
+      dibujarReparto();
+    }
+  });
 }
 
 
@@ -625,8 +1013,14 @@ export function inicializarCierreCaja() {
     if (boton) anularArqueo(Number(boton.dataset.arqueoAnular));
   });
 
-  // Mientras se escribe el efectivo contado, se muestra la diferencia.
-  document.getElementById('input-efectivo-real')?.addEventListener('input', actualizarDiferenciaEfectivo);
+  // Mientras se escribe el efectivo contado, se muestra la diferencia (y se recalcula el reparto a reservas).
+  document.getElementById('input-efectivo-real')?.addEventListener('input', () => {
+    actualizarDiferenciaEfectivo();
+    dibujarReparto();
+  });
+  // "Queda en caja": al escribirlo se arma el reparto de lo que sale del cajón.
+  document.getElementById('input-efectivo-queda')?.addEventListener('input', dibujarReparto);
+  conectarRepartoCierre();
 
   // Botón "Confirmar y cerrar caja".
   document.getElementById('btn-confirmar-cierre')?.addEventListener('click', async () => {
@@ -641,10 +1035,48 @@ export function inicializarCierreCaja() {
       inputEf?.focus();
       return;
     }
+    const efectivoReal = Number(inputEf.value);
+
+    // NUEVO (script 44): "queda en caja" y reparto a reservas. Solo cuenta si el bloque está a la vista
+    // (hay reservas) y se escribió un "queda"; si no, queda todo lo contado en el cajón (como siempre).
+    let efectivoQueda = null;
+    let reparto = null;
+    const bloqueVisible = !document.getElementById('bloque-queda-cierre')?.classList.contains('d-none');
+    const d = datosSalidaCajon();
+    if (bloqueVisible && d.estado !== 'sin_queda' && d.estado !== 'sin_real') {
+      if (d.estado === 'invalido') {
+        mostrarNotificacion('Lo que queda en caja tiene que estar entre $0 y el efectivo contado.', 'warning');
+        document.getElementById('input-efectivo-queda')?.focus();
+        return;
+      }
+      efectivoQueda = redondear2(d.queda);
+      if (d.salida > 0) {
+        const r = validarReparto(d.salida);
+        if (r.error) {
+          mostrarNotificacion(r.error, 'warning');
+          return;
+        }
+        reparto = r.reparto;
+      }
+    }
+
+    // Resumen de lo que se va a hacer (la ventana respeta los saltos de línea).
+    let mensajeConfirmar = '¿Estás seguro de confirmar y cerrar la caja diaria?';
+    if (efectivoQueda !== null) {
+      mensajeConfirmar += `\n\nQueda en caja para mañana: $${formatearMoneda(efectivoQueda)}`;
+      if (reparto) {
+        mensajeConfirmar += `\nPasa a reserva: $${formatearMoneda(d.salida)}`;
+        reparto.forEach(r => {
+          const nombre = reservasCierre.find(x => x.id === r.id_cuenta)?.nombre || 'Reserva';
+          mensajeConfirmar += `\n  · ${nombre}: $${formatearMoneda(r.monto)}`;
+        });
+      }
+    }
+
     // Ventana propia de confirmación (se abre encima de la ventana de cierre).
     const ok = await confirmarAccion({
       titulo: 'Cerrar caja',
-      mensaje: '¿Estás seguro de confirmar y cerrar la caja diaria?',
+      mensaje: mensajeConfirmar,
       textoConfirmar: 'Sí, cerrar caja'
     });
     if (!ok) return;
@@ -653,18 +1085,23 @@ export function inicializarCierreCaja() {
     btn.disabled = true;
     btn.innerText = 'Guardando cierre...';
 
-    const efectivoReal = Number(inputEf.value);
     const obs = document.getElementById('cierre-observaciones')?.value.trim() || null;
 
     try {
       // UNA sola llamada: la función cerrar_caja guarda la cabecera, el detalle por
       // medio de pago y la vinculación de los egresos, todo junto. Si algo falla,
       // no se guarda nada. Los nombres p_... son los parámetros de la función (script 07).
-      const { data, error } = await supabaseAdmin.rpc('cerrar_caja', {
+      // Los datos de "queda" y reparto solo se envían si se usaron (son opcionales en la base).
+      const parametros = {
         p_fecha: obtenerFechaActualISO(),
         p_efectivo_real: efectivoReal,
         p_observaciones: obs
-      });
+      };
+      if (efectivoQueda !== null) {
+        parametros.p_efectivo_queda = efectivoQueda;
+        parametros.p_reparto = reparto;   // null si no sale nada del cajón
+      }
+      const { data, error } = await supabaseAdmin.rpc('cerrar_caja', parametros);
 
       if (error) {
         mostrarNotificacion(mensajeErrorFuncion(error, 'cierre'), 'danger');
@@ -676,7 +1113,9 @@ export function inicializarCierreCaja() {
       const textoDif = dif === 0 ? 'sin diferencia'
         : (dif > 0 ? `sobrante de $${formatearMoneda(dif)}` : `faltante de $${formatearMoneda(Math.abs(dif))}`);
 
-      mostrarNotificacion(`¡Cierre de caja guardado con éxito! (${textoDif})`);
+      const textoReparto = Number(data.efectivo_reparto) > 0
+        ? ` Pasaron $${formatearMoneda(data.efectivo_reparto)} a reserva.` : '';
+      mostrarNotificacion(`¡Cierre de caja guardado con éxito! (${textoDif}).${textoReparto}`);
       actualizarIndicadorCaja();   // el encabezado pasa a "Caja cerrada"
       refrescarHistorialCierres();   // el historial (si ya estaba consultado) muestra el cierre nuevo
       $('#modalCierreCaja').modal('hide');
@@ -756,6 +1195,7 @@ export async function cargarTablaHistorialCierres() {
       .select(`
         id, fecha, total_general, efectivo_sistema, efectivo_real, diferencia_efectivo,
         gastos_efectivo, gastos_banco, total_gastos, retiros_efectivo, observaciones, estado,
+        efectivo_inicial, efectivo_queda,
         TB_DCIERRE_CAJA (
           monto, egresos, saldo_neto, cantidad_transacciones, TB_BMEDIO_PAGO ( nombre )
         ),
@@ -839,6 +1279,62 @@ async function cargarArqueosDelRango(desde, hasta) {
 
 
 // -----------------------------------------------------------------------------
+// cargarRepartoDelCierre  (interna)
+//   Completa, en el detalle de un cierre del historial, el lugar "reparto-cierre-detalle" con las
+//   reservas a las que se pasó el efectivo: una línea por reserva con su importe. Sale de las
+//   transferencias AUTOMÁTICAS que cerrar_caja creó para ese cierre (TB_TMOV_CUENTAS, solo lectura
+//   para Encargado y Dueño). Es informativo: si falla, el detalle del cierre se ve igual.
+//   Recibe: idCierre -> número del cierre; estadoCierre -> 'CERRADO' o 'ANULADO'.
+//   (Si el cierre se anuló, esas transferencias se anularon con él: se muestran como lo que fue el
+//    reparto original, aclarándolo.)
+// -----------------------------------------------------------------------------
+async function cargarRepartoDelCierre(idCierre, estadoCierre) {
+  const miCarga = ++contadorCargaReparto;
+  const hayLugar = () => document.getElementById('reparto-cierre-detalle');
+  if (!hayLugar()) return;
+
+  try {
+    const { data: transferencias, error } = await supabaseAdmin
+      .from('TB_TMOV_CUENTAS')
+      .select('id, monto, id_cuenta_destino')
+      .eq('id_cierre', idCierre)
+      .eq('tipo', 'TRANSFERENCIA')
+      .eq('automatico', true)
+      .order('id', { ascending: true });
+    if (error) throw error;
+
+    // Nombres de las reservas de destino (consulta aparte: más simple que anidar dos relaciones a la misma tabla).
+    const idsDestino = [...new Set((transferencias || []).map(t => t.id_cuenta_destino))];
+    let nombres = {};
+    if (idsDestino.length > 0) {
+      const { data: cuentas, error: errorCuentas } = await supabaseAdmin
+        .from('TB_BCUENTAS').select('id, nombre').in('id', idsDestino);
+      if (errorCuentas) throw errorCuentas;
+      (cuentas || []).forEach(c => { nombres[c.id] = c.nombre; });
+    }
+
+    if (miCarga !== contadorCargaReparto) return;   // se abrió otro detalle mientras tanto
+    const lugar = hayLugar();
+    if (!lugar) return;
+
+    if (!transferencias || transferencias.length === 0) {
+      lugar.textContent = 'No hay detalle del reparto para este cierre.';
+      return;
+    }
+    const lineas = transferencias.map(t =>
+      `<div>&middot; ${esc(nombres[t.id_cuenta_destino] || 'Reserva')}: <strong>$${formatearMoneda(t.monto)}</strong></div>`).join('');
+    lugar.innerHTML = lineas + (estadoCierre === 'ANULADO'
+      ? '<div class="font-italic">(cierre anulado: estos pasajes se anularon con él)</div>' : '');
+  } catch (err) {
+    console.error('No se pudo cargar el reparto del cierre:', err);
+    if (miCarga !== contadorCargaReparto) return;
+    const lugar = hayLugar();
+    if (lugar) lugar.textContent = 'No se pudo cargar el detalle del reparto.';
+  }
+}
+
+
+// -----------------------------------------------------------------------------
 // verDetalleCierre
 //   Abre la ventana con el detalle de un cierre del historial.
 //   Recibe: idCierre -> número del cierre.
@@ -875,6 +1371,20 @@ export function verDetalleCierre(idCierre) {
     ? `<div class="small font-weight-bold text-uppercase text-muted mb-1">Arqueos de turno del día</div>
        <div class="mb-3">${htmlListaArqueos(arqueosDelDia, { permitirAnular: false })}</div>` : '';
 
+  // NUEVO (script 44): efectivo con el que arrancó el día, lo que quedó en caja y lo que pasó a reservas.
+  // Los cierres anteriores al script 44 no tienen "queda" (null): en ese caso no se muestra nada de esto.
+  const tieneQueda = cierre.efectivo_queda !== null && cierre.efectivo_queda !== undefined;
+  const pasoAReservas = tieneQueda ? redondear2(Number(cierre.efectivo_real) - Number(cierre.efectivo_queda)) : 0;
+  const bloqueEfectivoInicial = tieneQueda
+    ? `<small class="d-block"><strong>Efectivo al empezar el día:</strong> $${formatearMoneda(cierre.efectivo_inicial)}</small>` : '';
+  const bloqueQueda = tieneQueda
+    ? `<small class="d-block"><strong>Quedó en caja para el día siguiente:</strong> $${formatearMoneda(cierre.efectivo_queda)}</small>`
+      + (pasoAReservas > 0
+          ? `<small class="d-block"><strong>Pasó a reservas:</strong> $${formatearMoneda(pasoAReservas)}</small>
+             <div id="reparto-cierre-detalle" class="small text-muted ml-3">Cargando detalle del reparto...</div>`
+          : '')
+    : '';
+
   // Una línea por medio de pago: ventas, y si hubo egresos, cuánto salió y el neto.
   let html = '<div class="list-group mb-3">';
   (cierre.TB_DCIERRE_CAJA || []).forEach(d => {
@@ -906,10 +1416,12 @@ export function verDetalleCierre(idCierre) {
       <small class="d-block"><strong>Gastos y pagos en efectivo:</strong> $${formatearMoneda(cierre.gastos_efectivo)}</small>
       <small class="d-block"><strong>Gastos y pagos por banco / otros:</strong> $${formatearMoneda(cierre.gastos_banco)}</small>
       <small class="d-block"><strong>Retiros de efectivo:</strong> $${formatearMoneda(cierre.retiros_efectivo)}</small>
+      ${bloqueEfectivoInicial}
       <small class="d-block"><strong>Efectivo esperado:</strong> $${formatearMoneda(cierre.efectivo_sistema)}</small>
       <small class="d-block"><strong>Efectivo contado:</strong> $${formatearMoneda(cierre.efectivo_real)}</small>
       <small class="d-block"><strong>Diferencia caja:</strong>
         <span class="${dif < 0 ? 'text-danger' : 'text-success'} font-weight-bold">$${formatearMoneda(dif)}</span></small>
+      ${bloqueQueda}
       <small class="d-block text-muted" style="white-space: pre-line;"><strong>Observaciones:</strong> ${esc(cierre.observaciones) || 'Sin observaciones'}</small>
     </div>
 
@@ -918,6 +1430,9 @@ export function verDetalleCierre(idCierre) {
 
   document.getElementById('body-modal-detalle-cierre').innerHTML = html;
   $('#modalDetalleCierre').modal('show');
+
+  // A qué reserva fue cada importe (se carga aparte para que la ventana abra al instante).
+  if (pasoAReservas > 0) cargarRepartoDelCierre(cierre.id, cierre.estado);
 }
 
 // =============================================================================
