@@ -290,10 +290,12 @@ export function renderizarGrillaPOS() {
       tabsHtml += `
         <button class="pos-category-tab ${isActive}" data-id="${esc(clave)}">
           <i class="fas ${iconoCategoria(texto)} pos-category-icon"></i> ${esc(texto)}
+          <span class="pos-tab-count d-none" title="Unidades de esta solapa en el pedido"></span>
         </button>
       `;
     });
     contenedorTabs.innerHTML = tabsHtml;
+    actualizarContadoresSolapas();   // las solapas se re-dibujan: hay que volver a pintar los números
   }
 
   // 2. FILTRAR PRODUCTOS (Por búsqueda o por categoría activa)
@@ -447,6 +449,10 @@ export function alterarCantidad(idProducto, delta) {
     carrito[idProducto] = nueva;
   }
 
+  // Un delta menor a -1 que deja el producto en 0 es la papelera de la tarjeta (quita todo de un
+  // toque): se ofrece "Deshacer". El botón "-" (delta -1) es un descuento normal y no lo necesita.
+  if (nueva === 0 && actual > 0 && delta < -1) mostrarDeshacerQuitado(idProducto, actual);
+
   // Si la tarjeta está en pantalla se actualiza sola; si no (otra solapa), se re-dibuja la grilla.
   if (!sincronizarTarjeta(idProducto, nueva)) {
     renderizarGrillaPOS();
@@ -514,9 +520,45 @@ function calcularDescuentoDocena(lineas) {
   return { docenasCompletas, descuentoTotal: Math.max(0, Math.round(descuento * 100) / 100) };
 }
 
+// -----------------------------------------------------------------------------
+// actualizarContadoresSolapas
+//   Muestra en cada solapa (Empanadas, Canastitas, Pizzas...) cuántas unidades hay cargadas
+//   en el pedido, así el cajero no tiene que cambiar de solapa para saber qué lleva. Solo
+//   actualiza los números: las solapas NO se re-dibujan. Se llama desde
+//   actualizarResumenCarrito (cada cambio del carrito) y al dibujar las solapas.
+// -----------------------------------------------------------------------------
+function actualizarContadoresSolapas() {
+  const contenedorTabs = document.getElementById('pos-tabs-categorias');
+  if (!contenedorTabs || !Array.isArray(cacheCategorias) || !Array.isArray(cacheProductos)) return;
+
+  // Unidades por grupo, con la misma clave en minúsculas que usan las solapas (data-id).
+  const porGrupo = {};
+  Object.keys(carrito).forEach(idProd => {
+    if (Number(idProd) === 999) return;   // la bonificación no es un producto del menú
+    const cant = Number(carrito[idProd]) || 0;
+    if (cant <= 0) return;
+    const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
+    if (!p) return;
+    const idCat = p.id_categoria || p.idCategoria;
+    const cat = cacheCategorias.find(c => Number(c.id) === Number(idCat));
+    if (!cat) return;
+    const clave = grupoDeCategoria(cat).toLowerCase();
+    porGrupo[clave] = (porGrupo[clave] || 0) + cant;
+  });
+
+  contenedorTabs.querySelectorAll('.pos-category-tab').forEach(tab => {
+    const marca = tab.querySelector('.pos-tab-count');
+    if (!marca) return;
+    const n = porGrupo[tab.dataset.id] || 0;
+    marca.textContent = n;
+    marca.classList.toggle('d-none', n <= 0);
+  });
+}
+
 export function actualizarResumenCarrito() {
   const contenedorItems = document.getElementById('resumen-carrito-items');
   const keys = Object.keys(carrito);
+  actualizarContadoresSolapas();   // antes del "return" del carrito vacío: así vuelven a 0
 
   // Escribe un texto en un elemento solo si existe (así un id faltante no rompe el POS).
   const poner = (id, texto) => {
@@ -626,6 +668,7 @@ export function actualizarResumenCarrito() {
 }
 
 export async function resetearPedido() {
+  ocultarDeshacer();   // un "Deshacer" pendiente no debe revivir productos en un pedido nuevo
   const inputRef = document.getElementById('input-ref-cliente');
   if (inputRef) inputRef.value = '';
 
@@ -882,11 +925,66 @@ export async function iniciarCobroPOS() {
 
 export function eliminarItemCarrito(idProducto) {
   if (carrito[idProducto]) {
+    const cantidadAnterior = carrito[idProducto];
     delete carrito[idProducto]; // Borramos el ítem del estado
+    mostrarDeshacerQuitado(idProducto, cantidadAnterior);   // papelera del carrito: también se puede deshacer
     
     // Si la tarjeta está en pantalla se actualiza sola; si está en otra solapa, se re-dibuja la grilla.
     if (!sincronizarTarjeta(idProducto, 0)) renderizarGrillaPOS();
 
     actualizarResumenCarrito();
   }
+}
+
+// -----------------------------------------------------------------------------
+// DESHACER AL QUITAR UN PRODUCTO ENTERO
+//   La papelera de la tarjeta y la del carrito borran todas las unidades de un toque. Para que
+//   un toque accidental no cueste el pedido, aparece un aviso "Quitaste Carne (12) · Deshacer"
+//   unos segundos, sin pedir confirmación (la venta sigue fluida). Se recuerda solo el ÚLTIMO
+//   producto quitado: si se quita otro antes de que el aviso se cierre, el aviso pasa al nuevo.
+//   El aviso lo crea este módulo (no depende del HTML) y se cierra solo al vaciar o guardar el pedido.
+// -----------------------------------------------------------------------------
+const TIEMPO_DESHACER_MS = 6000;
+let deshacerPendiente = null;      // { id, cantidad } del último producto quitado entero
+let temporizadorDeshacer = null;
+
+function obtenerAvisoDeshacer() {
+  let aviso = document.getElementById('pos-undo-toast');
+  if (aviso) return aviso;
+  aviso = document.createElement('div');
+  aviso.id = 'pos-undo-toast';
+  aviso.className = 'pos-undo-toast';
+  aviso.setAttribute('role', 'status');       // los lectores de pantalla lo anuncian
+  aviso.setAttribute('aria-live', 'polite');
+  aviso.innerHTML = '<span class="pos-undo-text"></span><button type="button" class="pos-undo-btn">Deshacer</button>';
+  aviso.querySelector('.pos-undo-btn').addEventListener('click', deshacerQuitado);
+  document.body.appendChild(aviso);
+  return aviso;
+}
+
+function mostrarDeshacerQuitado(idProducto, cantidad) {
+  const p = cacheProductos.find(x => Number(x.id) === Number(idProducto));
+  const aviso = obtenerAvisoDeshacer();
+  clearTimeout(temporizadorDeshacer);
+  deshacerPendiente = { id: idProducto, cantidad };
+  // textContent (no innerHTML): el nombre del producto nunca se interpreta como HTML.
+  aviso.querySelector('.pos-undo-text').textContent = `Quitaste ${p ? p.nombre : 'el producto'} (${cantidad})`;
+  aviso.classList.add('is-visible');
+  temporizadorDeshacer = setTimeout(ocultarDeshacer, TIEMPO_DESHACER_MS);
+}
+
+function ocultarDeshacer() {
+  clearTimeout(temporizadorDeshacer);
+  deshacerPendiente = null;
+  document.getElementById('pos-undo-toast')?.classList.remove('is-visible');
+}
+
+function deshacerQuitado() {
+  if (!deshacerPendiente) return;
+  const { id, cantidad } = deshacerPendiente;
+  ocultarDeshacer();
+  // Se SUMAN las unidades quitadas: si mientras tanto se volvió a cargar el producto, no se pisa lo nuevo.
+  carrito[id] = (carrito[id] || 0) + cantidad;
+  if (!sincronizarTarjeta(id, carrito[id])) renderizarGrillaPOS();
+  actualizarResumenCarrito();
 }
