@@ -55,17 +55,6 @@
   margin-bottom: 12px;
 }
 
-/* Tarjeta de Producto Base */
-.pos-card-producto {
-  background-color: #ffffff;
-}
-
-
-/* Tarjeta Activa (Azul Soft) */
-.pos-card-producto.pos-card-activa {
-  background-color: #eef2ff !important;
-}
-
 /* Pastilla Central de Contador (- 0 +) */
 .pos-qty-pill {
   background-color: #f8fafc;
@@ -270,8 +259,12 @@ body { touch-action: manipulation; }
 .pos-product-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .pos-card-producto { min-width: 0; margin: 0; display: flex; flex-direction: column; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
 .pos-product-info { display: flex; flex-direction: column; min-height: 45px; }
-.pos-prod-title { display: -webkit-box; overflow: hidden; color: #29384c; font-size: .9rem; font-weight: 650; line-height: 1.3; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;}
-.pos-prod-price { color: #111d2e; font-size: 1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+/* Nombre: máximo 2 líneas, centrado en su espacio. Tipografía, colores y espacios: bloque "TARJETAS DEL CATÁLOGO" (al final). */
+.pos-prod-title {
+  display: flex; justify-content: center; overflow: hidden;
+  align-items: flex-start;
+  align-items: safe center;      /* centra; si el nombre no entra, queda alineado arriba (nunca se corta la primera línea) */
+}
 .pos-qty-pill { display: grid; grid-template-columns: 40px minmax(24px,1fr) 40px; align-items: center; min-height: 42px; padding: 3px; border: 1px solid #d8e1eb; border-radius: 999px; }
 .btn-pos-sq { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 999px; font-size: 1.15rem; font-weight: 750; box-shadow: 0 1px 3px rgba(15,30,50,.10); }
 .pos-cant-num { text-align: center; font-size: .95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -310,7 +303,7 @@ body { touch-action: manipulation; }
   .pos-product-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
   .pos-catalog-content { padding: 12px; }
   .pos-category-tabs { padding: 10px; gap: 7px; }
-  .pos-card-producto { min-height: 148px; padding: 11px 9px; }
+  .pos-card-producto { min-height: 148px; }
   .pos-order-card .card-body { padding: 0 12px 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -351,6 +344,13 @@ body { background: var(--cruditas-bg); color: #202b3a; }
   background: #26364a; border-color: #26364a; color: #fff;
   box-shadow: 0 3px 8px rgba(38,54,74,.16);
 }
+/* Unidades cargadas en esa solapa (las pone pos.js; se oculta con d-none cuando es 0) */
+.pos-tab-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: 999px; background: #e9b83f; color: #1b2a3d;
+  font-size: .8rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+}
 .pos-category-tab.is-active .pos-category-icon { color: #f5c85b; opacity: 1; }
 .pos-category-tab:focus-visible { outline: 3px solid rgba(233,184,63,.55); outline-offset: 2px; }
 
@@ -358,12 +358,7 @@ body { background: var(--cruditas-bg); color: #202b3a; }
 .pos-section-eyebrow { color: #8a929e; letter-spacing: .12em; }
 .pos-category-heading h4 { color: #26364a; }
 .pos-product-grid { gap: 11px; }
-.pos-card-producto {
-  position: relative; 
-  border: 1px solid #e2e6ec !important; border-radius: 13px;
-  background: #fff !important; box-shadow: 0 2px 5px rgba(24,35,49,.025);
-}
-.pos-card-producto:hover { border-color: #c7ced8 !important; box-shadow: 0 5px 13px rgba(24,35,49,.07); }
+.pos-card-producto { position: relative; }   /* borde, fondo y estados: bloque "TARJETAS DEL CATÁLOGO" (al final) */
 .pos-product-info { gap: 7px; }
 .pos-qty-pill { background: #f4f6f8; border-color: #dce1e8; }
 .pos-cant-num { color: #26364a; }
@@ -381,7 +376,6 @@ body { background: var(--cruditas-bg); color: #202b3a; }
 
 
 /* Las tarjetas seleccionadas conservan el amarillo cálido del diseño aprobado. */
-.pos-card-activa .pos-prod-title { color: #283548; }
 .pos-card-activa .pos-qty-pill { background: #fff; border-color: #e2ca7d; }
 .pos-card-activa .pos-cant-num { color: #72520b; }
 .btn-docena-pill.btn-docena-add {
@@ -562,8 +556,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 .pos-card-producto {
   min-height: 0;
   justify-content: flex-start;
-  gap: 8px;
-  padding: 10px 10px 11px;
   text-align: center;
 }
 
@@ -586,8 +578,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* Etiqueta de categoría (solo en búsquedas): centrada y sin el margen negativo viejo */
 .pos-card-producto .pos-prod-cat { margin: 0; justify-content: center; }
-
-/* Nombre y precio de la tarjeta: ver bloque "TARJETAS DEL CATÁLOGO · versión sobria" (al final). */
 
 /* Botón "+" dorado, "-" claro */
 .pos-card-producto .pos-qty-pill .btn-pos-add { background: #e9b83f; color: #1b2a3d; }
@@ -633,10 +623,11 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* Formulario: etiquetas y campos legibles sobre fondo oscuro */
 .pos-order-dark .card-body { padding: 0 18px 18px; background: transparent; }
 .pos-order-dark label { color: #cbd5e1; }
+.pos-order-dark label .text-muted { color: #aab4c3 !important; }
 .pos-order-dark .form-control {
   background: #1f2937; border-color: #374151; color: #f3f4f6;
 }
-.pos-order-dark .form-control::placeholder { color: #8391a7; }
+.pos-order-dark .form-control::placeholder { color: #a3afc0; }
 .pos-order-dark .form-control:focus {
   background: #1f2937; color: #fff;
   border-color: #e9b83f; box-shadow: 0 0 0 3px rgba(233, 184, 63, .2);
@@ -647,7 +638,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 }
 .pos-order-dark .select2-container--default .select2-selection--single .select2-selection__rendered { color: #f3f4f6 !important; }
 .pos-order-dark .select2-container--default .select2-selection--single .select2-selection__arrow b { border-color: #9ca3af transparent transparent transparent; }
-.pos-order-dark .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #8391a7 !important; }
+.pos-order-dark .select2-container--default .select2-selection--single .select2-selection__placeholder { color: #a3afc0 !important; }
 
 /* Lista de ítems */
 .pos-order-dark .pos-cart-items {
@@ -658,7 +649,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   background: transparent !important;
   scrollbar-width: thin; scrollbar-color: #374151 transparent;
 }
-.pos-cart-empty { margin: 0; padding: 22px 0; color: #8391a7; text-align: center; font-size: .9rem; }
+.pos-cart-empty { margin: 0; padding: 22px 0; color: #aab4c3; text-align: center; font-size: .9rem; }
 .pos-cart-list { margin: 0; padding: 0; list-style: none; }
 .pos-cart-line {
   display: grid;
@@ -666,13 +657,14 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   grid-template-areas: "thumb info qty total del";
   align-items: center; gap: 10px;
   padding: 10px 2px;
-  border-bottom: 1px solid #243044;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
 }
+.pos-cart-line:last-child { border-bottom: 0; }
 .pos-cart-thumb { grid-area: thumb; width: 46px; height: 46px; border-radius: 8px; background: #1f2937; }
 .pos-cart-thumb .pos-prod-ph { color: #4b5a72; font-size: 1.2rem; }
 .pos-cart-info { grid-area: info; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.pos-cart-name { overflow: hidden; color: #fff; font-size: .95rem; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
-.pos-cart-sub { display: flex; gap: 8px; overflow: hidden; color: #9ca3af; font-size: .78rem; white-space: nowrap; }
+.pos-cart-name { overflow: hidden; color: #fff; font-size: 1rem; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.pos-cart-sub { display: flex; gap: 8px; overflow: hidden; color: #b8c2d0; font-size: .78rem; white-space: nowrap; }
 .pos-cart-cat { overflow: hidden; text-overflow: ellipsis; }
 .pos-cart-qty { grid-area: qty; display: inline-flex; align-items: center; gap: 6px; }
 .pos-cart-btn {
@@ -685,7 +677,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 .pos-cart-btn.pos-cart-btn-add { background: #e9b83f; color: #111827; }
 .pos-cart-btn.pos-cart-btn-add:hover { background: #f3c85c; color: #111827; }
 .pos-cart-n { min-width: 22px; color: #fff; font-size: 1.05rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
-.pos-cart-total { grid-area: total; min-width: 62px; color: #fff; font-size: .98rem; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.pos-cart-total { grid-area: total; min-width: 4em; color: #fff; font-size: .98rem; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
 .pos-cart-del {
   grid-area: del;
   display: inline-flex; align-items: center; justify-content: center;
@@ -705,12 +697,14 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* Desglose: aparece solo con descuento (lo muestra/oculta pos.js con d-none) */
 .pos-desglose { flex: 1 1 auto; max-width: 62%; margin: 0; min-width: 0; }
 .pos-desglose > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.pos-desglose dt { color: #9ca3af; font-size: .82rem; font-weight: 600; }
-.pos-desglose dt small { color: #8391a7; font-size: .74rem; font-weight: 600; }
-.pos-desglose dd { margin: 0; color: #fff; font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.pos-desglose-desc dt, .pos-desglose-desc dd { color: #f87171; }
-.pos-desglose-desc dt small { color: #fca5a5; }
-.pos-totales span { color: #9ca3af; font-size: .82rem; font-weight: 600; }
+.pos-desglose dt { color: #c4cdd9; font-size: .82rem; font-weight: 600; }
+.pos-desglose dt small { color: #aab4c3; font-size: .74rem; font-weight: 600; }
+.pos-desglose dd { margin: 0; color: #e5e9f0; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }   /* Subtotal: dato secundario */
+/* Descuento: ámbar suave (el rojo se leía como error; el signo "−" ya indica que resta) */
+.pos-desglose-desc dt, .pos-desglose-desc dd { color: #f0c75e; }
+.pos-desglose-desc dd { font-weight: 700; }
+.pos-desglose-desc dt small { color: #d9b45a; }
+.pos-totales span { color: #c4cdd9; font-size: .82rem; font-weight: 600; }
 .pos-order-dark #cant-total-items { color: #fff; font-size: 2rem; font-weight: 800; line-height: 1; }
 
 /* Total a cobrar */
@@ -1326,7 +1320,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* Carrito: letra un poco mayor y botones − / + / tacho de 40 px */
 #sec-pedidos .pos-cart-line { padding: 7px 2px; column-gap: 10px; }
-#sec-pedidos .pos-cart-name { font-size: 1rem; }
 #sec-pedidos .pos-cart-sub { font-size: .85rem; }
 #sec-pedidos .pos-cart-btn { width: 40px; height: 40px; font-size: .8rem; }
 #sec-pedidos .pos-cart-n { min-width: 26px; font-size: 1.15rem; }
@@ -1342,6 +1335,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   }
   #sec-pedidos .pos-cart-qty { justify-self: start; }
   #sec-pedidos .pos-cart-total { justify-self: end; }
+  #sec-pedidos .pos-cart-name { font-size: 1.05rem; line-height: 1.14; }   /* sobra ancho: nombre un poco mayor, sin crecer el renglón */
 }
 /* PC ancha: todo en una sola fila */
 @media (min-width: 1500px) {
@@ -1354,6 +1348,18 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 #sec-pedidos .pos-totales span { font-size: .95rem; }
 #sec-pedidos .pos-order-dark #cant-total-items { font-size: 1.6rem; }
 #sec-pedidos .pos-desglose dt { font-size: .9rem; }
+/* < 1500 px: el resumen se apila (unidades / subtotal / descuento), cada concepto en UNA línea y con los importes
+   alineados a la derecha. Antes el descuento se partía en 3-4 renglones (resumen de 132 px). En pantalla ancha no cambia. */
+@media (max-width: 1499.98px) {
+  #sec-pedidos .pos-totales { flex-wrap: wrap; row-gap: 2px; }
+  #sec-pedidos .pos-tot-unidades { flex: 1 1 100%; justify-content: space-between; }
+  #sec-pedidos .pos-desglose { flex: 1 1 100%; max-width: none; }
+  #sec-pedidos .pos-desglose > div { gap: 8px; }
+  #sec-pedidos .pos-desglose dt { font-size: .84rem; }
+  #sec-pedidos .pos-desglose dt small { font-size: .7rem; }
+  #sec-pedidos .pos-desglose dt { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }   /* si falta lugar se recorta el texto, nunca el importe */
+  #sec-pedidos .pos-desglose dd { flex: 0 0 auto; }
+}
 #sec-pedidos .pos-total-cobrar { padding: 8px 16px; margin-bottom: 8px; gap: 14px; }
 #sec-pedidos .pos-total-cobrar span { font-size: .95rem; }
 #sec-pedidos .pos-order-dark #monto-total-pedido { font-size: clamp(1.9rem, 2.6vw, 2.5rem); }
@@ -1421,6 +1427,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   #sec-pedidos .pos-main-card-header .text-muted.small { display: none; }
   #sec-pedidos .pos-category-tabs { padding: 8px 14px; }
   #sec-pedidos .pos-card-producto { padding: 9px; gap: 6px; }
+  #sec-pedidos .pos-card-producto .pos-prod-title { min-height: 0; }
   #sec-pedidos .pos-prod-img { aspect-ratio: 16 / 9; }
   #sec-pedidos .pos-order-card .form-group { margin-bottom: 6px; }
 }
@@ -1497,7 +1504,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
    Va al FINAL a propósito: con igual especificidad gana lo último.
    ============================================================================= */
 .pos-card-producto {
-  gap: 6px;
+  gap: 6px;                     /* ritmo vertical: foto · nombre · precio · cantidad · +6/+12 */
   padding: 10px 10px 12px;
   border: 1px solid #e3e7ed !important;
   border-radius: 12px;
@@ -1512,26 +1519,26 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   box-shadow: 0 0 0 1px #e9b83f !important;
 }
 
-/* Nombre y precio: el nombre manda (más grande, bold, más oscuro) y el precio acompaña (más chico,
-   semibold, gris azulado). Sin altura reservada: el nombre ocupa solo las líneas que necesita y el
-   precio queda pegado debajo. La alineación entre tarjetas de una misma fila la da el bloque de
-   cantidad (- 0 +), que se ancla al fondo con margin-top:auto (ver .pos-qty-pill más abajo). */
+/* Nombre y precio.
+   Jerarquía: el nombre manda (más grande, bold, casi negro) y el precio acompaña (más chico, semibold, gris).
+   Solo se usan pesos cargados en la tipografía (400 / 600 / 700). */
 .pos-card-producto .pos-prod-title,
 .pos-card-producto.pos-card-activa .pos-prod-title {
-  margin: 2px 0 0;              /* foto → nombre: 6px (gap) + 2px */
+  min-height: 2.4em;            /* 2 líneas reservadas: los precios quedan alineados entre tarjetas */
+  max-height: 2.4em;            /* y nunca más de 2 líneas (el nombre completo se ve al dejar el dedo/mouse encima: title) */
+  margin: 0;
   color: #111d2e;
-  font-size: 1.15rem;
+  font-size: 1.12rem;
   font-weight: 700;
-  line-height: 1.22;
+  line-height: 1.2;
   letter-spacing: -.01em;
 }
 .pos-card-producto .pos-prod-price,
 .pos-card-producto.pos-card-activa .pos-prod-price {
-  margin: -2px 0 2px;           /* nombre → precio: 4px (gap 6px − 2px) */
-  color: #556579;
-  font-size: .98rem;
+  margin: 0;
+  color: #4a5565;
+  font-size: .95rem;
   font-weight: 600;
-  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1559,7 +1566,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 .pos-badge-top > i { font-size: .62rem; }
 
 .pos-card-producto .pos-qty-pill {
-  margin-top: auto;             /* ancla "- 0 +" y "+6 / +12" al fondo: quedan alineados en toda la fila */
   grid-template-columns: 46px minmax(22px, 1fr) 46px;
   min-height: 52px;
   background: #f4f6f8; border: 1px solid #dce1e8;
@@ -1601,14 +1607,24 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 }
 .pos-card-producto .btn-docena-pill:hover { background: #f3f5f8; border-color: #b9c3d0; color: #1b2a3d; }
 .pos-card-producto .btn-docena-pill:active { background: #fff3cc; border-color: #e9b83f; color: #1b2a3d; }
+/* +12 dispara el descuento por docena: es la acción más importante, con borde amarillo (sin relleno) */
+.pos-card-producto .btn-docena-pill[data-delta="12"] { border-color: #e9b83f; box-shadow: inset 0 0 0 1px #e9b83f; color: #1b2a3d; font-weight: 800; }
+.pos-card-producto .btn-docena-pill[data-delta="12"]:hover { background: #fff8e3; border-color: #e9b83f; }
 
 @media (max-width: 767.98px) {
   /* 2 columnas: tarjetas angostas, así que los botones se achican un poco (siguen en 42px) */
   .pos-card-producto { padding: 9px 8px 10px; }
-  .pos-card-producto .pos-prod-title, .pos-card-producto.pos-card-activa .pos-prod-title { font-size: 1.08rem; }  /* celular: 2 columnas angostas */
+  .pos-card-producto .pos-prod-title, .pos-card-producto.pos-card-activa .pos-prod-title { font-size: 1.05rem; }
   .pos-btn-quitar { right: 5px; bottom: 5px; }
   .pos-card-producto .pos-qty-pill { grid-template-columns: 42px minmax(18px, 1fr) 42px; }
   .pos-card-producto .btn-pos-sq { width: 42px; height: 42px; }
+}
+/* Tablet apaisada de poca altura: la foto es más baja (regla de #sec-pedidos, 16/9), así que los dos círculos
+   de la foto se achican para no tocarse. La foto no cambia de tamaño. */
+@media (min-width: 768px) and (max-height: 820px) {
+  .pos-badge-top { top: 5px; left: 5px; }
+  .pos-qty-badge { top: 5px; right: 5px; min-width: 26px; height: 26px; padding: 0 6px; font-size: .85rem; }
+  .pos-btn-quitar { right: 5px; bottom: 5px; width: 28px; height: 28px; font-size: .78rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pos-btn-quitar, .pos-card-producto .btn-pos-sq { transition: none; }
@@ -1711,3 +1727,73 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   .cobro-cuentas { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { .cobro-medio-btn, .cobro-cuenta-btn { transition: none; } }
+
+/* =============================================================================
+   POS · ESTADO "PROCESANDO", CARTEL DE ERROR DE CARGA Y AVISO CON ACCIÓN
+   (pos.js, cobro.js y avisoAccion.js). No cambian el tamaño de ningún botón ni del panel.
+   ============================================================================= */
+
+/* Guardando: el panel del pedido muestra cursor de espera y los botones bloqueados se ven "apagados" */
+.pos-order-card.pos-guardando { cursor: progress; }
+.pos-order-card.pos-guardando .btn:disabled,
+.pos-order-card.pos-guardando .btn-pos-cobrar:disabled { opacity: .7; cursor: progress; transform: none; }
+#modal-cobro-pedido .modal-footer .btn:disabled { cursor: progress; }
+
+/* Cartel "No se pudo cargar el catálogo" (queda fijo arriba del área de productos) */
+.pos-error-carga {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 10px; padding: 10px 12px;
+  background: #fff8e3; border: 1px solid #e9b83f; border-radius: 12px;
+  color: #4a3600; font-size: 1rem; font-weight: 600; line-height: 1.3;
+}
+.pos-error-carga > i { flex: 0 0 auto; color: #b45309; font-size: 1.25rem; }
+.pos-error-carga-texto { flex: 1 1 auto; min-width: 0; }
+.pos-error-carga-btn {
+  flex: 0 0 auto; min-height: 44px; padding: 0 16px;
+  border: 0; border-radius: 10px; background: #e9b83f; color: #1b2a3d;
+  font-family: inherit; font-size: 1rem; font-weight: 800; cursor: pointer;
+}
+.pos-error-carga-btn:disabled { opacity: .75; cursor: progress; }
+.pos-error-carga-btn:focus-visible { outline: 3px solid rgba(27, 42, 61, .5); outline-offset: 2px; }
+
+/* Aviso flotante con un botón ("Deshacer" / "Entendido"). Va por encima de las ventanas (modal = 1050). */
+.aviso-accion {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 100000;
+  display: flex; align-items: center; gap: 14px;
+  width: max-content; max-width: min(520px, calc(100vw - 24px)); min-height: 56px;
+  padding: 8px 8px 8px 18px; overflow: hidden;
+  border-radius: 14px; background: #1b2d47; color: #fff;
+  box-shadow: 0 10px 28px rgba(8, 13, 24, .38);
+}
+.aviso-accion--peligro { background: #7f1d1d; }
+.aviso-accion-texto { flex: 1 1 auto; min-width: 0; font-size: 1rem; font-weight: 600; line-height: 1.3; }
+.aviso-accion-btn {
+  flex: 0 0 auto; min-width: 96px; min-height: 44px; padding: 0 18px;
+  border: 0; border-radius: 10px; background: #e9b83f; color: #1b2a3d;
+  font-family: inherit; font-size: 1rem; font-weight: 800; cursor: pointer;
+}
+.aviso-accion-btn:active { background: #d9a526; }
+.aviso-accion-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+/* Barrita que se vacía: cuánto falta para que el aviso desaparezca */
+.aviso-accion-barra {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: #e9b83f; transform-origin: left center;
+  animation-name: aviso-accion-barra; animation-timing-function: linear; animation-fill-mode: forwards;
+}
+@keyframes aviso-accion-barra { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (max-width: 767.98px) {
+  .aviso-accion { bottom: 160px; }   /* por encima de la barra fija de abajo (total y botones) */
+}
+@media (prefers-reduced-motion: reduce) {
+  .aviso-accion-barra { display: none; }
+}
+
+/* =============================================================================
+   TEXTO SOLO PARA LECTORES DE PANTALLA (pos.js: región #pos-anuncios)
+   Invisible en pantalla, pero los lectores de pantalla lo leen en voz alta.
+   ============================================================================= */
+.pos-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
+}

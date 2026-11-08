@@ -33,6 +33,8 @@ let mediosCobro = [];
 let cuentasCobro = [];
 // Medio elegido en este momento (número).
 let idMedioElegido = null;
+// ¿Se está guardando un cobro? Evita que un segundo envío del formulario pise el estado del primero.
+let procesandoCobro = false;
 
 
 // -----------------------------------------------------------------------------
@@ -242,7 +244,7 @@ export function actualizarVueltoCobro() {
 // -----------------------------------------------------------------------------
 export async function confirmarCobro(e) {
   e.preventDefault();
-  if (!contexto) return;
+  if (!contexto || procesandoCobro) return;
 
   const medio = mediosCobro.find(m => Number(m.id) === idMedioElegido);
   if (!medio) {
@@ -261,18 +263,36 @@ export async function confirmarCobro(e) {
     return;
   }
 
-  // Desactivamos el botón para evitar un doble clic que cobre dos veces.
+  // Mientras se procesa: el botón muestra "Guardando…", no se puede cancelar ni cerrar la ventana
+  // (ni con la X ni con Esc) y no se puede apretar de nuevo (evita un doble clic que cobre dos veces).
   const boton = document.getElementById('btn-confirmar-cobro');
-  boton.disabled = true;
+  const botonCancelar = document.querySelector('#modal-cobro-pedido .modal-footer [data-dismiss="modal"]');
+  const botonCerrar = document.querySelector('#modal-cobro-pedido .modal-header .close');
+  const contenidoOriginal = boton.innerHTML;
+  const impedirCierre = (ev) => ev.preventDefault();   // Bootstrap cierra la ventana con el evento hide.bs.modal
 
+  procesandoCobro = true;
+  boton.disabled = true;
+  boton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Guardando…';
+  if (botonCancelar) botonCancelar.disabled = true;
+  if (botonCerrar) botonCerrar.disabled = true;
+  $('#modal-cobro-pedido').on('hide.bs.modal', impedirCierre);
+
+  let guardado = false;
   // try / finally: "finally" se ejecuta SIEMPRE al salir, así el botón nunca queda trabado.
   try {
-    const guardado = await contexto.alConfirmar(Number(medio.id), idCuenta);
-    if (guardado) {
-      $('#modal-cobro-pedido').modal('hide');
-      contexto = null;
-    }
+    guardado = await contexto.alConfirmar(Number(medio.id), idCuenta);
   } finally {
+    $('#modal-cobro-pedido').off('hide.bs.modal', impedirCierre);   // antes de cerrar: si no, el cierre quedaría bloqueado
+    procesandoCobro = false;
     boton.disabled = false;
+    boton.innerHTML = contenidoOriginal;
+    if (botonCancelar) botonCancelar.disabled = false;
+    if (botonCerrar) botonCerrar.disabled = false;
+  }
+
+  if (guardado) {
+    $('#modal-cobro-pedido').modal('hide');
+    contexto = null;
   }
 }

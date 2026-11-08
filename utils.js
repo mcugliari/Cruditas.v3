@@ -1,11 +1,25 @@
-export function mostrarNotificacion(mensaje, tipo = 'success') {
+// -----------------------------------------------------------------------------
+// obtenerContenedorAvisos  (interna)
+//   El contenedor de los avisos ("toasts") es una región "status" (aria-live="polite"): los
+//   lectores de pantalla leen en voz alta cada aviso nuevo. Se crea apenas carga la página (ver el
+//   final de este archivo) y no recién con el primer aviso, porque los lectores solo anuncian
+//   cambios en regiones que ya existían.
+// -----------------------------------------------------------------------------
+function obtenerContenedorAvisos() {
   let container = document.getElementById('toast-container');
   if (!container) {
     container = document.createElement('div');
     container.id = 'toast-container';
+    container.setAttribute('role', 'status');
+    container.setAttribute('aria-live', 'polite');
     container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 8px;';
     document.body.appendChild(container);
   }
+  return container;
+}
+
+export function mostrarNotificacion(mensaje, tipo = 'success') {
+  const container = obtenerContenedorAvisos();
 
   const colores = { success: '#168647', danger: '#c62828', warning: '#e9b83f', info: '#0d5c6b' };
   const colorFondo = colores[tipo] || colores.success;
@@ -389,4 +403,11 @@ export function confirmarAccion({
 
     $(modal).modal('show');
   });
+}
+
+// Se crea el contenedor de avisos al cargar la página (si hay pantalla: así este archivo también se puede
+// importar desde las pruebas de Node, donde no hay "document").
+if (typeof document !== 'undefined') {
+  if (document.body) obtenerContenedorAvisos();
+  else document.addEventListener('DOMContentLoaded', obtenerContenedorAvisos);
 }

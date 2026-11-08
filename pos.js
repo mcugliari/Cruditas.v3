@@ -12,6 +12,11 @@ import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeEr
 import { abrirModalCobro } from './cobro.js';
 import { leerPreferenciasImpresion } from './preferencias.js';
 import { imprimirAutomatico } from './impresion.js';
+import { mostrarAvisoConAccion, cerrarAvisoAccion } from './avisoAccion.js';
+import { buscarPrecio, calcularDescuentoDocena, resumirPedido } from './precios.js';
+
+// calcularSubtotalItem se mudó a precios.js; se vuelve a exportar acá por si algún archivo lo importaba desde pos.js.
+export { calcularSubtotalItem } from './precios.js';
 
 // Nuevas variables de estado para el POS
 let grupoSeleccionado = null;   // clave (en minúsculas) del grupo/solapa activa
@@ -56,6 +61,7 @@ export function inicializarPOS() {
   // cargarSelectsPOS ya termina llamando a alCambiarCliente(), que a su vez
   // llama a cargarPOS(). Por eso no hace falta llamarlo de nuevo acá.
   // Se guarda la promesa en el momento de arrancar (antes de cualquier espera).
+  asegurarRegionAnuncios();   // región invisible para lectores de pantalla (ver "ANUNCIOS PARA LECTORES DE PANTALLA")
   promesaInicioPOS = cargarSelectsPOS();
   return promesaInicioPOS;
 }
@@ -67,8 +73,16 @@ export function esperarPOSListo() {
 }
 
 export async function cargarSelectsPOS() {
-  const { data: clientes } = await supabaseAdmin.from('TB_BCLIENTES').select('*').order('nombre');
-  const { data: listas } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*');
+  const { data: clientes, error: errorClientes } = await supabaseAdmin.from('TB_BCLIENTES').select('*').order('nombre');
+  const { data: listas, error: errorListas } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*');
+
+  // Si alguna de las dos falla NO se tocan los selects (siguen con lo que tenían) y se avisa.
+  // Antes el error se ignoraba y la persona se encontraba con la lista de clientes vacía.
+  if (errorClientes || errorListas || !Array.isArray(clientes) || !Array.isArray(listas)) {
+    mostrarErrorCargaPOS('No se pudieron cargar los clientes y las listas de precios. Revisá la conexión.');
+  } else {
+    selectsCargados = true;
+  }
 
   const selectCli = document.getElementById('select-cliente-pedido');
   if (selectCli && clientes) {
@@ -114,7 +128,7 @@ export async function alCambiarCliente() {
   }
 
   // Buscar la lista de precios predeterminada del cliente
-  const { data } = await supabaseAdmin
+  const { data, error: errorLista } = await supabaseAdmin
     .from('TB_ACLIENTE_LISTA_PRECIOS')
     .select('id_lista_precio')
     .eq('id_cliente', selectCli.value)
@@ -122,7 +136,11 @@ export async function alCambiarCliente() {
     .maybeSingle();
 
   const selectLista = document.getElementById('select-lista-pedido');
-  if (selectLista) {
+  if (errorLista) {
+    // No sabemos cuál es la lista del cliente. Volver a la lista base en silencio podía cobrar
+    // con precios equivocados, así que se deja la lista que está elegida y se avisa.
+    mostrarNotificacion('No se pudo verificar la lista de precios del cliente. Revisá la lista elegida antes de cobrar.', 'warning');
+  } else if (selectLista) {
     if (data && data.id_lista_precio) {
       // El cliente tiene lista predeterminada: la usamos.
       selectLista.value = data.id_lista_precio;
@@ -143,18 +161,89 @@ export async function cargarPOS() {
   const selectLis = document.getElementById('select-lista-pedido');
   const idLista = selectLis && selectLis.value ? parseInt(selectLis.value) : 1;
 
-  const { data: categorias } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('id');
-  const { data: productos } = await supabaseAdmin.from('TB_BPRODUCTOS').select('*').order('id');
-  const { data: precios } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', idLista);
+  const { data: categorias, error: errorCategorias } = await supabaseAdmin.from('TB_BCATEGORIAS').select('*').order('id');
+  const { data: productos, error: errorProductos } = await supabaseAdmin.from('TB_BPRODUCTOS').select('*').order('id');
+  const { data: precios, error: errorPrecios } = await supabaseAdmin.from('TB_DLISTA_PRECIOS').select('*').eq('id_lista_precio', idLista);
+
+  if (errorCategorias || errorProductos || errorPrecios) {
+    // Si falla la carga NO se reemplaza el catálogo por uno vacío (antes pasaba, por ejemplo al
+    // recargar justo después de guardar un pedido): se conserva el que ya estaba y se avisa.
+    const hayCatalogo = Array.isArray(cacheProductos) && cacheProductos.length > 0;
+    mostrarErrorCargaPOS(hayCatalogo
+      ? 'No se pudo actualizar el catálogo. Se muestran los datos anteriores: los precios podrían no estar al día.'
+      : 'No se pudo cargar el catálogo. Revisá la conexión.');
+    return;
+  }
+
+  // Si antes había un error y ahora anduvo, el cartel desaparece (renderizarGrillaPOS redibuja todo).
+  const veniaConError = errorCargaPOS !== null;
+  errorCargaPOS = null;
 
   setCacheCategorias(categorias || []);
   setCacheProductos(productos || []);
   setCachePrecios(precios || []);
 
   renderizarGrillaPOS();
+  if (veniaConError) mostrarNotificacion('Catálogo actualizado.');
 
   // La etiqueta "Más vendido" es decorativa: se pide en segundo plano (sin await) para no demorar el POS.
   cargarMasVendidos();
+}
+
+// -----------------------------------------------------------------------------
+// Cartel "No se pudo cargar" del catálogo
+//   Se dibuja DENTRO del área del catálogo, arriba (queda fijo al desplazarse), con un
+//   botón "Reintentar". No usa el aviso común porque ese desaparece a los segundos y acá
+//   la persona necesita ver que el catálogo puede estar vacío o desactualizado.
+//   renderizarGrillaPOS lo vuelve a dibujar cada vez que redibuja el catálogo, y
+//   cargarPOS lo borra apenas una carga sale bien.
+// -----------------------------------------------------------------------------
+let errorCargaPOS = null;          // texto del error actual (null = sin error)
+let selectsCargados = false;       // ¿alguna vez se cargaron bien clientes y listas?
+let reintentandoCarga = false;
+
+function mostrarErrorCargaPOS(texto) {
+  errorCargaPOS = texto;
+  mostrarNotificacion(texto, 'danger');
+  pintarErrorCargaPOS();
+}
+
+function pintarErrorCargaPOS() {
+  const contenedor = document.getElementById('contenedor-menu-productos');
+  if (!contenedor) return;
+  const viejo = document.getElementById('pos-error-carga');
+  if (viejo) viejo.remove();
+  if (!errorCargaPOS) return;
+
+  const cartel = document.createElement('div');
+  cartel.id = 'pos-error-carga';
+  cartel.className = 'pos-error-carga';
+  cartel.setAttribute('role', 'alert');
+  cartel.innerHTML = `
+    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+    <span class="pos-error-carga-texto">${esc(errorCargaPOS)}</span>
+    <button type="button" class="pos-error-carga-btn">Reintentar</button>`;
+  cartel.querySelector('button').addEventListener('click', reintentarCargaPOS);
+  contenedor.insertAdjacentElement('afterbegin', cartel);
+}
+
+async function reintentarCargaPOS() {
+  if (reintentandoCarga) return;
+  reintentandoCarga = true;
+  const boton = document.querySelector('#pos-error-carga .pos-error-carga-btn');
+  if (boton) {
+    boton.disabled = true;
+    boton.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Reintentando…';
+  }
+  try {
+    // Si los clientes y listas nunca llegaron se piden de nuevo; si no, alcanza con el catálogo
+    // (así no se pierde el cliente que ya se eligió para el pedido en curso).
+    if (selectsCargados) await cargarPOS();
+    else await cargarSelectsPOS();
+  } finally {
+    reintentandoCarga = false;
+    pintarErrorCargaPOS();   // si volvió a fallar, se redibuja con el botón normal; si anduvo, ya no hay cartel
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -288,14 +377,13 @@ export function renderizarGrillaPOS() {
     grupos.forEach((texto, clave) => {
       const isActive = clave === grupoSeleccionado ? 'is-active' : '';
       tabsHtml += `
-        <button class="pos-category-tab ${isActive}" data-id="${esc(clave)}">
+        <button class="pos-category-tab ${isActive}" data-id="${esc(clave)}" aria-pressed="${isActive ? 'true' : 'false'}">
           <i class="fas ${iconoCategoria(texto)} pos-category-icon"></i> ${esc(texto)}
-          <span class="pos-tab-count d-none" title="Unidades de esta solapa en el pedido"></span>
+          <span class="pos-tab-count d-none"></span>
         </button>
       `;
     });
     contenedorTabs.innerHTML = tabsHtml;
-    actualizarContadoresSolapas();   // las solapas se re-dibujan: hay que volver a pintar los números
   }
 
   // 2. FILTRAR PRODUCTOS (Por búsqueda o por categoría activa)
@@ -324,6 +412,7 @@ export function renderizarGrillaPOS() {
   // 3. RENDERIZAR GRILLA
   if (prodsMostrar.length === 0) {
     contenedor.innerHTML = '<p class="text-muted text-center my-4 w-100">No se encontraron productos.</p>';
+    pintarErrorCargaPOS();
     return;
   }
 
@@ -399,47 +488,82 @@ export function renderizarGrillaPOS() {
 
   htmlCompleto += '</div></div>';
   contenedor.innerHTML = htmlCompleto;
+  pintarErrorCargaPOS();      // si hay un error de carga pendiente, el cartel vuelve a aparecer arriba
   actualizarResumenCarrito(); // Garantizamos sincronización del carrito visual
 }
 
+// -----------------------------------------------------------------------------
+// obtenerPrecioProducto
+//   Precio { unidad, docena } de un producto. Solo resuelve DE DÓNDE salen los datos (el caché
+//   de precios y la lista elegida en pantalla); la búsqueda en sí vive en precios.js (buscarPrecio),
+//   que es la que tienen las pruebas automáticas (carpeta tests/).
+// -----------------------------------------------------------------------------
 export function obtenerPrecioProducto(idProd, idCat, idLista = null) {
-  if (!cachePrecios || cachePrecios.length === 0) return { unidad: 0, docena: 0 };
-
-  const idP = Number(idProd);
-  const idC = Number(idCat);
   const idL = idLista ? Number(idLista) : Number(document.getElementById('select-lista-pedido')?.value || 0);
-
-  const preciosFiltrados = cachePrecios.filter(p => !idL || Number(p.id_lista_precio || p.id_lista) === idL);
-  const listaABuscar = preciosFiltrados.length > 0 ? preciosFiltrados : cachePrecios;
-
-  const pProd = listaABuscar.find(p => p.id_producto !== null && Number(p.id_producto) === idP);
-  if (pProd) {
-    const un = Number(pProd.precio_unidad ?? pProd.precio ?? 0);
-    const doc = pProd.precio_docena ? Number(pProd.precio_docena) : (un * 12);
-    return { unidad: un, docena: doc };
-  }
-
-  const pCat = listaABuscar.find(p => Number(p.id_categoria) === idC && (p.id_producto === null || p.id_producto === undefined));
-  if (pCat) {
-    const un = Number(pCat.precio_unidad ?? pCat.precio ?? 0);
-    const doc = pCat.precio_docena ? Number(pCat.precio_docena) : (un * 12);
-    return { unidad: un, docena: doc };
-  }
-
-  return { unidad: 0, docena: 0 };
+  return buscarPrecio(cachePrecios, idProd, idCat, idL);
 }
 
-export function calcularSubtotalItem(cantidad, precios, permiteDocena = true) {
-  if (!permiteDocena || !precios.docena) {
-    return cantidad * precios.unidad;
-  }
-  const docenas = Math.floor(cantidad / 12);
-  const sueltas = cantidad % 12;
+// -----------------------------------------------------------------------------
+// ANUNCIOS PARA LECTORES DE PANTALLA
+//   Una persona que usa lector de pantalla no ve que cambió el total ni que se agregó un producto.
+//   Acá hay UNA región oculta (role="status", aria-live="polite") donde se escribe un resumen corto
+//   ("Carne: 6 unidades. Pedido: 18 unidades, $ 27.000.") cada vez que se modifica el pedido.
+//   - Se espera 350 ms antes de hablar: si se toca "+" varias veces seguido se anuncia solo el
+//     resultado final, no cada toque.
+//   - La región se crea al abrir el POS (inicializarPOS) y NO al primer mensaje: los lectores solo
+//     anuncian cambios en regiones que ya existían.
+//   - Los avisos comunes (utils.js) y los carteles (avisoAccion.js, cartel de error) ya son
+//     regiones accesibles por sí mismos.
+// -----------------------------------------------------------------------------
+let temporizadorAnuncio = null;
+let alternarAnuncio = false;
+let cambioParaAnunciar = null;   // último producto tocado: { id, cant } (lo consume actualizarResumenCarrito)
 
-  return (docenas * precios.docena) + (sueltas * precios.unidad);
+function asegurarRegionAnuncios() {
+  let region = document.getElementById('pos-anuncios');
+  if (!region) {
+    region = document.createElement('div');
+    region.id = 'pos-anuncios';
+    region.className = 'pos-sr-only';   // invisible, pero la leen los lectores de pantalla
+    region.setAttribute('role', 'status');
+    region.setAttribute('aria-live', 'polite');
+    region.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(region);
+  }
+  return region;
+}
+
+function anunciar(texto) {
+  const region = asegurarRegionAnuncios();
+  clearTimeout(temporizadorAnuncio);
+  temporizadorAnuncio = setTimeout(() => {
+    // Un espacio al final, alternado: así un mensaje IGUAL al anterior se vuelve a leer.
+    alternarAnuncio = !alternarAnuncio;
+    region.textContent = texto + (alternarAnuncio ? '' : '\u00A0');
+  }, 350);
+}
+
+// Se llama al final de actualizarResumenCarrito, cuando ya están calculados unidades y total.
+function anunciarCambioCarrito(unidades, total) {
+  if (!cambioParaAnunciar) return;
+  const { id, cant } = cambioParaAnunciar;
+  cambioParaAnunciar = null;
+
+  const producto = cacheProductos.find(x => Number(x.id) === Number(id));
+  const nombre = producto ? producto.nombre : 'Producto';
+  const detalle = cant > 0 ? `${nombre}: ${cant} ${cant === 1 ? 'unidad' : 'unidades'}.` : `${nombre}: quitado del pedido.`;
+  const resumen = unidades > 0
+    ? ` Pedido: ${unidades} ${unidades === 1 ? 'unidad' : 'unidades'}, ${formatearPesos(total)}.`
+    : ' El pedido está vacío.';
+  anunciar(detalle + resumen);
 }
 
 export function alterarCantidad(idProducto, delta) {
+  if (guardandoPedido) return;   // mientras se guarda, el pedido no se puede modificar (se perdería el cambio)
+  // La papelera de la tarjeta manda un delta enorme negativo: es "quitar el producto", y eso se puede deshacer.
+  if (delta <= -1000) { eliminarItemCarrito(idProducto); return; }
+  // Si recién se vació el pedido y la persona empieza otro, el "Deshacer" de la vaciada ya no corresponde.
+  if (pendienteDeshacer && pendienteDeshacer.tipo === 'vaciar') descartarDeshacer();
   const actual = carrito[idProducto] || 0;
   const nueva = Math.max(0, actual + delta);
   
@@ -448,10 +572,7 @@ export function alterarCantidad(idProducto, delta) {
   } else {
     carrito[idProducto] = nueva;
   }
-
-  // Un delta menor a -1 que deja el producto en 0 es la papelera de la tarjeta (quita todo de un
-  // toque): se ofrece "Deshacer". El botón "-" (delta -1) es un descuento normal y no lo necesita.
-  if (nueva === 0 && actual > 0 && delta < -1) mostrarDeshacerQuitado(idProducto, actual);
+  cambioParaAnunciar = { id: idProducto, cant: nueva };
 
   // Si la tarjeta está en pantalla se actualiza sola; si no (otra solapa), se re-dibuja la grilla.
   if (!sincronizarTarjeta(idProducto, nueva)) {
@@ -459,6 +580,39 @@ export function alterarCantidad(idProducto, delta) {
   }
 
   actualizarResumenCarrito();
+}
+
+// -----------------------------------------------------------------------------
+// actualizarContadoresSolapas  (interna)
+//   Pone en cada solapa la cantidad de UNIDADES cargadas en el carrito para ese grupo
+//   (ej.: "Empanadas 36"), así no hay que abrir cada solapa para saber qué hay cargado.
+//   - Cuenta por grupo igual que las solapas (grupoDeCategoria, sin distinguir mayúsculas).
+//   - No cuenta el descuento por docena (producto 999) ni la categoría "sistema".
+//   - Solo cambia el texto de un <span> que ya existe; no redibuja las solapas.
+//   La llama actualizarResumenCarrito, que corre ante cualquier cambio del carrito.
+// -----------------------------------------------------------------------------
+function actualizarContadoresSolapas() {
+  const unidadesPorGrupo = {};
+  Object.keys(carrito).forEach(idProd => {
+    if (Number(idProd) === 999) return;
+    const cant = Number(carrito[idProd]) || 0;
+    if (cant <= 0) return;
+    const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
+    if (!p) return;
+    const cat = cacheCategorias.find(c => Number(c.id) === Number(p.id_categoria || p.idCategoria));
+    if (!cat || esCategoriaSistema(cat)) return;
+    const clave = grupoDeCategoria(cat).toLowerCase();
+    unidadesPorGrupo[clave] = (unidadesPorGrupo[clave] || 0) + cant;
+  });
+
+  document.querySelectorAll('.pos-category-tab').forEach(tab => {
+    const unidades = unidadesPorGrupo[tab.dataset.id] || 0;
+    const marca = tab.querySelector('.pos-tab-count');
+    if (!marca) return;
+    marca.textContent = unidades;
+    marca.classList.toggle('d-none', unidades <= 0);
+    marca.title = `${unidades} unidad${unidades === 1 ? '' : 'es'} cargada${unidades === 1 ? '' : 's'}`;
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -492,73 +646,12 @@ function sincronizarTarjeta(idProducto, cant) {
   return true;
 }
 
-// -----------------------------------------------------------------------------
-// calcularDescuentoDocena
-//   Descuento por docenas combinadas cuando hay precios distintos por gusto.
-//   Recibe SOLO los productos que permiten docena: [{ cantidad, precioUnidad, precioDocena }].
-//   Regla (la misma que usa el servidor en crear_pedido_cliente):
-//     descuento = (unidades en docenas completas / unidades docenables)
-//                 x suma de [ cantidad x (precio unitario - precio docena / 12) ]
-//   O sea: cada gusto ahorra lo que le corresponde según SU precio, y se descuenta solo
-//   la parte que entra en docenas completas (las unidades sueltas no se descuentan).
-//   Con un precio único da lo mismo que la fórmula vieja: 1500 / 17000 -> $1.000 por docena.
-//   Devuelve { docenasCompletas, descuentoTotal } (redondeado a centavos, nunca negativo).
-//   OJO: esta función está repetida en cliente.js; si se cambia una, cambiar la otra.
-// -----------------------------------------------------------------------------
-function calcularDescuentoDocena(lineas) {
-  const unidades = lineas.reduce((suma, l) => suma + l.cantidad, 0);
-  const docenasCompletas = Math.floor(unidades / 12);
-  if (docenasCompletas === 0) return { docenasCompletas: 0, descuentoTotal: 0 };
-
-  // Ahorro de cada línea. Sin precio de docena (0) no ahorra, pero sus unidades igual cuentan.
-  const ahorroTotal = lineas.reduce((suma, l) => (
-    l.precioDocena > 0 ? suma + l.cantidad * (l.precioUnidad - l.precioDocena / 12) : suma
-  ), 0);
-
-  const descuento = ((docenasCompletas * 12) / unidades) * ahorroTotal;
-  // Math.round(x * 100) / 100: redondea a 2 decimales (evita restos como 999,9999999).
-  return { docenasCompletas, descuentoTotal: Math.max(0, Math.round(descuento * 100) / 100) };
-}
-
-// -----------------------------------------------------------------------------
-// actualizarContadoresSolapas
-//   Muestra en cada solapa (Empanadas, Canastitas, Pizzas...) cuántas unidades hay cargadas
-//   en el pedido, así el cajero no tiene que cambiar de solapa para saber qué lleva. Solo
-//   actualiza los números: las solapas NO se re-dibujan. Se llama desde
-//   actualizarResumenCarrito (cada cambio del carrito) y al dibujar las solapas.
-// -----------------------------------------------------------------------------
-function actualizarContadoresSolapas() {
-  const contenedorTabs = document.getElementById('pos-tabs-categorias');
-  if (!contenedorTabs || !Array.isArray(cacheCategorias) || !Array.isArray(cacheProductos)) return;
-
-  // Unidades por grupo, con la misma clave en minúsculas que usan las solapas (data-id).
-  const porGrupo = {};
-  Object.keys(carrito).forEach(idProd => {
-    if (Number(idProd) === 999) return;   // la bonificación no es un producto del menú
-    const cant = Number(carrito[idProd]) || 0;
-    if (cant <= 0) return;
-    const p = cacheProductos.find(x => Number(x.id) === Number(idProd));
-    if (!p) return;
-    const idCat = p.id_categoria || p.idCategoria;
-    const cat = cacheCategorias.find(c => Number(c.id) === Number(idCat));
-    if (!cat) return;
-    const clave = grupoDeCategoria(cat).toLowerCase();
-    porGrupo[clave] = (porGrupo[clave] || 0) + cant;
-  });
-
-  contenedorTabs.querySelectorAll('.pos-category-tab').forEach(tab => {
-    const marca = tab.querySelector('.pos-tab-count');
-    if (!marca) return;
-    const n = porGrupo[tab.dataset.id] || 0;
-    marca.textContent = n;
-    marca.classList.toggle('d-none', n <= 0);
-  });
-}
+// (calcularDescuentoDocena y resumirPedido viven ahora en precios.js: son funciones puras con pruebas
+//  automáticas en tests/. Acá solo se las usa para mostrar el resumen; el servidor es la fuente de verdad.)
 
 export function actualizarResumenCarrito() {
   const contenedorItems = document.getElementById('resumen-carrito-items');
   const keys = Object.keys(carrito);
-  actualizarContadoresSolapas();   // antes del "return" del carrito vacío: así vuelven a 0
 
   // Escribe un texto en un elemento solo si existe (así un id faltante no rompe el POS).
   const poner = (id, texto) => {
@@ -576,14 +669,14 @@ export function actualizarResumenCarrito() {
     document.getElementById('pos-desglose')?.classList.add('d-none');
     totalCarritoActual = 0;
     unidadesCarritoActual = 0;
+    actualizarContadoresSolapas();
+    anunciarCambioCarrito(0, 0);
     return;
   }
 
   const idLista = document.getElementById('select-lista-pedido')?.value;
 
-  let totalItems = 0;
-  let subtotalSinDescuento = 0;
-  const lineasDocena = []; // productos que permiten docena (para el descuento)
+  const lineasPedido = []; // una por producto del pedido: de acá salen los totales y el descuento (precios.js)
 
   let html = '<ul class="pos-cart-list">';
 
@@ -599,8 +692,6 @@ export function actualizarResumenCarrito() {
     const cant = Number(carrito[idProd]) || 0;
     if (cant <= 0) return;
 
-    totalItems += cant;
-
     const idCatProd = p.id_categoria || p.idCategoria;
     const cat = cacheCategorias.find(c => Number(idCatProd) === Number(c.id));
     const nombreCat = cat ? cat.nombre : '';
@@ -609,11 +700,7 @@ export function actualizarResumenCarrito() {
     const precioUnidad = precios.unidad || 0;
     const subTotalProducto = cant * precioUnidad;
 
-    subtotalSinDescuento += subTotalProducto;
-
-    if (p.m_permite_docena) {
-      lineasDocena.push({ cantidad: cant, precioUnidad, precioDocena: precios.docena || 0 });
-    }
+    lineasPedido.push({ cantidad: cant, precioUnidad, precioDocena: precios.docena || 0, permiteDocena: !!p.m_permite_docena });
 
     // Miniatura: igual que en el catálogo (ícono de reemplazo + foto encima si hay URL).
     const urlFoto = urlImagenSegura(p.imagen_url);
@@ -646,9 +733,10 @@ export function actualizarResumenCarrito() {
     `;
   });
 
-  // 2. Calcular si corresponde el Descuento por Docena combinada
-  const { docenasCompletas, descuentoTotal } = calcularDescuentoDocena(lineasDocena);
-  const montoTotalFinal = subtotalSinDescuento - descuentoTotal;
+  // 2. Totales y descuento por docena combinada (funciones puras de precios.js)
+  const {
+    unidades: totalItems, subtotal: subtotalSinDescuento, docenasCompletas, descuentoTotal, total: montoTotalFinal
+  } = resumirPedido(lineasPedido);
 
   html += '</ul>';
   if (contenedorItems) contenedorItems.innerHTML = html;
@@ -665,10 +753,12 @@ export function actualizarResumenCarrito() {
   // Los guardamos para mostrarlos en la ventana de cobro.
   totalCarritoActual = montoTotalFinal;
   unidadesCarritoActual = totalItems;
+  actualizarContadoresSolapas();
+  anunciarCambioCarrito(totalItems, montoTotalFinal);
 }
 
 export async function resetearPedido() {
-  ocultarDeshacer();   // un "Deshacer" pendiente no debe revivir productos en un pedido nuevo
+  descartarDeshacer();   // al empezar de cero (guardar, cancelar edición...) un "Deshacer" anterior ya no corresponde
   const inputRef = document.getElementById('input-ref-cliente');
   if (inputRef) inputRef.value = '';
 
@@ -736,19 +826,167 @@ export async function cancelarEdicionPOS() {
   mostrarNotificacion(`Edición del pedido #${id} cancelada. No se modificó nada.`, 'info');
 }
 
+// -----------------------------------------------------------------------------
+// DESHACER (quitar una línea / vaciar el pedido)
+//   Cuando se quita algo del pedido se muestra, MS_DESHACER milisegundos, un aviso con el
+//   botón "Deshacer" (avisoAccion.js). Es de UN solo nivel: vale para lo último que se quitó
+//   (si se quitan varias líneas seguidas, el aviso las junta y las devuelve todas).
+//   "pendienteDeshacer" guarda lo necesario para volver atrás:
+//     { tipo: 'lineas', lineas: [{id, cant}], carritoRef, idEdicion }
+//     { tipo: 'vaciar', foto: {carrito, idCliente, idLista, referencia}, carritoRef }
+//   Dejan de valer (y no hacen nada) si el pedido cambió por otro camino:
+//     - carritoRef: es el OBJETO carrito del momento. alterarCantidad lo modifica "por
+//       dentro" (sigue siendo el mismo), pero setCarrito (guardar, editar otro pedido, resetear)
+//       pone uno nuevo: si ya no es el mismo, el pedido cambió de verdad.
+//     - idEdicion: el pedido que se estaba editando (null = pedido nuevo).
+// -----------------------------------------------------------------------------
+const MS_DESHACER = 8000;
+let pendienteDeshacer = null;
+
+// Cantidad de productos distintos y de unidades del pedido actual (sin el descuento, producto 999).
+function resumenCarrito() {
+  let productos = 0;
+  let unidades = 0;
+  Object.keys(carrito).forEach(id => {
+    if (Number(id) === 999) return;
+    const cant = Number(carrito[id]) || 0;
+    if (cant > 0) { productos++; unidades += cant; }
+  });
+  return { productos, unidades };
+}
+
+// Borra el "Deshacer" pendiente y cierra su aviso (sin tocar un aviso de error que esté en pantalla).
+function descartarDeshacer() {
+  pendienteDeshacer = null;
+  cerrarAvisoAccion('deshacer');
+}
+
+// Se llama justo DESPUÉS de quitar una línea del carrito (ver eliminarItemCarrito).
+function registrarQuitado(idProducto, cantidad) {
+  const p = pendienteDeshacer;
+  const vigente = p && p.tipo === 'lineas' && p.carritoRef === carrito && p.idEdicion === pedidoEditandoId;
+  if (!vigente) pendienteDeshacer = { tipo: 'lineas', lineas: [], carritoRef: carrito, idEdicion: pedidoEditandoId };
+
+  const lineas = pendienteDeshacer.lineas;
+  const previa = lineas.find(l => Number(l.id) === Number(idProducto));
+  if (previa) previa.cant = cantidad;
+  else lineas.push({ id: idProducto, cant: cantidad });
+
+  const producto = cacheProductos.find(x => Number(x.id) === Number(idProducto));
+  const nombre = producto ? producto.nombre : 'Producto';
+  mostrarAvisoConAccion({
+    mensaje: lineas.length === 1 ? `Se quitó ${nombre} (${lineas[0].cant}).` : `Se quitaron ${lineas.length} productos.`,
+    textoAccion: 'Deshacer',
+    duracionMs: MS_DESHACER,
+    tipo: 'deshacer',
+    alAccionar: deshacerQuitados,
+    // El pendiente se borra solo si el aviso VENCE o lo cierra el código. Si se tocó "Deshacer" ('accion')
+    // la propia acción lo consume (el aviso avisa que se cerró ANTES de ejecutarla), y si se reemplazó por
+    // otro igual (más líneas quitadas) el pendiente sigue vivo.
+    alCerrar: (motivo) => { if (motivo === 'expiro' || motivo === 'cerrado') pendienteDeshacer = null; }
+  });
+}
+
+function deshacerQuitados() {
+  const p = pendienteDeshacer;
+  pendienteDeshacer = null;
+  if (!p || p.tipo !== 'lineas' || p.carritoRef !== carrito || p.idEdicion !== pedidoEditandoId) {
+    mostrarNotificacion('Ya no se puede deshacer: el pedido cambió.', 'warning');
+    return;
+  }
+  let repuestos = 0;
+  let yaEstaban = 0;
+  p.lineas.forEach(l => {
+    // Si mientras tanto se volvió a cargar ese producto, no se pisa ni se duplica.
+    if (carrito[l.id]) yaEstaban++;
+    else { carrito[l.id] = l.cant; repuestos++; }
+  });
+  renderizarGrillaPOS();   // redibuja el catálogo y el carrito con lo repuesto
+  anunciar(repuestos === 1 ? 'Se repuso 1 producto.' : `Se repusieron ${repuestos} productos.`);
+  if (yaEstaban > 0) {
+    mostrarNotificacion(repuestos > 0
+      ? 'Se repuso lo quitado. Algunos productos ya estaban cargados y no se tocaron.'
+      : 'Esos productos ya están en el pedido: no se repuso nada.', 'info');
+  }
+}
+
+async function deshacerVaciado() {
+  const p = pendienteDeshacer;
+  pendienteDeshacer = null;
+  const pedidoOcupado = () => pedidoEditandoId || Object.keys(carrito).length > 0;
+  if (!p || p.tipo !== 'vaciar' || p.carritoRef !== carrito || pedidoOcupado()) {
+    mostrarNotificacion('Ya no se puede deshacer: empezaste otro pedido.', 'warning');
+    return;
+  }
+
+  const f = p.foto;
+  // Cliente: Select2 dibuja su propio cuadro, por eso se usa trigger('change.select2'), que le avisa
+  // SOLO a Select2 (mismo método que usa editarPedido). alCambiarCliente ajusta la etiqueta de
+  // referencia y deja la lista predeterminada del cliente: la lista guardada se vuelve a poner abajo.
+  if (document.getElementById('select-cliente-pedido') && f.idCliente) {
+    $('#select-cliente-pedido').val(f.idCliente).trigger('change.select2');
+    await alCambiarCliente();
+  }
+
+  // Mientras esperábamos la base, ¿alguien empezó otro pedido? Entonces no se pisa nada.
+  if (p.carritoRef !== carrito || pedidoOcupado()) {
+    mostrarNotificacion('Ya no se puede deshacer: empezaste otro pedido.', 'warning');
+    return;
+  }
+
+  const selectLista = document.getElementById('select-lista-pedido');
+  if (selectLista && f.idLista) selectLista.value = f.idLista;
+  const inputRef = document.getElementById('input-ref-cliente');
+  if (inputRef) inputRef.value = f.referencia;
+
+  Object.assign(carrito, f.carrito);   // se repone "por dentro": sigue siendo el mismo objeto carrito
+  renderizarGrillaPOS();               // se ve ya, sin esperar a la base
+  await cargarPOS();                   // y se recargan los precios con la lista restaurada
+  anunciar('Pedido restaurado.');
+  mostrarNotificacion('Pedido restaurado.');
+}
+
 export async function vaciarCarrito() {
-  // Si hay productos cargados pedimos confirmar: un clic accidental borraría todo el pedido.
+  if (guardandoPedido) return;   // no se vacía el pedido mientras se está guardando
+  const { productos, unidades } = resumenCarrito();
+
+  // Con productos cargados se pide confirmar (un toque accidental borraría todo) y se dice CUÁNTO se va a quitar.
   // confirmarAccion (utils.js) es nuestra ventana propia; con "await" se espera la respuesta.
-  if (Object.keys(carrito).length > 0) {
+  if (productos > 0) {
     const ok = await confirmarAccion({
       titulo: 'Vaciar pedido',
-      mensaje: 'Se van a quitar todos los productos del pedido actual. ¿Querés continuar?',
+      mensaje: `Se van a quitar ${productos} ${productos === 1 ? 'producto' : 'productos'} (${unidades} ${unidades === 1 ? 'unidad' : 'unidades'}) del pedido actual.\nVas a poder deshacerlo durante unos segundos.`,
       textoConfirmar: 'Sí, vaciar',
       peligro: true
     });
     if (!ok) return;   // canceló: no se toca nada
+    if (guardandoPedido) return;
   }
+
+  // Foto del pedido ANTES de vaciar: resetearPedido borra también cliente, lista y referencia.
+  const foto = {
+    carrito: { ...carrito },
+    idCliente: (document.getElementById('select-cliente-pedido') || {}).value || '',
+    idLista: (document.getElementById('select-lista-pedido') || {}).value || '',
+    referencia: (document.getElementById('input-ref-cliente') || {}).value || ''
+  };
+
+  // Sin await a propósito (igual que antes): hasta su primer await, resetearPedido ya dejó el
+  // carrito nuevo y vacío, que es lo que necesitamos para registrar el "Deshacer" enseguida.
   resetearPedido();
+
+  if (productos > 0) {
+    anunciar('Pedido vaciado. Podés deshacerlo durante unos segundos.');
+    pendienteDeshacer = { tipo: 'vaciar', foto, carritoRef: carrito };
+    mostrarAvisoConAccion({
+      mensaje: 'Pedido vaciado.',
+      textoAccion: 'Deshacer',
+      duracionMs: MS_DESHACER,
+      tipo: 'deshacer',
+      alAccionar: deshacerVaciado,
+      alCerrar: (motivo) => { if (motivo === 'expiro' || motivo === 'cerrado') pendienteDeshacer = null; }   // ver registrarQuitado
+    });
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -768,11 +1006,60 @@ let guardandoPedido = false;
 export async function guardarPedido(estadoInicial, cobro = null) {
   if (guardandoPedido) return;
   guardandoPedido = true;
+  marcarGuardando(true, estadoInicial);
   try {
     await guardarPedidoSinBloqueo(estadoInicial, cobro);
   } finally {
     guardandoPedido = false;
+    marcarGuardando(false, estadoInicial);
   }
+}
+
+// -----------------------------------------------------------------------------
+// marcarGuardando  (interna)
+//   Muestra que se está guardando: bloquea los botones que no corresponden y pone un
+//   spinner en el que se apretó (solo cambia el ícono: el texto y el tamaño no se mueven).
+//   Mientras tanto alterarCantidad, eliminarItemCarrito y vaciarCarrito no hacen nada
+//   (miran guardandoPedido), porque un cambio hecho con el pedido "en viaje" se perdería.
+// -----------------------------------------------------------------------------
+const IDS_BOTONES_AL_GUARDAR = ['btn-pos-preparar', 'btn-pos-guardar-cambios', 'btn-limpiar-todo', 'btn-cancelar-edicion'];
+
+function marcarGuardando(activo, estadoInicial) {
+  const panel = document.querySelector('.pos-order-card');
+  if (panel) {
+    panel.classList.toggle('pos-guardando', activo);
+    panel.setAttribute('aria-busy', String(activo));
+  }
+
+  const botones = IDS_BOTONES_AL_GUARDAR.map(id => document.getElementById(id)).filter(Boolean);
+  document.querySelectorAll('.pos-order-card .btn-pos-cobrar').forEach(b => botones.push(b));
+  botones.forEach(b => { b.disabled = activo; });
+
+  // Spinner en el botón que disparó la acción (PREPARACION, MANTENER o COMPLETADO).
+  const apretado = document.querySelector(`.pos-order-card [data-action="guardar-pedido"][data-estado="${estadoInicial}"]`);
+  const icono = apretado ? apretado.querySelector('i') : null;
+  if (icono) {
+    if (activo) {
+      icono.dataset.claseOriginal = icono.className;
+      icono.className = 'fas fa-spinner fa-spin';
+    } else if (icono.dataset.claseOriginal) {
+      icono.className = icono.dataset.claseOriginal;
+      delete icono.dataset.claseOriginal;
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// esErrorDeConexion  (interna)
+//   ¿El error es de CONEXIÓN (la respuesta nunca llegó) y no una respuesta de la base?
+//   Los errores que vienen de la base traen un código (P0001, 23505, PGRST...); los de red no.
+//   Distinguirlos importa: con un error de conexión NO se sabe si el pedido se guardó.
+// -----------------------------------------------------------------------------
+function esErrorDeConexion(error) {
+  if (!error) return false;
+  const codigo = String(error.code || '');
+  if (codigo && !/^(FETCH|ECONN|ETIMEDOUT|ENOTFOUND)/i.test(codigo)) return false;
+  return /failed to fetch|networkerror|network request failed|load failed|timeout|timed out|abort|fetch/i.test(String(error.message || error));
 }
 
 async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
@@ -833,7 +1120,10 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
 
   const eraEdicion = Boolean(pedidoEditandoId);
 
-  const { data, error } = await supabaseAdmin.rpc('guardar_pedido', {
+  let data = null;
+  let error = null;
+  try {
+    ({ data, error } = await supabaseAdmin.rpc('guardar_pedido', {
     p_id_pedido: pedidoEditandoId || null,
     p_id_cliente: Number(idCliente),
     p_id_lista: Number(idLista),
@@ -842,9 +1132,25 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
     p_items: items,
     p_id_medio: cobro ? cobro.idMedio : null,
     p_id_cuenta: cobro ? cobro.idCuenta : null
-  });
+  }));
+  } catch (fallo) {
+    error = fallo;   // una excepción de red cuenta como error de conexión
+  }
 
   if (error) {
+    if (esErrorDeConexion(error)) {
+      // La respuesta nunca llegó: el pedido PUDO haberse guardado igual. Si se reintenta a ciegas
+      // se podría crear (y cobrar) dos veces, así que se avisa que primero hay que mirar el listado.
+      // El aviso queda fijo hasta que se toca "Entendido". El pedido en pantalla NO se borra.
+      descartarDeshacer();
+      mostrarAvisoConAccion({
+        mensaje: 'No se pudo confirmar si el pedido se guardó (falló la conexión). Antes de volver a intentar, revisá en "Listado de Pedidos" si ya aparece.',
+        textoAccion: 'Entendido',
+        duracionMs: 0,
+        tipo: 'peligro'
+      });
+      return;
+    }
     mostrarNotificacion('Error al guardar el pedido: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
     return;
   }
@@ -924,67 +1230,18 @@ export async function iniciarCobroPOS() {
 }
 
 export function eliminarItemCarrito(idProducto) {
+  if (guardandoPedido) return;   // mientras se guarda, el pedido no se modifica
   if (carrito[idProducto]) {
-    const cantidadAnterior = carrito[idProducto];
+    const cantidadQuitada = carrito[idProducto];
     delete carrito[idProducto]; // Borramos el ítem del estado
-    mostrarDeshacerQuitado(idProducto, cantidadAnterior);   // papelera del carrito: también se puede deshacer
-    
+    cambioParaAnunciar = { id: idProducto, cant: 0 };
+
     // Si la tarjeta está en pantalla se actualiza sola; si está en otra solapa, se re-dibuja la grilla.
     if (!sincronizarTarjeta(idProducto, 0)) renderizarGrillaPOS();
 
     actualizarResumenCarrito();
+
+    // Se quita sin preguntar (es rápido), pero se puede deshacer unos segundos.
+    registrarQuitado(idProducto, cantidadQuitada);
   }
-}
-
-// -----------------------------------------------------------------------------
-// DESHACER AL QUITAR UN PRODUCTO ENTERO
-//   La papelera de la tarjeta y la del carrito borran todas las unidades de un toque. Para que
-//   un toque accidental no cueste el pedido, aparece un aviso "Quitaste Carne (12) · Deshacer"
-//   unos segundos, sin pedir confirmación (la venta sigue fluida). Se recuerda solo el ÚLTIMO
-//   producto quitado: si se quita otro antes de que el aviso se cierre, el aviso pasa al nuevo.
-//   El aviso lo crea este módulo (no depende del HTML) y se cierra solo al vaciar o guardar el pedido.
-// -----------------------------------------------------------------------------
-const TIEMPO_DESHACER_MS = 6000;
-let deshacerPendiente = null;      // { id, cantidad } del último producto quitado entero
-let temporizadorDeshacer = null;
-
-function obtenerAvisoDeshacer() {
-  let aviso = document.getElementById('pos-undo-toast');
-  if (aviso) return aviso;
-  aviso = document.createElement('div');
-  aviso.id = 'pos-undo-toast';
-  aviso.className = 'pos-undo-toast';
-  aviso.setAttribute('role', 'status');       // los lectores de pantalla lo anuncian
-  aviso.setAttribute('aria-live', 'polite');
-  aviso.innerHTML = '<span class="pos-undo-text"></span><button type="button" class="pos-undo-btn">Deshacer</button>';
-  aviso.querySelector('.pos-undo-btn').addEventListener('click', deshacerQuitado);
-  document.body.appendChild(aviso);
-  return aviso;
-}
-
-function mostrarDeshacerQuitado(idProducto, cantidad) {
-  const p = cacheProductos.find(x => Number(x.id) === Number(idProducto));
-  const aviso = obtenerAvisoDeshacer();
-  clearTimeout(temporizadorDeshacer);
-  deshacerPendiente = { id: idProducto, cantidad };
-  // textContent (no innerHTML): el nombre del producto nunca se interpreta como HTML.
-  aviso.querySelector('.pos-undo-text').textContent = `Quitaste ${p ? p.nombre : 'el producto'} (${cantidad})`;
-  aviso.classList.add('is-visible');
-  temporizadorDeshacer = setTimeout(ocultarDeshacer, TIEMPO_DESHACER_MS);
-}
-
-function ocultarDeshacer() {
-  clearTimeout(temporizadorDeshacer);
-  deshacerPendiente = null;
-  document.getElementById('pos-undo-toast')?.classList.remove('is-visible');
-}
-
-function deshacerQuitado() {
-  if (!deshacerPendiente) return;
-  const { id, cantidad } = deshacerPendiente;
-  ocultarDeshacer();
-  // Se SUMAN las unidades quitadas: si mientras tanto se volvió a cargar el producto, no se pisa lo nuevo.
-  carrito[id] = (carrito[id] || 0) + cantidad;
-  if (!sincronizarTarjeta(id, carrito[id])) renderizarGrillaPOS();
-  actualizarResumenCarrito();
 }
