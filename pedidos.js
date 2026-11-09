@@ -9,6 +9,7 @@ import { btnFila, itemMenuMas } from './menuMas.js';   // botones de la fila y m
 import { puedeAlMenos } from './roles.js';   // el rol decide si se ve "Anular pedido"
 import { telefonoParaWhatsApp } from './telefono.js';   // teléfono del cliente -> formato de WhatsApp
 import { esPedidoNuevoSinVer, marcarVistos, marcarTodosVistos } from './avisoPedidos.js';   // "NUEVO" / visto de los pedidos web
+import { pedirMotivoAnulacion } from './motivoAnulacion.js';   // ventana que pide el motivo al anular
 import { verHistorialPedido } from './historialPedido.js';   // ventana "Ver historial" de un pedido
 
 // Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
@@ -391,10 +392,19 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
     return;
   }
 
-  // El servidor valida que la transición esté permitida (cambiar_estado_pedido, script 24).
+  // Anular: primero se pide el motivo (lista corta). Si la persona cierra la ventana, no se anula.
+  let motivoAnulacion = null;
+  if (nuevoEstado === 'ANULADO') {
+    motivoAnulacion = await pedirMotivoAnulacion(idPedido);
+    if (!motivoAnulacion) return;
+  }
+
+  // El servidor valida que la transición esté permitida y, al anular, que haya un motivo
+  // válido (cambiar_estado_pedido, scripts 24 y 48).
   const { error } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
     p_id_pedido: Number(idPedido),
-    p_nuevo_estado: nuevoEstado
+    p_nuevo_estado: nuevoEstado,
+    ...(motivoAnulacion ? { p_motivo: motivoAnulacion.motivo, p_detalle: motivoAnulacion.detalle } : {})
   });
 
   if (error) {

@@ -5,8 +5,10 @@
 // QUÉ HACE
 //   Desde el menú "Más" de un pedido (pedidos.js) se abre esta ventana con la línea de tiempo
 //   de ESE pedido: cuándo se creó, y cada cambio de estado con fecha, hora y usuario.
-//   Los datos salen de la función de la base pedido_historial (script 47), que solo
+//   Los datos salen de la función de la base pedido_historial (scripts 47 y 48), que solo
 //   responde a Encargado y Dueño y devuelve el email de cada usuario.
+//   Cada fila es un cambio de estado (con el motivo, si fue una anulación) o una edición del
+//   pedido (con el total antes y después).
 //
 // CÓMO SE CONECTA
 //   - La ventana (modal) se crea sola por código la primera vez que se usa: no hace falta
@@ -16,7 +18,8 @@
 // =============================================================================
 
 import { supabaseAdmin } from './config.js';
-import { esc, mostrarNotificacion, mensajeErrorFuncion } from './utils.js';
+import { esc, mostrarNotificacion, mensajeErrorFuncion, formatearPesos } from './utils.js';
+import { ETIQUETA_MOTIVO } from './motivoAnulacion.js';   // texto de cada motivo de anulación
 
 const ID_MODAL = 'modal-historial-pedido';
 
@@ -78,6 +81,33 @@ function textoEstado(estado) {
   return esc(ETIQUETA_ESTADO[estado] || estado || '');
 }
 
+// Texto de la columna "Cambio" según el tipo de fila.
+function textoCambio(f) {
+  // Edición del pedido: el estado no cambia; se muestra el total antes y después.
+  if (f.r_evento === 'EDICION') {
+    const antes = Number(f.r_importe_anterior), despues = Number(f.r_importe_nuevo);
+    const total = antes === despues
+      ? `total sin cambios (${esc(formatearPesos(despues))})`
+      : `total ${esc(formatearPesos(antes))} <i class="fas fa-arrow-right mx-1 text-muted"></i> ${esc(formatearPesos(despues))}`;
+    return `✏️ <strong>Pedido editado</strong> <span class="text-muted">(${textoEstado(f.r_estado_nuevo)})</span><br><small>${total}</small>`;
+  }
+
+  // Cambio de estado.
+  let html = f.r_estado_anterior
+    ? `${textoEstado(f.r_estado_anterior)} <i class="fas fa-arrow-right mx-1 text-muted"></i> ${textoEstado(f.r_estado_nuevo)}`
+    : `<span class="text-muted">Pedido creado</span> <i class="fas fa-arrow-right mx-1 text-muted"></i> ${textoEstado(f.r_estado_nuevo)}`;
+
+  // Anulación: el motivo y, si eligió "Otro", la aclaración. Las anulaciones anteriores al
+  // script 48 no tienen motivo.
+  if (f.r_estado_nuevo === 'ANULADO') {
+    const motivo = f.r_motivo
+      ? `Motivo: ${esc(ETIQUETA_MOTIVO[f.r_motivo] || f.r_motivo)}${f.r_detalle ? ` — ${esc(f.r_detalle)}` : ''}`
+      : '<span class="text-muted">Sin motivo registrado</span>';
+    html += `<br><small>${motivo}</small>`;
+  }
+  return html;
+}
+
 // -----------------------------------------------------------------------------
 // verHistorialPedido: abre la ventana y carga la línea de tiempo del pedido.
 // -----------------------------------------------------------------------------
@@ -110,9 +140,7 @@ export async function verHistorialPedido(idPedido) {
   const htmlFilas = filas.map(f => `
     <tr>
       <td class="text-nowrap">${esc(fechaHora(f.r_fecha))}</td>
-      <td>${f.r_estado_anterior
-        ? `${textoEstado(f.r_estado_anterior)} <i class="fas fa-arrow-right mx-1 text-muted"></i> ${textoEstado(f.r_estado_nuevo)}`
-        : `<span class="text-muted">Pedido creado</span> <i class="fas fa-arrow-right mx-1 text-muted"></i> ${textoEstado(f.r_estado_nuevo)}`}</td>
+      <td>${textoCambio(f)}</td>
       <td>${textoUsuario(f)}</td>
     </tr>`).join('');
 
@@ -123,5 +151,5 @@ export async function verHistorialPedido(idPedido) {
         <tbody>${htmlFilas}</tbody>
       </table>
     </div>
-    <p class="small text-muted mb-0">Solo se registran los cambios de estado. Editar un pedido sin cambiarle el estado no figura acá.</p>`;
+    <p class="small text-muted mb-0">Se registran los cambios de estado y cada vez que se guardan cambios en el pedido.</p>`;
 }
