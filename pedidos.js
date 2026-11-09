@@ -9,6 +9,7 @@ import { btnFila, itemMenuMas } from './menuMas.js';   // botones de la fila y m
 import { puedeAlMenos } from './roles.js';   // el rol decide si se ve "Anular pedido"
 import { telefonoParaWhatsApp } from './telefono.js';   // teléfono del cliente -> formato de WhatsApp
 import { esPedidoNuevoSinVer, marcarVistos, marcarTodosVistos } from './avisoPedidos.js';   // "NUEVO" / visto de los pedidos web
+import { verHistorialPedido } from './historialPedido.js';   // ventana "Ver historial" de un pedido
 
 // Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
 // nombre_referencia y observaciones los escribe un cliente anónimo desde la web.
@@ -242,6 +243,12 @@ function filaPedidoHtml(p) {
   }
   enMenu.push(itemMenuMas('fa-receipt', 'Comanda de cocina', `data-id="${idPed}"`, 'btn-print-cocina'));
   enMenu.push(itemMenuMas('fa-print', 'Ticket del cliente', `data-id="${idPed}"`, 'btn-print-cliente'));
+  
+  // Historial de cambios de estado del pedido (quién y cuándo): solo Encargado y Dueño; la base también lo verifica.
+  if (puedeAlMenos('ENCARGADO')) {
+    enMenu.push(itemMenuMas('fa-history', 'Ver historial', `data-id="${idPed}"`, 'btn-ver-historial'));
+  }
+
   // Anular un pedido: solo Encargado y Dueño (la base también lo verifica).
   if (p.estado !== 'ANULADO' && puedeAlMenos('ENCARGADO')) {
     enMenu.push('<div class="menu-mas-sep" role="separator"></div>');
@@ -623,6 +630,13 @@ document.getElementById('tabla-pedidos-body')?.addEventListener('click', async (
     const d = btnAvisar.dataset;
     const texto = mensajePedidoListo(d.nombre, d.id, d.total);
     window.open(`https://wa.me/${d.tel}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
+    return;
+  }
+
+  // Ver historial del pedido (sin "await" antes, igual que el aviso de WhatsApp).
+  const btnHistorial = e.target.closest('.btn-ver-historial');
+  if (btnHistorial) {
+    verHistorialPedido(Number(btnHistorial.dataset.id));
     return;
   }
 

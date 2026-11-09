@@ -1,4 +1,5 @@
 import { supabasePublic } from './config.js';
+import { buscarPrecio, resumirPedido } from './precios.js';
 
 let cacheCategorias = [];
 let cacheProductos = [];
@@ -320,25 +321,10 @@ function alTocarCantidad(e) {
   cambiarCantidad(Number(btn.dataset.id), btn.dataset.accion === 'sumar' ? 1 : -1);
 }
 
+// Precio { unidad, docena } de un producto. La búsqueda vive en precios.js (la misma que usa el POS, con pruebas
+// automáticas en tests/). Acá no se filtra por lista: menu_publico ya devuelve los precios de UNA sola lista.
 function obtenerPrecioProductoCliente(idProd, idCat) {
-  const idP = Number(idProd);
-  const idC = Number(idCat);
-
-  const pProd = cachePrecios.find(p => p.id_producto !== null && Number(p.id_producto) === idP);
-  if (pProd) {
-    const un = Number(pProd.precio_unidad ?? pProd.precio ?? 0);
-    const doc = pProd.precio_docena ? Number(pProd.precio_docena) : (un * 12);
-    return { unidad: un, docena: doc };
-  }
-
-  const pCat = cachePrecios.find(p => Number(p.id_categoria) === idC && (p.id_producto === null || p.id_producto === undefined));
-  if (pCat) {
-    const un = Number(pCat.precio_unidad ?? pCat.precio ?? 0);
-    const doc = pCat.precio_docena ? Number(pCat.precio_docena) : (un * 12);
-    return { unidad: un, docena: doc };
-  }
-
-  return { unidad: 0, docena: 0 };
+  return buscarPrecio(cachePrecios, idProd, idCat);
 }
 
 function cambiarCantidad(idProd, cambio) {
@@ -386,40 +372,12 @@ function actualizarBadgeGrupo(idDom) {
   badge.classList.toggle('d-none', unidades === 0);
 }
 
-// -----------------------------------------------------------------------------
-// calcularDescuentoDocena
-//   Descuento por docenas combinadas cuando hay precios distintos por gusto.
-//   Recibe SOLO los productos que permiten docena: [{ cantidad, precioUnidad, precioDocena }].
-//   Regla (la misma que usa el servidor en crear_pedido_cliente):
-//     descuento = (unidades en docenas completas / unidades docenables)
-//                 x suma de [ cantidad x (precio unitario - precio docena / 12) ]
-//   O sea: cada gusto ahorra lo que le corresponde según SU precio, y se descuenta solo
-//   la parte que entra en docenas completas (las unidades sueltas no se descuentan).
-//   Con un precio único da lo mismo que la fórmula vieja: 1500 / 17000 -> $1.000 por docena.
-//   Devuelve { docenasCompletas, descuentoTotal } (redondeado a centavos, nunca negativo).
-//   OJO: esta función está repetida en cliente.js; si se cambia una, cambiar la otra.
-// -----------------------------------------------------------------------------
-function calcularDescuentoDocena(lineas) {
-  const unidades = lineas.reduce((suma, l) => suma + l.cantidad, 0);
-  const docenasCompletas = Math.floor(unidades / 12);
-  if (docenasCompletas === 0) return { docenasCompletas: 0, descuentoTotal: 0 };
-
-  // Ahorro de cada línea. Sin precio de docena (0) no ahorra, pero sus unidades igual cuentan.
-  const ahorroTotal = lineas.reduce((suma, l) => (
-    l.precioDocena > 0 ? suma + l.cantidad * (l.precioUnidad - l.precioDocena / 12) : suma
-  ), 0);
-
-  const descuento = ((docenasCompletas * 12) / unidades) * ahorroTotal;
-  // Math.round(x * 100) / 100: redondea a 2 decimales (evita restos como 999,9999999).
-  return { docenasCompletas, descuentoTotal: Math.max(0, Math.round(descuento * 100) / 100) };
-}
+// (El descuento por docena y los totales del pedido viven en precios.js: es el MISMO código que usa el POS, con
+//  pruebas automáticas en tests/. El servidor es la fuente de verdad: crear_pedido_cliente calcula el total real.)
 
 // Cálculo centralizado para el cliente
 function obtenerResumenCarritoCliente() {
-  let totalUnidades = 0;
-  let subtotalSinDescuento = 0;
-  const lineasDocena = []; // productos que permiten docena (para el descuento)
-
+  const lineasPedido = []; // una por producto del pedido: de acá salen los totales y el descuento (precios.js)
   const listaItems = [];
 
   Object.entries(carrito).forEach(([idProd, cant]) => {
@@ -433,18 +391,12 @@ function obtenerResumenCarritoCliente() {
     const cantidad = Number(cant) || 0;
     if (cantidad <= 0) return;
 
-    totalUnidades += cantidad;
-
     const idCatProd = p.id_categoria || p.idCategoria;
     const precios = obtenerPrecioProductoCliente(p.id, idCatProd);
     const precioUnidad = precios.unidad || 0;
     const subTotal = cantidad * precioUnidad;
 
-    subtotalSinDescuento += subTotal;
-
-    if (p.m_permite_docena) {
-      lineasDocena.push({ cantidad, precioUnidad, precioDocena: precios.docena || 0 });
-    }
+    lineasPedido.push({ cantidad, precioUnidad, precioDocena: precios.docena || 0, permiteDocena: !!p.m_permite_docena });
 
     listaItems.push({
       id: p.id,
@@ -455,9 +407,12 @@ function obtenerResumenCarritoCliente() {
     });
   });
 
-  const { docenasCompletas, descuentoTotal } = calcularDescuentoDocena(lineasDocena);
+  const {
+    unidades: totalUnidades, subtotal: subtotalSinDescuento, docenasCompletas, descuentoTotal, total
+  } = resumirPedido(lineasPedido);
 
-  const totalFinal = Math.max(0, subtotalSinDescuento - descuentoTotal);
+  // Nunca negativo (como estaba antes en esta pantalla).
+  const totalFinal = Math.max(0, total);
 
   return {
     totalUnidades,

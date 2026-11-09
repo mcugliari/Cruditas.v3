@@ -18,9 +18,10 @@
 //                 x suma de [ cantidad x (precio unitario - precio docena / 12) ]
 //   redondeado a centavos y nunca negativo. La FUENTE DE VERDAD es el servidor
 //   (guardar_pedido y crear_pedido_cliente): esto solo muestra el valor en pantalla.
-//   OJO: cliente.js tiene una copia de calcularDescuentoDocena; si se cambia una, cambiar la otra.
+//   Es el ÚNICO código del descuento: lo usan el POS (pos.js) y la página del cliente (cliente.js).
 //
-// CÓMO SE CONECTA: lo importa pos.js (que lo re-exporta donde hacía falta) y tests/.
+// CÓMO SE CONECTA: lo importan pos.js (que lo re-exporta donde hacía falta), cliente.js y tests/.
+//   Tiene que estar en la MISMA carpeta que cliente.html (cliente.js lo importa con './precios.js').
 // =============================================================================
 
 
