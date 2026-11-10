@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './config.js';
-import { mostrarNotificacion, obtenerFechaActualISO, esc } from './utils.js';
+import { mostrarNotificacion, obtenerFechaActualISO, esc, mensajeErrorFuncion } from './utils.js';
 
 export async function inicializarReporteVentas() {
   await cargarSelectClientesFiltro();
@@ -43,26 +43,25 @@ export async function generarResumenVentasProductos() {
   // No se espera: se completa solo cuando llega la respuesta.
   mostrarNotaImpagos(fDesde, fHasta, idCliente);
 
-  // 1. Consultar pedidos cobrados (COMPLETADO) cuyo COBRO cayó dentro del rango.
-  //    Se filtra por fecha de cobro (columna date, día local), no por fecha de emisión.
-  //    Los entregados sin cobrar (ENTREGADO_IMPAGO) no entran hasta que se cobren.
-  let queryPedidos = supabaseAdmin
-    .from('TB_TPEDIDOS')
-    .select('id')
-    .eq('estado', 'COMPLETADO')
-    .gte('fecha_cobro', fDesde)
-    .lte('fecha_cobro', fHasta);
-
-  if (idCliente) {
-    queryPedidos = queryPedidos.eq('id_cliente', idCliente);
-  }
-
-  const { data: pedidos, error: errPed } = await queryPedidos;
+  // 1. Ventas por producto según los PAGOS del rango (script 50): la venta cuenta el día en que se cobra
+  //    (aunque el pedido se retire después) y cada pago se reparte entre las líneas de su pedido en proporción a lo
+  //    cobrado. Una devolución resta el día en que ocurre. La base devuelve una fila por producto; el renglón de
+  //    descuento por docena (producto 999) viene con monto negativo.
+  const { data: filas, error: errVentas } = await supabaseAdmin.rpc('ventas_por_producto', {
+    p_desde: fDesde,
+    p_hasta: fHasta,
+    p_id_cliente: idCliente ? Number(idCliente) : null
+  });
 
   const tbody = document.getElementById('tbody-resumen-productos');
   const tfoot = document.getElementById('tfoot-resumen-productos');
 
-  if (errPed || !pedidos || pedidos.length === 0) {
+  if (errVentas) {
+    mostrarNotificacion('Error al consultar las ventas: ' + mensajeErrorFuncion(errVentas, 'reporte'), 'danger');
+    return;
+  }
+
+  if (!filas || filas.length === 0) {
     tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas cobradas para los filtros seleccionados.</td></tr>`;
     if (tfoot) tfoot.style.display = 'none';
     renderizarTarjetasGrupos({});
@@ -70,53 +69,26 @@ export async function generarResumenVentasProductos() {
     return;
   }
 
-  const idsPedidos = pedidos.map(p => p.id);
-
-  // 2. Traer el detalle usando la columna 'grupo' de la tabla TB_BCATEGORIAS
-  const { data: detalles, error: errDet } = await supabaseAdmin
-    .from('TB_DPEDIDOS')
-    .select(`
-      cantidad,
-      subTotal,
-      TB_BPRODUCTOS (
-        id,
-        nombre,
-        m_permite_docena,
-        TB_BCATEGORIAS ( nombre, grupo )
-      )
-    `)
-    .in('id_pedido', idsPedidos);
-
-  if (errDet) {
-    mostrarNotificacion('Error al consultar el detalle: ' + errDet.message, 'danger');
-    return;
-  }
-
-  // 3. Agrupar por Grupo y por Producto
+  // 2. Agrupar por Grupo y por Producto
   const gruposAcumulados = {};
   const productosAgrupados = {};
   // Suma (negativa) de los descuentos por docena: no se muestra como fila, pero se resta de los totales.
   let descuentoTotal = 0;
 
-  detalles.forEach(item => {
-    const prod = item.TB_BPRODUCTOS;
-    if (!prod) return;
-
+  filas.forEach(item => {
     // El renglón de descuento (producto 999) guarda "docenas" en cantidad:
     // suma el monto (negativo) pero no cuenta como unidades vendidas.
-    const esDescuento = Number(prod.id) === 999;
-    const cant = esDescuento ? 0 : Number(item.cantidad || 0);
-    const monto = Number(item.subTotal || 0);
+    const esDescuento = Number(item.id_producto) === 999;
+    const cant = esDescuento ? 0 : Number(item.unidades || 0);
+    const monto = Number(item.monto || 0);
 
-    // Leer el nuevo atributo 'grupo' (Ej: "EMPANADAS", "PIZZAS", u "OTROS")
-    let grupoNombre = (prod.TB_BCATEGORIAS?.grupo || 'OTROS').toUpperCase().trim();
-    const catNombre = prod.TB_BCATEGORIAS?.nombre || 'Sin Categoría';
+    let grupoNombre = String(item.grupo || 'OTROS').toUpperCase().trim();
+    const catNombre = item.categoria || 'Sin Categoría';
 
     // 💡 SI ES UN DESCUENTO POR DOCENA, SE LO ASIGNAMOS AL GRUPO 'EMPANADAS'
-    if (grupoNombre === 'SISTEMA' || prod.nombre.toLowerCase().includes('docena')) {
+    if (grupoNombre === 'SISTEMA' || String(item.producto || '').toLowerCase().includes('docena')) {
       grupoNombre = 'EMPANADAS';
     }
-
 
     // Acumulador de KPI por grupo
     if (!gruposAcumulados[grupoNombre]) {
@@ -131,27 +103,26 @@ export async function generarResumenVentasProductos() {
       return;
     }
 
-    // Acumulador por producto individual
-    const keyProd = prod.id;
-    if (!productosAgrupados[keyProd]) {
-      productosAgrupados[keyProd] = {
-        grupo: grupoNombre,
-        categoria: catNombre,
-        producto: prod.nombre,
-        permiteDocena: Boolean(prod.m_permite_docena),
-        unidades: 0,
-        montoTotal: 0
-      };
-    }
-    productosAgrupados[keyProd].unidades += cant;
-    productosAgrupados[keyProd].montoTotal += monto;
+    productosAgrupados[item.id_producto] = {
+      grupo: grupoNombre,
+      categoria: catNombre,
+      producto: item.producto,
+      permiteDocena: Boolean(item.permite_docena),
+      unidades: cant,
+      montoTotal: monto
+    };
   });
 
-  // 4. Renderizar KPIs visuales superiores
+  // Las unidades pueden quedar con decimales si hubo cobros parciales o devoluciones: se redondean a 2.
+  const redondearUnidades = (n) => Math.round(n * 100) / 100;
+  Object.values(gruposAcumulados).forEach(g => { g.unidades = redondearUnidades(g.unidades); });
+  Object.values(productosAgrupados).forEach(r => { r.unidades = redondearUnidades(r.unidades); });
+
+  // 3. Renderizar KPIs visuales superiores
   renderizarTarjetasGrupos(gruposAcumulados);
 
-  // 5. Renderizar Tabla de Detalle
-  const listaConsolidada = Object.values(productosAgrupados).sort((a, b) => 
+  // 4. Renderizar Tabla de Detalle
+  const listaConsolidada = Object.values(productosAgrupados).sort((a, b) =>
     a.grupo.localeCompare(b.grupo) || a.categoria.localeCompare(b.categoria) || a.producto.localeCompare(b.producto)
   );
 
@@ -172,8 +143,8 @@ export async function generarResumenVentasProductos() {
     totalUnidadesGral += row.unidades;
     totalMontoGral += row.montoTotal;
 
-    const textoDocenas = row.permiteDocena 
-      ? `${(row.unidades / 12).toFixed(1)} doc.` 
+    const textoDocenas = row.permiteDocena
+      ? `${(row.unidades / 12).toFixed(1)} doc.`
       : '-';
 
     return `
@@ -189,12 +160,12 @@ export async function generarResumenVentasProductos() {
 
   if (tfoot) {
    tfoot.style.display = 'table-footer-group';
-    document.getElementById('total-resumen-unidades').innerText = `${totalUnidadesGral} u.`;
-    
+    document.getElementById('total-resumen-unidades').innerText = `${redondearUnidades(totalUnidadesGral)} u.`;
+
     // Opcional: Para el Total General podés mostrar solo las docenas del grupo de Empanadas
     const unidadesEmpanadas = gruposAcumulados['EMPANADAS']?.unidades || 0;
     document.getElementById('total-resumen-docenas').innerText = `${(unidadesEmpanadas / 12).toFixed(1)} doc.`;
-    
+
     document.getElementById('total-resumen-monto').innerText = `$${totalMontoGral.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
   }
 
@@ -203,19 +174,20 @@ export async function generarResumenVentasProductos() {
 
 // -----------------------------------------------------------------------------
 // mostrarNotaImpagos  (interna)
-//   Avisa cuántos pedidos están entregados pero sin cobrar (ENTREGADO_IMPAGO) y por cuánto.
-//   Como todavía no tienen fecha de cobro, se buscan por su FECHA DE PEDIDO dentro del
-//   rango (y del cliente, si hay uno elegido). NO se suman a los totales de la tabla:
-//   recién entran al reporte el día que se cobran. Si no hay ninguno, la nota se oculta.
+//   Avisa cuántos pedidos están entregados pero con saldo sin cobrar y por cuánto. Se buscan por su
+//   FECHA DE PEDIDO dentro del rango (y del cliente, si hay uno elegido). Esa plata NO está en los totales:
+//   entra al reporte el día que se cobra. Si no hay ninguno, la nota se oculta.
+//   (Antes eran los pedidos ENTREGADO_IMPAGO; ahora es ENTREGADO con saldo mayor a cero, de VW_PEDIDO_SALDO.)
 // -----------------------------------------------------------------------------
 async function mostrarNotaImpagos(fDesde, fHasta, idCliente) {
   const nota = document.getElementById('nota-resumen-impagos');
   if (!nota) return;
 
   let query = supabaseAdmin
-    .from('TB_TPEDIDOS')
-    .select('id, importe_total')
-    .eq('estado', 'ENTREGADO_IMPAGO')
+    .from('VW_PEDIDO_SALDO')
+    .select('id_pedido, saldo')
+    .eq('estado', 'ENTREGADO')
+    .gt('saldo', 0)
     .gte('fecha', fDesde)
     .lte('fecha', fHasta);
   if (idCliente) query = query.eq('id_cliente', idCliente);
@@ -229,9 +201,9 @@ async function mostrarNotaImpagos(fDesde, fHasta, idCliente) {
   }
 
   const cantidad = data.length;
-  const monto = data.reduce((suma, p) => suma + Number(p.importe_total || 0), 0)
+  const monto = data.reduce((suma, p) => suma + Number(p.saldo || 0), 0)
     .toLocaleString('es-AR', { minimumFractionDigits: 2 });
-  nota.innerText = `Hay ${cantidad} ${cantidad === 1 ? 'pedido entregado' : 'pedidos entregados'} sin cobrar en este período, por $${monto}. No están incluidos en los totales: aparecen cuando se cobran.`;
+  nota.innerText = `Hay ${cantidad} ${cantidad === 1 ? 'pedido entregado' : 'pedidos entregados'} con saldo sin cobrar en este período, por $${monto}. No están incluidos en los totales: aparecen cuando se cobran.`;
   nota.classList.remove('d-none');
 }
 

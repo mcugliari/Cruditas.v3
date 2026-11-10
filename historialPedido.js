@@ -7,8 +7,8 @@
 //   de ESE pedido: cuándo se creó, y cada cambio de estado con fecha, hora y usuario.
 //   Los datos salen de la función de la base pedido_historial (scripts 47 y 48), que solo
 //   responde a Encargado y Dueño y devuelve el email de cada usuario.
-//   Cada fila es un cambio de estado (con el motivo, si fue una anulación) o una edición del
-//   pedido (con el total antes y después).
+//   Cada fila es un cambio de estado (con el motivo, si fue una anulación), una edición del
+//   pedido (con el total antes y después), un pago (cobro) o una devolución / traspaso de plata (con el monto).
 //
 // CÓMO SE CONECTA
 //   - La ventana (modal) se crea sola por código la primera vez que se usa: no hace falta
@@ -25,11 +25,15 @@ const ID_MODAL = 'modal-historial-pedido';
 
 // Cómo se muestra cada estado (mismos textos que el listado de pedidos).
 const ETIQUETA_ESTADO = {
+  EN_PREPARACION: '⏳ En Preparación',
+  LISTO: '🔔 Listo',
+  ENTREGADO: '📦 Entregado',
+  ANULADO: '🚫 Anulado',
+  // Estados anteriores al script 49 (por si quedara alguno en un respaldo viejo)
   PREPARACION: '⏳ En Preparación',
-  PREPARADO: '🔔 Preparado',
-  ENTREGADO_IMPAGO: '📦 Entregado (Impago)',
-  COMPLETADO: '✅ Completado',
-  ANULADO: '🚫 Anulado'
+  PREPARADO: '🔔 Listo',
+  ENTREGADO_IMPAGO: '📦 Entregado',
+  COMPLETADO: '📦 Entregado'
 };
 
 // Número de la última consulta: si se abre otro pedido antes de que llegue la respuesta
@@ -83,6 +87,22 @@ function textoEstado(estado) {
 
 // Texto de la columna "Cambio" según el tipo de fila.
 function textoCambio(f) {
+  // Devolución de plata (script 51): el estado no cambia.
+  if (f.r_evento === 'DEVOLUCION') {
+    return `↩️ <strong>Devolución registrada</strong> <span class="text-muted">(${textoEstado(f.r_estado_nuevo)})</span><br><small>${esc(formatearPesos(Math.abs(Number(f.r_importe_nuevo))))}</small>`;
+  }
+  // Traspaso de un pago entre pedidos (script 51): negativo = sale de este pedido, positivo = llega a este pedido.
+  if (f.r_evento === 'TRASPASO') {
+    const sale = Number(f.r_importe_nuevo) < 0;
+    return `🔁 <strong>${sale ? 'Pago traspasado a otro pedido' : 'Pago recibido por traspaso'}</strong> <span class="text-muted">(${textoEstado(f.r_estado_nuevo)})</span><br><small>${esc(formatearPesos(Math.abs(Number(f.r_importe_nuevo))))}</small>`;
+  }
+  // Pago (script 49): cobro (monto positivo). El estado no cambia.
+  if (f.r_evento === 'PAGO') {
+    const monto = Number(f.r_importe_nuevo);
+    const titulo = monto < 0 ? '↩️ <strong>Devolución registrada</strong>' : '💵 <strong>Cobro registrado</strong>';
+    return `${titulo} <span class="text-muted">(${textoEstado(f.r_estado_nuevo)})</span><br><small>${esc(formatearPesos(Math.abs(monto)))}</small>`;
+  }
+
   // Edición del pedido: el estado no cambia; se muestra el total antes y después.
   if (f.r_evento === 'EDICION') {
     const antes = Number(f.r_importe_anterior), despues = Number(f.r_importe_nuevo);
@@ -147,9 +167,9 @@ export async function verHistorialPedido(idPedido) {
   cuerpo.innerHTML = `
     <div class="table-responsive">
       <table class="table table-sm table-striped mb-2">
-        <thead><tr><th>Fecha y hora</th><th>Cambio de estado</th><th>Usuario</th></tr></thead>
+        <thead><tr><th>Fecha y hora</th><th>Cambio</th><th>Usuario</th></tr></thead>
         <tbody>${htmlFilas}</tbody>
       </table>
     </div>
-    <p class="small text-muted mb-0">Se registran los cambios de estado y cada vez que se guardan cambios en el pedido.</p>`;
+    <p class="small text-muted mb-0">Se registran los cambios de estado, los pagos y cada vez que se guardan cambios en el pedido.</p>`;
 }

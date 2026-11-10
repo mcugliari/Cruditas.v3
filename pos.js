@@ -784,10 +784,10 @@ export async function resetearPedido() {
 //   Cuando se edita un pedido existente (Gestión de Pedidos -> Más -> Editar pedido) el
 //   panel lo deja bien a la vista: el título dice "Editando pedido #N", se muestra su estado,
 //   el panel cambia de color y los botones son los de una edición:
-//     Guardar cambios  (el pedido sigue en el mismo estado)  ·  Cobrar y entregar
+//     Guardar cambios  (el pedido sigue en el mismo estado)  ·  Cobrar
 //   "Cancelar edición" ocupa el lugar de "Limpiar todo". Todo se deshace en resetearPedido.
 // -----------------------------------------------------------------------------
-const ROTULO_ESTADO_EDICION = { PREPARACION: 'En preparación', PREPARADO: 'Preparado' };
+const ROTULO_ESTADO_EDICION = { EN_PREPARACION: 'En preparación', LISTO: 'Listo' };
 
 export function actualizarModoEdicionPOS() {
   const editando = Boolean(pedidoEditandoId);
@@ -995,9 +995,11 @@ export async function vaciarCarrito() {
 //   El navegador manda solo qué se pidió (productos y cantidades), el cliente, la lista,
 //   la referencia, el estado y, si se cobra, medio y cuenta. Los PRECIOS, el DESCUENTO por
 //   docena y el TOTAL los calcula el servidor; lo que se ve en pantalla es solo una vista previa.
-//   estadoInicial: 'PREPARACION', 'ENTREGADO_IMPAGO' o 'COMPLETADO' ("Cobrar y Entregar"), o
+//   estadoInicial: 'EN_PREPARACION' (pedido nuevo), 'ENTREGADO' (se entrega en el acto) o
 //   'MANTENER' (solo al editar: "Guardar cambios"; la base deja el pedido en el estado que tiene).
-//   cobro: null, o { idMedio, idCuenta } cuando viene de la ventana de cobro (solo al cobrar y entregar).
+//   cobro: null, o { idMedio, idCuenta } cuando viene de la ventana de cobro. Con cobro, la base registra UN pago
+//   por el total del pedido (script 49): con 'ENTREGADO' es cobrar y entregar; con 'EN_PREPARACION' o 'MANTENER'
+//   es un pago por adelantado (el pedido sigue su camino en cocina).
 // -----------------------------------------------------------------------------
 // Mientras un pedido se está guardando, un segundo toque (doble clic) no hace nada: así no se
 // crea el pedido dos veces ni se imprime dos veces. "finally" libera el bloqueo siempre.
@@ -1006,12 +1008,14 @@ let guardandoPedido = false;
 export async function guardarPedido(estadoInicial, cobro = null) {
   if (guardandoPedido) return;
   guardandoPedido = true;
-  marcarGuardando(true, estadoInicial);
+  // El botón que se apretó es "Cobrar" (data-estado="COBRAR") cuando hay cobro; si no, el del estado.
+  const botonApretado = cobro ? 'COBRAR' : estadoInicial;
+  marcarGuardando(true, botonApretado);
   try {
     await guardarPedidoSinBloqueo(estadoInicial, cobro);
   } finally {
     guardandoPedido = false;
-    marcarGuardando(false, estadoInicial);
+    marcarGuardando(false, botonApretado);
   }
 }
 
@@ -1035,7 +1039,7 @@ function marcarGuardando(activo, estadoInicial) {
   document.querySelectorAll('.pos-order-card .btn-pos-cobrar').forEach(b => botones.push(b));
   botones.forEach(b => { b.disabled = activo; });
 
-  // Spinner en el botón que disparó la acción (PREPARACION, MANTENER o COMPLETADO).
+  // Spinner en el botón que disparó la acción (EN_PREPARACION, MANTENER o COBRAR).
   const apretado = document.querySelector(`.pos-order-card [data-action="guardar-pedido"][data-estado="${estadoInicial}"]`);
   const icono = apretado ? apretado.querySelector('i') : null;
   if (icono) {
@@ -1064,7 +1068,7 @@ function esErrorDeConexion(error) {
 
 async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   // "Guardar cambios" (solo existe al editar): se manda 'MANTENER' y guardar_pedido (script 39)
-  // deja el pedido en el estado que tiene en la base (PREPARACION o PREPARADO), todo en un paso.
+  // deja el pedido en el estado que tiene en la base (EN_PREPARACION o LISTO), todo en un paso.
   if (estadoInicial === 'MANTENER' && !pedidoEditandoId) {
     mostrarNotificacion('No hay un pedido en edición.', 'warning');
     return;
@@ -1079,9 +1083,9 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   const idCliente = document.getElementById('select-cliente-pedido').value;
   const idLista = document.getElementById('select-lista-pedido').value;
 
-  // Medio y cuenta llegan de la ventana de cobro (cobro.js) y SOLO al cobrar y entregar.
-  // Un pedido que todavía no se cobró queda con medio y cuenta en NULL.
-  if (estadoInicial === 'COMPLETADO' && !cobro) {
+  // Medio y cuenta llegan de la ventana de cobro (cobro.js) y SOLO al cobrar.
+  // Un pedido que todavía no se cobró no tiene pagos registrados.
+  if (estadoInicial === 'ENTREGADO' && !cobro) {
     mostrarNotificacion('Para cobrar, usá la ventana de cobro.', 'warning');
     return;
   }
@@ -1091,7 +1095,7 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
 
   // La referencia solo se exige si el pedido NO se cobra y entrega en el momento.
   // (El servidor repite esta regla; acá se avisa antes para no hacer el viaje.)
-  const seCobraYEntregaYa = estadoInicial === 'COMPLETADO';
+  const seCobraYEntregaYa = estadoInicial === 'ENTREGADO' && Boolean(cobro);
   if (idCliente === '1' && nombreReferencia === '' && !seCobraYEntregaYa) {
     mostrarNotificacion('Indicá un nombre o referencia. Solo podés omitirlo si cobrás y entregás en el momento.', 'warning');
     if (inputRef) inputRef.focus();
@@ -1163,29 +1167,36 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   resetearPedido();
 
   // Impresión automática (si este equipo la tiene activada en la pantalla "Impresión").
-  programarImpresion(data.id_pedido, estadoInicial, eraEdicion);
+  programarImpresion(data.id_pedido, estadoInicial, eraEdicion, Boolean(cobro));
 }
 
 // -----------------------------------------------------------------------------
 // programarImpresion  (interna)
 //   Decide qué imprimir después de guardar, según las preferencias de este equipo:
-//     Solo preparar (pedido nuevo)      -> comanda
-//     Cobrar y entregar (pedido nuevo)  -> comanda y ticket
-//     Cobrar y entregar (pedido editado)-> solo el ticket (la comanda ya salió al prepararlo)
-//     Editar y dejar en preparación     -> nada
+//     Solo preparar (pedido nuevo)             -> comanda
+//     Cobrar y entregar (pedido nuevo)         -> comanda y ticket
+//     Cobrar y entregar (pedido editado)       -> solo el ticket (la comanda ya salió al prepararlo)
+//     Pago por adelantado (pedido nuevo)       -> comanda (si está activada) y ticket
+//     Pago por adelantado (pedido editado)     -> solo el ticket
+//     Editar sin cobrar                        -> nada
 //   La impresión se difiere un instante (setTimeout) y NO se espera: el pedido ya está
 //   guardado y la pantalla ya se limpió, así que un problema de la impresora no afecta nada.
 // -----------------------------------------------------------------------------
-function programarImpresion(idPedido, estado, eraEdicion) {
+function programarImpresion(idPedido, estado, eraEdicion, huboCobro) {
   const pref = leerPreferenciasImpresion();
   let comanda = false;
   let ticket = false;
 
-  if (estado === 'PREPARACION') {
-    comanda = pref.comandaAlPreparar && !eraEdicion;
-  } else if (estado === 'COMPLETADO' && pref.imprimirAlCobrar) {
-    comanda = !eraEdicion;
-    ticket = true;
+  if (estado === 'ENTREGADO') {
+    // Cobrar y entregar en el acto (antes "COMPLETADO")
+    if (pref.imprimirAlCobrar) {
+      comanda = !eraEdicion;
+      ticket = true;
+    }
+  } else {
+    // 'EN_PREPARACION' (nuevo) o 'MANTENER' (edición): la comanda sale solo al crear el pedido; el ticket, solo si se cobró.
+    comanda = estado === 'EN_PREPARACION' && pref.comandaAlPreparar && !eraEdicion;
+    ticket = huboCobro && pref.imprimirAlCobrar;
   }
   if (!comanda && !ticket) return;
 
@@ -1202,8 +1213,9 @@ function programarImpresion(idPedido, estado, eraEdicion) {
 
 // -----------------------------------------------------------------------------
 // iniciarCobroPOS
-//   Se ejecuta al apretar "Cobrar y Entregar". En vez de guardar directo, abre la
-//   ventana de cobro (cobro.js); el pedido se guarda recién cuando se confirma ahí.
+//   Se ejecuta al apretar "Cobrar". En vez de guardar directo, abre la ventana de cobro (cobro.js);
+//   el pedido se guarda recién cuando se confirma ahí. En esa ventana se elige si se entrega ahora
+//   (cobrar y entregar) o si el cliente paga por adelantado (el pedido queda en preparación).
 // -----------------------------------------------------------------------------
 export async function iniciarCobroPOS() {
   if (Object.keys(carrito).length === 0) {
@@ -1212,16 +1224,20 @@ export async function iniciarCobroPOS() {
   }
 
   await abrirModalCobro({
-    titulo: 'Cobrar y Entregar',
+    titulo: 'Cobrar',
     subtitulo: pedidoEditandoId
-      ? `Pedido #${pedidoEditandoId}: completá los datos de pago para finalizarlo.`
-      : 'Completá los datos de pago para finalizar el pedido.',
+      ? `Pedido #${pedidoEditandoId}: completá los datos de pago.`
+      : 'Completá los datos de pago del pedido.',
+    permiteAnticipado: true,   // muestra "Entregar ahora" / "Pagó por adelantado"
     total: totalCarritoActual,
     unidades: unidadesCarritoActual,
     // Callback: la ventana lo llama al confirmar. Devuelve true si se guardó (la ventana
     // se cierra) o false si falló (queda abierta para corregir).
-    alConfirmar: async (idMedio, idCuenta) => {
-      await guardarPedido('COMPLETADO', { idMedio, idCuenta });
+    alConfirmar: async (idMedio, idCuenta, entregar) => {
+      // Entregar ahora -> ENTREGADO. Pagó por adelantado -> un pedido nuevo queda EN_PREPARACION y uno que se
+      // está editando conserva su estado (MANTENER). En los dos casos la base registra el pago.
+      const estado = entregar ? 'ENTREGADO' : (pedidoEditandoId ? 'MANTENER' : 'EN_PREPARACION');
+      await guardarPedido(estado, { idMedio, idCuenta });
       // Si guardó bien, guardarPedido vació el carrito (resetearPedido). Si falló, el
       // carrito sigue lleno.
       return Object.keys(carrito).length === 0;

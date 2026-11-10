@@ -11,7 +11,7 @@
 //
 // IDEA CLAVE: CALLBACK (la misma que en pagos.js)
 //   Esta ventana no sabe QUÉ se está cobrando. Quien la abre le pasa una función
-//   "alConfirmar(idMedio, idCuenta)" que hace el guardado y devuelve:
+//   "alConfirmar(idMedio, idCuenta, entregar)" que hace el guardado y devuelve:
 //     true  -> se guardó bien: la ventana se cierra
 //     false -> falló: la ventana queda abierta para corregir
 //   Así cobro.js no importa pos.js ni pedidos.js (evitamos dependencias circulares).
@@ -33,6 +33,11 @@ let mediosCobro = [];
 let cuentasCobro = [];
 // Medio elegido en este momento (número).
 let idMedioElegido = null;
+// Solo si quien abre la ventana lo permite (POS): ¿se entrega ahora (true) o el pedido queda en preparación
+// porque el cliente paga por adelantado (false)?
+let entregarAhora = true;
+// Devolución de plata: no hay "Paga con $" ni vuelto (lo decide quien abre la ventana con ctx.sinVuelto).
+let sinVuelto = false;
 // ¿Se está guardando un cobro? Evita que un segundo envío del formulario pise el estado del primero.
 let procesandoCobro = false;
 
@@ -59,10 +64,16 @@ function estiloMedio(m) {
 // abrirModalCobro
 //   Prepara y abre la ventana. Recibe un objeto "ctx":
 //     titulo      -> texto del encabezado (opcional; por defecto "Cobrar y Entregar")
+//     etiquetaTotal -> texto sobre el importe (opcional; por defecto "Total a cobrar"; "Saldo a cobrar" si ya hubo pagos)
+//     sinVuelto -> true = oculta "Paga con $" (para devolver plata, donde no hay vuelto)
+//     tituloCuenta -> texto sobre la lista de cuentas (por defecto "Cuenta donde entra el cobro")
+//     textoConfirmar -> texto del botón (por defecto "Confirmar cobro")
+//     unidades -> si no viene, no se muestra el conteo de unidades
+//     permiteAnticipado -> true = muestra "¿Se entrega ahora?" (Entregar ahora / Pagó por adelantado). El POS lo usa.
 //     subtitulo   -> línea chica debajo del título
 //     total       -> importe a cobrar (número)
 //     unidades    -> cantidad de unidades (número)
-//     alConfirmar -> async (idMedio, idCuenta) => true | false
+//     alConfirmar -> async (idMedio, idCuenta, entregar) => true | false   (entregar solo cambia con permiteAnticipado)
 // -----------------------------------------------------------------------------
 export async function abrirModalCobro(ctx) {
   // Las dos consultas salen AL MISMO TIEMPO (Promise.all) y se espera a ambas.
@@ -89,11 +100,25 @@ export async function abrirModalCobro(ctx) {
   // textContent escribe texto plano (no hace falta esc()).
   document.getElementById('cobro-titulo').textContent = ctx.titulo || 'Cobrar y Entregar';
   document.getElementById('cobro-subtitulo').textContent = ctx.subtitulo || '';
+  document.getElementById('cobro-total-etiqueta').textContent = ctx.etiquetaTotal || 'Total a cobrar';
   document.getElementById('cobro-total').textContent = formatearPesos(ctx.total);
-  document.getElementById('cobro-unidades').textContent =
-    `${ctx.unidades} unidad${Number(ctx.unidades) === 1 ? '' : 'es'}`;
+  document.getElementById('cobro-unidades').textContent = ctx.unidades == null
+    ? ''
+    : `${ctx.unidades} unidad${Number(ctx.unidades) === 1 ? '' : 'es'}`;
+  sinVuelto = Boolean(ctx.sinVuelto);
+  document.getElementById('cobro-cuentas-titulo').textContent = ctx.tituloCuenta || 'Cuenta donde entra el cobro';
+  document.getElementById('btn-confirmar-cobro').innerHTML =
+    `<i class="fas fa-check mr-1"></i> ${esc(ctx.textoConfirmar || 'Confirmar cobro')}`;
   document.getElementById('cobro-paga-con').value = '';
   document.getElementById('cobro-cuenta').value = '';   // sin cuenta elegida al abrir
+
+  // "¿Se entrega ahora?": solo se ofrece cuando quien abre la ventana lo permite. Arranca en "Entregar ahora".
+  document.getElementById('cobro-grupo-entrega').classList.toggle('d-none', !ctx.permiteAnticipado);
+  elegirEntrega(true);
+  document.getElementById('cobro-entrega').onclick = (e) => {
+    const btn = e.target.closest('[data-entregar]');
+    if (btn) elegirEntrega(btn.dataset.entregar === '1');
+  };
 
   // Clics sobre la lista de cuentas. Se asigna con "onclick" (no addEventListener) para que,
   // aunque la ventana se abra muchas veces, quede UN solo oyente.
@@ -123,6 +148,20 @@ export async function abrirModalCobro(ctx) {
 
 
 // -----------------------------------------------------------------------------
+// elegirEntrega  (interna)
+//   Marca "Entregar ahora" o "Pagó por adelantado" (el pedido queda en preparación).
+// -----------------------------------------------------------------------------
+function elegirEntrega(entregar) {
+  entregarAhora = Boolean(entregar);
+  document.querySelectorAll('#cobro-entrega [data-entregar]').forEach(btn => {
+    const activo = (btn.dataset.entregar === '1') === entregarAhora;
+    btn.classList.toggle('active', activo);
+    btn.setAttribute('aria-checked', String(activo));
+  });
+}
+
+
+// -----------------------------------------------------------------------------
 // seleccionarMedio  (interna)
 //   Marca el botón elegido y muestra/oculta lo que depende del medio:
 //     - efectivo   -> se muestra "Paga con $" (vuelto); la cuenta se oculta
@@ -146,7 +185,7 @@ function seleccionarMedio(idMedio) {
   if (!esEfectivo) dibujarCuentasCobro();
 
   // "Paga con $": solo tiene sentido en efectivo.
-  document.getElementById('cobro-grupo-efectivo').classList.toggle('d-none', !esEfectivo);
+  document.getElementById('cobro-grupo-efectivo').classList.toggle('d-none', !esEfectivo || sinVuelto);
   actualizarVueltoCobro();
 }
 
@@ -281,7 +320,7 @@ export async function confirmarCobro(e) {
   let guardado = false;
   // try / finally: "finally" se ejecuta SIEMPRE al salir, así el botón nunca queda trabado.
   try {
-    guardado = await contexto.alConfirmar(Number(medio.id), idCuenta);
+    guardado = await contexto.alConfirmar(Number(medio.id), idCuenta, contexto.permiteAnticipado ? entregarAhora : true);
   } finally {
     $('#modal-cobro-pedido').off('hide.bs.modal', impedirCierre);   // antes de cerrar: si no, el cierre quedaría bloqueado
     procesandoCobro = false;

@@ -1,6 +1,6 @@
 import { supabaseAdmin } from './config.js';
 import { setPedidoEditandoId, setPedidoEditandoEstado, setCarrito } from './state.js';
-import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion } from './utils.js';
+import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, confirmarAccion } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
 import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarModoEdicionPOS } from './pos.js';
 import { navegarA } from './main.js';
@@ -11,6 +11,7 @@ import { telefonoParaWhatsApp } from './telefono.js';   // teléfono del cliente
 import { esPedidoNuevoSinVer, marcarVistos, marcarTodosVistos } from './avisoPedidos.js';   // "NUEVO" / visto de los pedidos web
 import { pedirMotivoAnulacion } from './motivoAnulacion.js';   // ventana que pide el motivo al anular
 import { verHistorialPedido } from './historialPedido.js';   // ventana "Ver historial" de un pedido
+import { elegirPedidoDestino } from './traspasoPago.js';   // ventana para elegir el pedido que recibe un pago traspasado
 
 // Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
 // nombre_referencia y observaciones los escribe un cliente anónimo desde la web.
@@ -32,10 +33,14 @@ function nombreSinTelefono(texto) {
 }
 
 // Texto del mensaje de "pedido listo". Se puede cambiar libremente.
-function mensajePedidoListo(nombre, idPedido, total) {
-  const importe = Number(total || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+// Si el pedido ya está pago NO se pide plata: se avisa que está pago. Si falta cobrar, se pide solo el saldo.
+function mensajePedidoListo(nombre, idPedido, saldo) {
   const saludo = nombre ? `Hola ${nombre}!` : 'Hola!';
-  return `${saludo} Tu pedido #${idPedido} de Cruditas ya está listo para retirar. Total: $${importe}. ¡Te esperamos!`;
+  const falta = Number(saldo || 0);
+  const cierre = falta > 0
+    ? `Saldo a abonar: $${falta.toLocaleString('es-AR', { maximumFractionDigits: 2 })}.`
+    : 'Ya está pago.';
+  return `${saludo} Tu pedido #${idPedido} de Cruditas ya está listo para retirar. ${cierre} ¡Te esperamos!`;
 }
 
 // Variable para conservar el id del pedido que se está viendo en el modal
@@ -45,8 +50,40 @@ let pedidoActualModalId = null;
 // hacer) o 'HISTORIAL' (la tabla con filtros de fecha, estado y búsqueda).
 let modoPedidos = 'PENDIENTES';
 let numeroConsultaPendientes = 0;   // descarta respuestas viejas si se cambia de vista a mitad de carga
-const ESTADOS_PENDIENTES = ['PREPARACION', 'PREPARADO', 'ENTREGADO_IMPAGO'];   // los que NO son COMPLETADO ni ANULADO
-const COLUMNAS_PEDIDO = 'id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, telefono, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre)';
+// Pendientes = lo que hay que hacer: en preparación, listos, entregados con saldo distinto de cero (falta cobrar o hay
+// que devolver) y anulados con plata todavía sin devolver ni traspasar (script 51). "Completado" ya no es un estado: es ENTREGADO con saldo cero, y no figura en Pendientes.
+// El saldo sale de la vista VW_PEDIDO_SALDO (pagos del pedido, scripts 49 y 50c).
+const FILTRO_PENDIENTES = 'estado.in.(EN_PREPARACION,LISTO),and(estado.eq.ENTREGADO,saldo.neq.0),and(estado.eq.ANULADO,a_devolver.gt.0)';
+const COLUMNAS_PEDIDO = 'id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, telefono, TB_BCLIENTES(nombre)';
+
+const redondear = (n) => Math.round(Number(n || 0) * 100) / 100;
+const pesos = (n) => `$${redondear(n).toLocaleString('es-AR')}`;
+
+// -----------------------------------------------------------------------------
+// traerSaldos  (interna)
+//   Pagado, saldo y medios de varios pedidos de una vez. Devuelve { [idPedido]: {...} }.
+//   La vista la pueden leer los tres roles (la tabla de pagos solo Encargado y Dueño).
+// -----------------------------------------------------------------------------
+async function traerSaldos(ids) {
+  if (!ids || ids.length === 0) return {};
+  const { data, error } = await supabaseAdmin
+    .from('VW_PEDIDO_SALDO')
+    .select('id_pedido, importe_total, pagado, saldo, cantidad_pagos, medios, cuentas, a_devolver')
+    .in('id_pedido', ids);
+  if (error) throw error;
+  const mapa = {};
+  (data || []).forEach(r => {
+    mapa[r.id_pedido] = {
+      pagado: redondear(r.pagado), saldo: redondear(r.saldo), cantidadPagos: Number(r.cantidad_pagos || 0),
+      medios: r.medios || '', cuentas: r.cuentas || '', aDevolver: redondear(r.a_devolver)
+    };
+  });
+  return mapa;
+}
+
+// Si por algún motivo no hay datos de saldo de un pedido, se lo trata como sin pagos.
+// aDevolver = plata para devolver: en un pedido anulado, todo lo pagado; en uno vigente, lo pagado de más.
+const saldoDe = (mapa, p) => mapa[p.id] || { pagado: 0, saldo: redondear(p.importe_total), cantidadPagos: 0, medios: '', cuentas: '', aDevolver: 0 };
 
 // Entrar al listado desde el menú (o desde la campana): siempre arranca en Pendientes.
 export function abrirListadoPedidos() {
@@ -96,7 +133,7 @@ export async function cargarTablaPedidos() {
 
   let query = supabaseAdmin
     .from('TB_TPEDIDOS')
-    .select('id, fecha, created_at, estado, importe_total, nombre_referencia, observaciones, canal, telefono, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre)')
+    .select(COLUMNAS_PEDIDO)
     .gte('fecha', fechaDesde)
     .lte('fecha', fechaHasta)
     .order('id', { ascending: false });
@@ -121,6 +158,17 @@ export async function cargarTablaPedidos() {
     });
   }
 
+  // Saldos de lo que se está mostrando (una sola consulta).
+  let saldos = {};
+  try {
+    saldos = await traerSaldos(pedidosFiltrados.map(p => p.id));
+  } catch (errSaldos) {
+    console.error('Error al cargar los saldos:', errSaldos);
+    mostrarNotificacion('No se pudieron cargar los pagos de los pedidos.', 'danger');
+    return;
+  }
+
+  // Total cobrado = lo pagado en los pedidos (sin los anulados). Pendiente de cobro = lo que se debe de pedidos ya entregados.
   let totalCobrado = 0;
   let totalPendienteCobro = 0;
   let cantPreparacion = 0;
@@ -128,10 +176,11 @@ export async function cargarTablaPedidos() {
   let cantAnulados = 0;
 
   pedidosFiltrados.forEach(p => {
-    if (p.estado === 'COMPLETADO') totalCobrado += (p.importe_total || 0);
-    if (p.estado === 'ENTREGADO_IMPAGO') totalPendienteCobro += (p.importe_total || 0);
-    if (p.estado === 'PREPARACION') cantPreparacion++;
-    if (p.estado === 'PREPARADO') cantPreparados++;
+    const s = saldoDe(saldos, p);
+    if (p.estado !== 'ANULADO') totalCobrado += s.pagado;
+    if (p.estado === 'ENTREGADO' && s.saldo > 0) totalPendienteCobro += s.saldo;
+    if (p.estado === 'EN_PREPARACION') cantPreparacion++;
+    if (p.estado === 'LISTO') cantPreparados++;
     if (p.estado === 'ANULADO') cantAnulados++;
   });
 
@@ -151,21 +200,18 @@ export async function cargarTablaPedidos() {
     return;
   }
 
-  tbody.innerHTML = pedidosFiltrados.map(filaPedidoHtml).join('');
+  tbody.innerHTML = pedidosFiltrados.map(p => filaPedidoHtml(p, saldoDe(saldos, p))).join('');
 }
 
 // Una fila de la tabla de pedidos. La usan las dos vistas (Pendientes e Historial).
-function filaPedidoHtml(p) {
+function filaPedidoHtml(p, s) {
   const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
-  const medioBase = p.TB_BMEDIO_PAGO ? p.TB_BMEDIO_PAGO.nombre : '';   // sin medio = todavía no se cobró
-  const cuentaPago = p.TB_BCUENTAS?.nombre;
-  // La cuenta se agrega solo si aporta algo (para efectivo, medio y cuenta se llaman igual)
-  const mostrarCuenta = cuentaPago && cuentaPago.toLowerCase() !== medioBase.toLowerCase();
-  // Celda armada como HTML (los textos pasan por esc()): el medio en su insignia y, debajo,
-  // la cuenta en letra chica y gris. Sin medio (pedido sin cobrar) se muestra un guion.
+  // Medios y cuentas de lo cobrado (pueden ser varios si se pagó en partes). Sin pagos: un guion.
+  const medioBase = s.medios;
+  const cuentaPago = s.cuentas;   // el efectivo no tiene cuenta para mostrar
   const medioPago = medioBase
     ? `<small class="badge badge-light border">${esc(medioBase)}</small>`
-      + (mostrarCuenta ? `<div class="small text-muted">${esc(cuentaPago)}</div>` : '')
+      + (cuentaPago ? `<div class="small text-muted">${esc(cuentaPago)}</div>` : '')
     : '<span class="text-muted">-</span>';
   // Marca del canal de venta (solo se muestra si no es MOSTRADOR, para no saturar la tabla)
   const badgeCanal = (p.canal && p.canal !== 'MOSTRADOR')
@@ -188,14 +234,28 @@ function filaPedidoHtml(p) {
   // En Pendientes, un pedido de un día anterior se marca en rojo (se quedó sin cerrar)
   const fechaAtrasada = modoPedidos === 'PENDIENTES' && p.fecha.split('T')[0] < obtenerFechaActualISO();
 
+  // Estado físico (cocina) y, aparte, el estado de pago (calculado con los pagos del pedido).
   let badgeClass = 'badge-secondary';
   let estadoTexto = p.estado;
 
-  if (p.estado === 'PREPARACION') { badgeClass = 'badge-info'; estadoTexto = '⏳ En Preparación'; }
-  if (p.estado === 'PREPARADO') { badgeClass = 'badge-primary'; estadoTexto = '🔔 Preparado'; }
-  if (p.estado === 'ENTREGADO_IMPAGO') { badgeClass = 'badge-warning'; estadoTexto = '📦 Entregado (Impago)'; }
-  if (p.estado === 'COMPLETADO') { badgeClass = 'badge-success'; estadoTexto = '✅ Completado'; }
+  if (p.estado === 'EN_PREPARACION') { badgeClass = 'badge-info'; estadoTexto = '⏳ En Preparación'; }
+  if (p.estado === 'LISTO') { badgeClass = 'badge-primary'; estadoTexto = '🔔 Listo'; }
+  if (p.estado === 'ENTREGADO') { badgeClass = 'badge-secondary'; estadoTexto = '📦 Entregado'; }
   if (p.estado === 'ANULADO') { badgeClass = 'badge-danger'; estadoTexto = '🚫 Anulado'; }
+
+  const saldo = s.saldo;
+  const debe = p.estado !== 'ANULADO' && saldo > 0;
+  const hayDevolucion = s.aDevolver > 0;   // hay plata para devolver (o traspasar si el pedido está anulado)
+  const puedeDevolver = hayDevolucion && puedeAlMenos('ENCARGADO');
+  let etiquetaPago = '';
+  if (hayDevolucion) {
+    etiquetaPago = `<span class="badge badge-danger">Devolver ${pesos(s.aDevolver)}</span>`;
+  } else if (p.estado !== 'ANULADO') {
+    if (saldo === 0 && s.pagado > 0) etiquetaPago = '<span class="badge badge-success">Pagado ✓</span>';
+    else if (debe && s.pagado > 0) etiquetaPago = `<span class="badge badge-warning">Pago parcial · falta ${pesos(saldo)}</span>`;
+    else if (debe && p.estado === 'ENTREGADO') etiquetaPago = `<span class="badge badge-warning">Debe ${pesos(saldo)}</span>`;
+    else if (debe) etiquetaPago = '<span class="badge badge-light border text-muted">Sin pagar</span>';
+  }
 
   // BOTONES DE LA FILA
   // A la vista, con texto: solo lo que hace avanzar el pedido (preparar, cobrar, entregar).
@@ -208,16 +268,38 @@ function filaPedidoHtml(p) {
   const visibles = [];
   const enMenu = [];
 
-  if (p.estado === 'PREPARACION') {
-    visibles.push(btnFila('btn-accion-pagar', 'fa-box-open', 'Marcar preparado', cambiar('PREPARADO')));
-  } else if (p.estado === 'PREPARADO') {
-    visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Cobrar y entregar', cambiar('COMPLETADO')));
-    visibles.push(btnFila('btn-accion-aviso', 'fa-truck', 'Entregar sin cobrar', cambiar('ENTREGADO_IMPAGO')));
-  } else if (p.estado === 'ENTREGADO_IMPAGO') {
-    visibles.push(btnFila('btn-accion-cobrar', 'fa-dollar-sign', 'Registrar cobro', cambiar('COMPLETADO')));
+  const cobrar = (entregar) => `data-action="cobrar-pedido" data-id="${idPed}" data-entregar="${entregar ? 1 : 0}"`;
+  let hayVerDetalleVisible = false;
+
+  if (p.estado === 'EN_PREPARACION') {
+    visibles.push(btnFila('btn-accion-pagar', 'fa-box-open', 'Marcar listo', cambiar('LISTO')));
+    // Pago por adelantado: se puede cobrar mientras está en cocina, sin cambiar su estado.
+    if (debe) visibles.push(btnFila('btn-accion-cobrar', 'fa-dollar-sign', 'Cobrar', cobrar(false)));
+  } else if (p.estado === 'LISTO') {
+    if (debe) {
+      visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Cobrar y entregar', cobrar(true)));
+      visibles.push(btnFila('btn-accion-aviso', 'fa-truck', 'Entregar sin cobrar', cambiar('ENTREGADO')));
+    } else {
+      visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Entregar', cambiar('ENTREGADO')));   // ya está pago
+    }
+  } else if (p.estado === 'ENTREGADO' && debe) {
+    visibles.push(btnFila('btn-accion-cobrar', 'fa-dollar-sign', 'Registrar cobro', cobrar(false)));
   } else {
-    // COMPLETADO o ANULADO: no queda nada por hacer, se deja a la vista la consulta
-    visibles.push(btnFila('btn-accion-ver', 'fa-eye', 'Ver detalle', accionVer));
+    // ENTREGADO y saldado, ENTREGADO con devolución pendiente, o ANULADO: la consulta queda a la vista
+    // (salvo que haya plata para devolver y quien mira pueda hacerlo: ahí van esos botones y "Ver detalle" en el menú).
+    if (!puedeDevolver) {
+      visibles.push(btnFila('btn-accion-ver', 'fa-eye', 'Ver detalle', accionVer));
+      hayVerDetalleVisible = true;
+    }
+  }
+
+  // Devolver la plata (efectivo del cajón o desde una cuenta). Solo Encargado y Dueño (la base también lo verifica).
+  if (puedeDevolver) {
+    visibles.push(btnFila('btn-accion-cobrar', 'fa-undo', 'Devolver', `data-action="devolver-pedido" data-id="${idPed}"`));
+    // En un pedido anulado, además, el pago se puede pasar a un pedido nuevo.
+    if (p.estado === 'ANULADO') {
+      visibles.push(btnFila('btn-accion-aviso', 'fa-exchange-alt', 'Traspasar pago', `data-action="traspasar-pago" data-id="${idPed}"`));
+    }
   }
 
   // Pedido web nuevo: botón para marcarlo como visto sin tener que abrirlo
@@ -226,20 +308,25 @@ function filaPedidoHtml(p) {
   }
 
   // Menú "Más" (el orden es el que se ve en pantalla)
-  // Pedido PREPARADO con teléfono válido: avisar al cliente por WhatsApp (opcional).
+  // Pedido LISTO con teléfono válido: avisar al cliente por WhatsApp (opcional).
   const telWS = telefonoParaWhatsApp(p.telefono);
-  if (p.estado === 'PREPARADO' && telWS) {
+  if (p.estado === 'LISTO' && telWS) {
     enMenu.push(itemMenuMas(
       'fa-comment-dots',
       'Avisar por WhatsApp',
-      `data-id="${idPed}" data-tel="${telWS}" data-nombre="${esc(nombreSinTelefono(p.nombre_referencia))}" data-total="${Number(p.importe_total || 0)}"`,
+      `data-id="${idPed}" data-tel="${telWS}" data-nombre="${esc(nombreSinTelefono(p.nombre_referencia))}" data-saldo="${Math.max(saldo, 0)}"`,
       'btn-avisar-ws'
     ));
   }
-  if (visibles.length > 0 && p.estado !== 'COMPLETADO' && p.estado !== 'ANULADO') {
+  if (!hayVerDetalleVisible) {
     enMenu.push(itemMenuMas('fa-eye', 'Ver detalle', accionVer));
   }
-  if (p.estado === 'PREPARACION' || p.estado === 'PREPARADO') {
+  // Cobrar sin entregar un pedido que ya está listo (el botón visible cobra y entrega).
+  if (p.estado === 'LISTO' && debe) {
+    enMenu.push(itemMenuMas('fa-dollar-sign', 'Cobrar (sin entregar)', cobrar(false)));
+  }
+  // Un pedido con pagos no se edita: para cambiarlo se anula y se carga uno nuevo, y se traspasa el pago (botón "Traspasar pago").
+  if ((p.estado === 'EN_PREPARACION' || p.estado === 'LISTO') && s.pagado === 0) {
     enMenu.push(itemMenuMas('fa-edit', 'Editar pedido', `data-action="editar-pedido" data-id="${idPed}"`));
   }
   enMenu.push(itemMenuMas('fa-receipt', 'Comanda de cocina', `data-id="${idPed}"`, 'btn-print-cocina'));
@@ -278,31 +365,56 @@ function filaPedidoHtml(p) {
       </td>
       <td>${medioPago}</td>
       <td class="text-right font-weight-bold">$${(p.importe_total || 0).toLocaleString('es-AR')}</td>
-      <td class="text-center"><span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span></td>
+      <td class="text-center"><span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span>${etiquetaPago ? `<div class="mt-1">${etiquetaPago}</div>` : ''}</td>
       <td class="text-center">${botonesAccion}</td>
     </tr>
   `;
 }
 
 // =============================================================================
-// VISTA "PENDIENTES": todo lo que no está COMPLETADO ni ANULADO, sin filtros de fecha
-// ni de estado. Agrupado por estado y, dentro de cada grupo, el más antiguo primero.
+// VISTA "PENDIENTES": en preparación, listos y entregados con saldo distinto de cero, sin filtros de
+// fecha ni de estado. Agrupado por estado y, dentro de cada grupo, el más antiguo primero.
 // =============================================================================
 const GRUPOS_PENDIENTES = [
-  { estado: 'PREPARACION', titulo: '⏳ En preparación' },
-  { estado: 'PREPARADO', titulo: '🔔 Listos para entregar' },
-  { estado: 'ENTREGADO_IMPAGO', titulo: '📦 Entregados sin cobrar' }
+  { estado: 'EN_PREPARACION', titulo: '⏳ En preparación' },
+  { estado: 'LISTO', titulo: '🔔 Listos para entregar' },
+  { estado: 'ENTREGADO', titulo: '📦 Entregados con saldo (sin cobrar o a devolver)' },
+  { estado: 'ANULADO', titulo: '🚫 Anulados con plata para devolver o traspasar' }
 ];
 
 async function cargarPendientes() {
   const numero = ++numeroConsultaPendientes;
 
-  const { data, error } = await supabaseAdmin
-    .from('TB_TPEDIDOS')
-    .select(COLUMNAS_PEDIDO)
-    .in('estado', ESTADOS_PENDIENTES)
-    .order('created_at', { ascending: true })
-    .limit(500);
+  // 1) La vista dice cuáles son los pendientes (y trae su saldo); 2) se piden esos pedidos completos.
+  let saldos = {};
+  let data = [];
+  let error = null;
+  try {
+    const { data: filas, error: errVista } = await supabaseAdmin
+      .from('VW_PEDIDO_SALDO')
+      .select('id_pedido, importe_total, pagado, saldo, cantidad_pagos, medios, cuentas, a_devolver')
+      .or(FILTRO_PENDIENTES)
+      .limit(500);
+    if (errVista) throw errVista;
+    (filas || []).forEach(r => {
+      saldos[r.id_pedido] = {
+        pagado: redondear(r.pagado), saldo: redondear(r.saldo), cantidadPagos: Number(r.cantidad_pagos || 0),
+        medios: r.medios || '', cuentas: r.cuentas || '', aDevolver: redondear(r.a_devolver)
+      };
+    });
+    const ids = (filas || []).map(r => r.id_pedido);
+    if (ids.length > 0) {
+      const res = await supabaseAdmin
+        .from('TB_TPEDIDOS')
+        .select(COLUMNAS_PEDIDO)
+        .in('id', ids)
+        .order('created_at', { ascending: true });
+      if (res.error) throw res.error;
+      data = res.data || [];
+    }
+  } catch (e) {
+    error = e;
+  }
 
   // Si mientras tanto se pidió otra carga o se cambió de vista, esta respuesta ya no sirve.
   if (numero !== numeroConsultaPendientes || modoPedidos !== 'PENDIENTES') return;
@@ -313,12 +425,16 @@ async function cargarPendientes() {
     return;
   }
 
-  const pedidos = data || [];
+  const pedidos = data;
   const porEstado = (estado) => pedidos.filter(p => p.estado === estado);
-  const cantPrep = porEstado('PREPARACION').length;
-  const cantListos = porEstado('PREPARADO').length;
-  const impagos = porEstado('ENTREGADO_IMPAGO');
-  const porCobrar = impagos.reduce((acc, p) => acc + Number(p.importe_total || 0), 0);
+  const cantPrep = porEstado('EN_PREPARACION').length;
+  const cantListos = porEstado('LISTO').length;
+  const entregados = porEstado('ENTREGADO');
+  const impagos = entregados.filter(p => saldoDe(saldos, p).saldo > 0);
+  // A devolver: cualquier pedido (anulado o entregado) con plata para devolver.
+  const aDevolver = pedidos.filter(p => saldoDe(saldos, p).aDevolver > 0);
+  const porCobrar = impagos.reduce((acc, p) => acc + saldoDe(saldos, p).saldo, 0);
+  const montoDevolver = aDevolver.reduce((acc, p) => acc + saldoDe(saldos, p).aDevolver, 0);
 
   const resumen = document.getElementById('resumen-pendientes');
   if (resumen) {
@@ -326,7 +442,8 @@ async function cargarPendientes() {
       ? ''
       : `${cantPrep} en preparación · ${cantListos} listo${cantListos !== 1 ? 's' : ''} para entregar · `
         + `${impagos.length} entregado${impagos.length !== 1 ? 's' : ''} sin cobrar`
-        + (impagos.length > 0 ? ` ($${porCobrar.toLocaleString('es-AR')} por cobrar)` : '');
+        + (impagos.length > 0 ? ` (${pesos(porCobrar)} por cobrar)` : '')
+        + (aDevolver.length > 0 ? ` · ${aDevolver.length} a devolver (${pesos(montoDevolver)})` : '');
   }
 
   const sinVer = pedidos.filter(esPedidoNuevoSinVer).length;
@@ -344,7 +461,7 @@ async function cargarPendientes() {
     const delGrupo = porEstado(g.estado);
     if (delGrupo.length === 0) return '';
     return `<tr class="fila-grupo-estado"><td colspan="7">${g.titulo} (${delGrupo.length})</td></tr>`
-      + delGrupo.map(filaPedidoHtml).join('');
+      + delGrupo.map(p => filaPedidoHtml(p, saldoDe(saldos, p))).join('');
   }).join('');
 }
 
@@ -385,23 +502,30 @@ document.addEventListener('pedidos:cambio', () => programarRefrescoListado());
 export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
   marcarVistos([idPedido]);   // si la persona actúa sobre un pedido web, ya lo vio
 
-  // Cobrar: antes de marcar COMPLETADO preguntamos con qué medio se cobra.
-  // La ventana se encarga de guardar el estado y el medio juntos.
-  if (nuevoEstado === 'COMPLETADO') {
-    await cobrarPedido(idPedido);
-    return;
-  }
+  // (Cobrar ya no es un cambio de estado: tiene su propia acción, cobrarPedido.)
 
   // Anular: primero se pide el motivo (lista corta). Si la persona cierra la ventana, no se anula.
   let motivoAnulacion = null;
   if (nuevoEstado === 'ANULADO') {
+    // Un pedido con pagos se puede anular (script 51), pero la plata queda para devolver o traspasar: se avisa ANTES de pedir el motivo.
+    try {
+      const s = (await traerSaldos([Number(idPedido)]))[Number(idPedido)];
+      if (s && s.pagado > 0) {
+        const sigue = await confirmarAccion({
+          titulo: 'Pedido con pagos',
+          mensaje: `Este pedido ya tiene ${pesos(s.pagado)} pagados. Si lo anulás, esa plata queda para devolver al cliente o para traspasar a un pedido nuevo (lo vas a ver en Pendientes).`,
+          textoConfirmar: 'Continuar', peligro: true
+        });
+        if (!sigue) return;
+      }
+    } catch (e) { /* si no se pudo consultar, decide la base */ }
     motivoAnulacion = await pedirMotivoAnulacion(idPedido);
     if (!motivoAnulacion) return;
   }
 
   // El servidor valida que la transición esté permitida y, al anular, que haya un motivo
-  // válido (cambiar_estado_pedido, scripts 24 y 48).
-  const { error } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
+  // válido (cambiar_estado_pedido, scripts 24, 48 y 49).
+  const { data: resultado, error } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
     p_id_pedido: Number(idPedido),
     p_nuevo_estado: nuevoEstado,
     ...(motivoAnulacion ? { p_motivo: motivoAnulacion.motivo, p_detalle: motivoAnulacion.detalle } : {})
@@ -412,17 +536,116 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
     // y mensajeErrorFuncion lo traduce a un mensaje claro.
     mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
   } else {
+    if (nuevoEstado === 'ANULADO' && Number(resultado?.a_devolver) > 0) {
+      mostrarNotificacion(`Pedido #${idPedido} anulado. Quedaron ${pesos(resultado.a_devolver)} para devolver o traspasar a otro pedido.`, 'warning');
+    }
     cargarTablaPedidos();
   }
+}
+
+// =============================================================================
+// DEVOLVER PLATA Y TRASPASAR UN PAGO (script 51; solo Encargado y Dueño, la base también lo verifica)
+//   Devolver: la ventana de cobro (cobro.js) se reutiliza para elegir POR DÓNDE sale la plata (efectivo del cajón o
+//   una cuenta). Se devuelve siempre todo lo que hay para devolver.
+//   Traspasar: se elige el pedido nuevo que recibe el pago (traspasoPago.js) y la base hace los dos movimientos.
+// =============================================================================
+async function traerPedidoYDevolucion(idPedido) {
+  const { data: pedido, error } = await supabaseAdmin
+    .from('TB_TPEDIDOS')
+    .select('id, estado, nombre_referencia, TB_BCLIENTES(nombre)')
+    .eq('id', idPedido)
+    .single();
+  if (error || !pedido) {
+    mostrarNotificacion('No se pudo cargar el pedido.', 'danger');
+    return null;
+  }
+  try {
+    const s = saldoDe(await traerSaldos([pedido.id]), pedido);
+    if (s.aDevolver <= 0) {
+      mostrarNotificacion(mensajeErrorFuncion({ message: 'nada_para_devolver' }, 'pedido'), 'warning');
+      cargarTablaPedidos();
+      return null;
+    }
+    return { pedido, aDevolver: s.aDevolver };
+  } catch (e) {
+    mostrarNotificacion('No se pudo consultar los pagos de este pedido.', 'danger');
+    return null;
+  }
+}
+
+export async function devolverPedido(idPedido) {
+  marcarVistos([idPedido]);
+  const datos = await traerPedidoYDevolucion(idPedido);
+  if (!datos) return;
+  const { pedido, aDevolver } = datos;
+  const cliente = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
+
+  await abrirModalCobro({
+    titulo: 'Devolver plata',
+    subtitulo: `Pedido #${pedido.id} · ${cliente}`,
+    etiquetaTotal: 'Total a devolver',
+    total: aDevolver,
+    sinVuelto: true,
+    tituloCuenta: 'Cuenta de donde sale la plata',
+    textoConfirmar: 'Confirmar devolución',
+    alConfirmar: async (idMedio, idCuenta) => {
+      const { error } = await supabaseAdmin.rpc('registrar_devolucion_pedido', {
+        p_id_pedido: Number(pedido.id),
+        p_id_medio: idMedio,
+        p_id_cuenta: idCuenta
+      });
+      if (error) {
+        mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
+        return false;
+      }
+      mostrarNotificacion('Devolución registrada.');
+      cargarTablaPedidos();
+      return true;
+    }
+  });
+}
+
+export async function traspasarPago(idOrigen) {
+  marcarVistos([idOrigen]);
+  const datos = await traerPedidoYDevolucion(idOrigen);
+  if (!datos) return;
+  if (datos.pedido.estado !== 'ANULADO') {
+    mostrarNotificacion(mensajeErrorFuncion({ message: 'pedido_origen_invalido' }, 'pedido'), 'warning');
+    return;
+  }
+
+  const idDestino = await elegirPedidoDestino({ idOrigen: Number(idOrigen), aDevolver: datos.aDevolver });
+  if (!idDestino) return;
+
+  const { data, error } = await supabaseAdmin.rpc('traspasar_pago_pedido', {
+    p_id_origen: Number(idOrigen),
+    p_id_destino: Number(idDestino)
+  });
+  if (error) {
+    mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
+    return;
+  }
+
+  let mensaje = `Pago traspasado: ${pesos(data?.traspasado)} del pedido #${idOrigen} al #${idDestino}.`;
+  if (Number(data?.a_devolver_origen) > 0) mensaje += ` Quedan ${pesos(data.a_devolver_origen)} a devolver en el #${idOrigen}.`;
+  if (Number(data?.saldo_destino) > 0) mensaje += ` Al #${idDestino} le faltan cobrar ${pesos(data.saldo_destino)}.`;
+  mostrarNotificacion(mensaje);
+  cargarTablaPedidos();
 }
 
 // =============================================================================
 // COBRO DE UN PEDIDO YA CARGADO
 // La ventana (medio, cuenta, vuelto) vive en cobro.js y es la MISMA que usa el POS.
 // Acá solo preparamos los datos del pedido y le decimos qué hacer al confirmar.
+// Se cobra SIEMPRE el saldo que falta (total menos lo ya pagado).
+//   entregar = true  -> "Cobrar y entregar": un solo paso (cambiar_estado_pedido a ENTREGADO con el pago).
+//   entregar = false -> solo registra el cobro y el pedido sigue en su estado (registrar_cobro_pedido):
+//                       sirve para el pago por adelantado y para cobrar un pedido ya entregado.
 // =============================================================================
-async function cobrarPedido(idPedido) {
-  // Traemos el pedido con sus renglones (para contar las unidades).
+export async function cobrarPedido(idPedido, entregar = false) {
+  marcarVistos([idPedido]);
+
+  // Traemos el pedido con sus renglones (para contar las unidades) y su saldo.
   const { data: pedido, error } = await supabaseAdmin
     .from('TB_TPEDIDOS')
     .select('id, estado, importe_total, nombre_referencia, TB_BCLIENTES(nombre), TB_DPEDIDOS(id_producto, cantidad)')
@@ -431,6 +654,19 @@ async function cobrarPedido(idPedido) {
 
   if (error || !pedido) {
     mostrarNotificacion('No se pudo cargar el pedido para cobrarlo.', 'danger');
+    return;
+  }
+
+  let s;
+  try {
+    s = saldoDe(await traerSaldos([pedido.id]), pedido);
+  } catch (e) {
+    mostrarNotificacion('No se pudo consultar cuánto falta cobrar de este pedido.', 'danger');
+    return;
+  }
+  if (pedido.estado === 'ANULADO' || s.saldo <= 0) {
+    mostrarNotificacion(mensajeErrorFuncion({ message: pedido.estado === 'ANULADO' ? 'pedido_anulado' : 'sin_saldo' }, 'pedido'), 'warning');
+    cargarTablaPedidos();
     return;
   }
 
@@ -443,23 +679,29 @@ async function cobrarPedido(idPedido) {
   const cliente = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
 
   await abrirModalCobro({
-    // Un pedido ya entregado impago no se "entrega" de nuevo: solo se cobra.
-    titulo: pedido.estado === 'ENTREGADO_IMPAGO' ? 'Registrar cobro' : 'Cobrar y Entregar',
+    titulo: entregar ? 'Cobrar y Entregar' : (pedido.estado === 'ENTREGADO' ? 'Registrar cobro' : 'Cobrar pedido'),
     subtitulo: `Pedido #${pedido.id} · ${cliente}`,
-    total: pedido.importe_total,
+    etiquetaTotal: s.pagado > 0 ? 'Saldo a cobrar' : 'Total a cobrar',
+    total: s.saldo,
     unidades,
     // Callback: la ventana lo llama al confirmar. true = se guardó (la ventana se cierra).
     alConfirmar: async (idMedio, idCuenta) => {
-      // Estado, medio y cuenta van en la MISMA llamada: se guardan juntos o no se guarda nada.
-      const { error: errorCobro } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
-        p_id_pedido: Number(pedido.id),
-        p_nuevo_estado: 'COMPLETADO',
-        p_id_medio: idMedio,
-        p_id_cuenta: idCuenta
-      });
+      // Entregar y cobrar van en la MISMA llamada: se guardan juntos o no se guarda nada.
+      const { error: errorCobro } = entregar
+        ? await supabaseAdmin.rpc('cambiar_estado_pedido', {
+            p_id_pedido: Number(pedido.id),
+            p_nuevo_estado: 'ENTREGADO',
+            p_id_medio: idMedio,
+            p_id_cuenta: idCuenta
+          })
+        : await supabaseAdmin.rpc('registrar_cobro_pedido', {
+            p_id_pedido: Number(pedido.id),
+            p_id_medio: idMedio,
+            p_id_cuenta: idCuenta
+          });
 
       if (errorCobro) {
-        // Por ejemplo, si la caja de ese día ya está cerrada.
+        // Por ejemplo, si la caja de hoy ya está cerrada.
         mostrarNotificacion(mensajeErrorFuncion(errorCobro, 'pedido'), 'danger');
         return false;
       }
@@ -486,7 +728,7 @@ export async function editarPedido(idPedido) {
     }
 
     setPedidoEditandoId(pedido.id);
-    setPedidoEditandoEstado(pedido.estado);   // PREPARACION o PREPARADO: el POS lo muestra y lo conserva al guardar
+    setPedidoEditandoEstado(pedido.estado);   // EN_PREPARACION o LISTO: el POS lo muestra y lo conserva al guardar
     actualizarModoEdicionPOS();
 
     const linkPedidos = document.querySelector('#menu-navegacion .nav-link[data-section="pedidos"]');
@@ -544,7 +786,7 @@ export async function verDetallePedido(idPedido) {
   try {
     const { data: pedido, error } = await supabaseAdmin
       .from('TB_TPEDIDOS')
-      .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_BCUENTAS(nombre), TB_DPEDIDOS(cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(nombre, TB_BCATEGORIAS(nombre)))')
+      .select('*, TB_BCLIENTES(nombre), TB_DPEDIDOS(cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(nombre, TB_BCATEGORIAS(nombre)))')
       .eq('id', idPedido)
       .single();
 
@@ -564,14 +806,26 @@ export async function verDetallePedido(idPedido) {
     });
 
     document.getElementById('detalle-id-pedido').innerText = pedido.id;
-    const medioDetalle = pedido.TB_BMEDIO_PAGO?.nombre || '';   // sin medio = todavía no se cobró
-    const cuentaDetalle = pedido.TB_BCUENTAS?.nombre;
-    // Medio arriba y, debajo en letra chica y gris, la cuenta (solo si aporta algo). Sin medio: "Sin especificar".
-    const detalleMostrarCuenta = cuentaDetalle && cuentaDetalle.toLowerCase() !== medioDetalle.toLowerCase();
+    // Cobros del pedido: medios (y cuentas) con lo pagado y lo que falta o hay que devolver.
+    let sd;
+    try {
+      sd = saldoDe(await traerSaldos([pedido.id]), pedido);
+    } catch (e) {
+      sd = { pagado: 0, saldo: redondear(pedido.importe_total), medios: '', cuentas: '' };
+    }
+    let resumenPago = '';
+    if (pedido.estado === 'ANULADO' && sd.aDevolver > 0) {
+      resumenPago = `<small class="d-block text-danger font-weight-bold">Anulado con ${esc(pesos(sd.aDevolver))} para devolver o traspasar</small>`;
+    } else if (pedido.estado !== 'ANULADO') {
+      if (sd.aDevolver > 0) resumenPago = `<small class="d-block text-danger font-weight-bold">Pagado ${esc(pesos(sd.pagado))} · hay que devolver ${esc(pesos(sd.aDevolver))}</small>`;
+      else if (sd.saldo > 0 && sd.pagado > 0) resumenPago = `<small class="d-block text-warning font-weight-bold">Pagado ${esc(pesos(sd.pagado))} · falta ${esc(pesos(sd.saldo))}</small>`;
+      else if (sd.saldo === 0 && sd.pagado > 0) resumenPago = '<small class="d-block text-success font-weight-bold">Pagado ✓</small>';
+    }
     document.getElementById('detalle-medio-pago').innerHTML =
-      medioDetalle
-        ? esc(medioDetalle) + (detalleMostrarCuenta ? `<small class="d-block text-muted font-weight-normal">${esc(cuentaDetalle)}</small>` : '')
-        : '<span class="text-muted font-weight-normal">Sin especificar</span>';
+      (sd.medios
+        ? esc(sd.medios) + (sd.cuentas ? `<small class="d-block text-muted font-weight-normal">${esc(sd.cuentas)}</small>` : '')
+        : '<span class="text-muted font-weight-normal">Sin cobrar</span>')
+      + resumenPago;
     document.getElementById('detalle-monto-total').innerText = `$${formatearMoneda(pedido.importe_total)}`;
 
     const clienteNombre = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
@@ -638,7 +892,7 @@ document.getElementById('tabla-pedidos-body')?.addEventListener('click', async (
   const btnAvisar = e.target.closest('.btn-avisar-ws');
   if (btnAvisar) {
     const d = btnAvisar.dataset;
-    const texto = mensajePedidoListo(d.nombre, d.id, d.total);
+    const texto = mensajePedidoListo(d.nombre, d.id, d.saldo);
     window.open(`https://wa.me/${d.tel}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
     return;
   }

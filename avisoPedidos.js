@@ -5,7 +5,7 @@
 //  - Escucha la base en tiempo real (Supabase Realtime sobre TB_TPEDIDOS). Cuando algo cambia
 //    vuelve a consultar los pedidos pendientes. Cada 45 s consulta igual (red de seguridad
 //    por si el canal en tiempo real se cae) y al volver a la pestaña.
-//  - Si aparece un pedido WEB en PREPARACION que esta persona no vio todavía: suena un
+//  - Si aparece un pedido WEB en EN_PREPARACION que esta persona no vio todavía: suena un
 //    aviso, sale un cartel arriba a la derecha, la campana de la barra superior se pone
 //    a latir y, con la pestaña en segundo plano, el título parpadea (y, si se dio permiso,
 //    sale una notificación del sistema).
@@ -13,11 +13,13 @@
 //
 // No importa pedidos.js ni main.js (evita dependencias circulares): avisa con el evento
 // 'pedidos:cambio' y recibe desde main.js la función para ir al listado.
-// Solo LEE TB_TPEDIDOS (no hay ninguna escritura).
+// Solo LEE TB_TPEDIDOS y VW_PEDIDO_SALDO (no hay ninguna escritura).
 // =============================================================================
 import { supabaseAdmin } from './config.js';
 
-const ESTADOS_PENDIENTES = ['PREPARACION', 'PREPARADO', 'ENTREGADO_IMPAGO'];
+// Pendientes = en preparación, listos, entregados con saldo distinto de cero (falta cobrar o devolver) y anulados con plata sin devolver.
+// Es el mismo criterio que la vista Pendientes del listado; el saldo sale de VW_PEDIDO_SALDO (scripts 49 y 50c).
+const FILTRO_PENDIENTES = 'estado.in.(EN_PREPARACION,LISTO),and(estado.eq.ENTREGADO,saldo.neq.0),and(estado.eq.ANULADO,a_devolver.gt.0)';
 const INTERVALO_CONSULTA_MS = 45000;      // red de seguridad si falla el tiempo real
 const ESPERA_ENTRE_CAMBIOS_MS = 600;      // junta varios cambios seguidos en una sola consulta
 const MAX_VISTOS_GUARDADOS = 300;
@@ -62,7 +64,7 @@ function guardarVistos() {
   } catch (e) { /* sin almacenamiento: el aviso funciona igual, solo no recuerda */ }
 }
 
-const esWebEnPreparacion = (p) => p.canal === 'WEB' && p.estado === 'PREPARACION';
+const esWebEnPreparacion = (p) => p.canal === 'WEB' && p.estado === 'EN_PREPARACION';
 
 // ¿Es un pedido web que todavía no se marcó como visto en este equipo?
 export function esPedidoNuevoSinVer(p) {
@@ -95,14 +97,26 @@ async function consultarPendientes() {
   if (consultando) { volverAConsultar = true; return; }
   consultando = true;
   try {
-    const { data, error } = await supabaseAdmin
-      .from('TB_TPEDIDOS')
-      .select('id, estado, canal, importe_total, nombre_referencia, TB_BCLIENTES(nombre)')
-      .in('estado', ESTADOS_PENDIENTES)
-      .order('id', { ascending: true })
+    // 1) la vista dice cuáles son los pendientes; 2) se piden esos pedidos.
+    const { data: filas, error: errVista } = await supabaseAdmin
+      .from('VW_PEDIDO_SALDO')
+      .select('id_pedido')
+      .or(FILTRO_PENDIENTES)
       .limit(500);
-    if (error) throw error;
-    pendientes = data || [];
+    if (errVista) throw errVista;
+    const ids = (filas || []).map(f => f.id_pedido);
+
+    let data = [];
+    if (ids.length > 0) {
+      const res = await supabaseAdmin
+        .from('TB_TPEDIDOS')
+        .select('id, estado, canal, importe_total, nombre_referencia, TB_BCLIENTES(nombre)')
+        .in('id', ids)
+        .order('id', { ascending: true });
+      if (res.error) throw res.error;
+      data = res.data || [];
+    }
+    pendientes = data;
     procesarNovedades();
     actualizarIndicadores();
   } catch (e) {

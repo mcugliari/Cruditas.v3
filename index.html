@@ -317,7 +317,7 @@
 
               <div class="pos-actions-container">
                 <div class="pos-btn-grid">
-                  <button type="button" class="btn btn-pos-action btn-pos-preparar" id="btn-pos-preparar" data-action="guardar-pedido" data-estado="PREPARACION">
+                  <button type="button" class="btn btn-pos-action btn-pos-preparar" id="btn-pos-preparar" data-action="guardar-pedido" data-estado="EN_PREPARACION">
                     <i class="fas fa-hourglass-half" aria-hidden="true"></i> <span>Solo Preparar</span>
                   </button>
                   <!-- Solo al editar: guarda los cambios SIN cambiar el estado del pedido -->
@@ -325,8 +325,8 @@
                     <i class="fas fa-save" aria-hidden="true"></i> <span>Guardar cambios</span>
                   </button>
                 </div>
-                <button type="button" class="btn btn-pos-cobrar" data-action="guardar-pedido" data-estado="COMPLETADO">
-                  <span class="pos-cobrar-texto"><i class="fas fa-check-circle" aria-hidden="true"></i> Cobrar y entregar</span>
+                <button type="button" class="btn btn-pos-cobrar" data-action="guardar-pedido" data-estado="COBRAR">
+                  <span class="pos-cobrar-texto"><i class="fas fa-check-circle" aria-hidden="true"></i> Cobrar</span>
                 </button>
               </div>
 
@@ -369,10 +369,9 @@
               <label class="small font-weight-bold">Estado del Pedido:</label>
               <select class="form-control form-control-sm" id="filtro-estado-pedido">
                 <option value="TODOS">-- Todos los Estados --</option>
-                <option value="PREPARACION">⏳ En Preparación</option>
-                <option value="PREPARADO">🔔 Preparado (Listo)</option>
-                <option value="ENTREGADO_IMPAGO">📦 Entregado (Impago)</option>
-                <option value="COMPLETADO">✅ Completado (Cobrado)</option>
+                <option value="EN_PREPARACION">⏳ En Preparación</option>
+                <option value="LISTO">🔔 Listo</option>
+                <option value="ENTREGADO">📦 Entregado</option>
                 <option value="ANULADO">🚫 Anulado</option>
               </select>
             </div>
@@ -402,7 +401,7 @@
           <div class="small-box bg-warning h-100 mb-0 shadow-sm">
             <div class="inner p-2">
               <h4 id="kpi-total-pendiente-cobro" class="font-weight-bold m-0">$0</h4>
-              <p class="mb-0 small">Pendiente Cobro</p>
+              <p class="mb-0 small">Entregado sin cobrar</p>
             </div>
           </div>
         </div>
@@ -2095,10 +2094,24 @@
             <!-- Total: el dato principal -->
             <div class="cobro-total-box">
               <div>
-                <div class="cobro-total-etiqueta">Total a cobrar</div>
+                <div class="cobro-total-etiqueta" id="cobro-total-etiqueta">Total a cobrar</div>
                 <div class="cobro-total-importe" id="cobro-total"></div>
               </div>
               <span class="cobro-total-unidades" id="cobro-unidades"></span>
+            </div>
+
+            <!-- ¿Se entrega ahora? Solo lo muestra el POS (cobro.js): "Pagó por adelantado" deja el pedido en preparación -->
+            <div class="d-none" id="cobro-grupo-entrega">
+              <div class="cobro-seccion-titulo" id="cobro-entrega-titulo">¿Se entrega ahora?</div>
+              <div class="btn-group btn-group-toggle w-100 mb-3" id="cobro-entrega" role="radiogroup" aria-labelledby="cobro-entrega-titulo">
+                <button type="button" class="btn btn-outline-primary active" data-entregar="1" role="radio" aria-checked="true">
+                  <i class="fas fa-hand-holding mr-1" aria-hidden="true"></i> Entregar ahora
+                </button>
+                <button type="button" class="btn btn-outline-primary" data-entregar="0" role="radio" aria-checked="false">
+                  <i class="fas fa-hourglass-half mr-1" aria-hidden="true"></i> Pagó por adelantado
+                  <small class="d-block">queda en preparación</small>
+                </button>
+              </div>
             </div>
 
             <!-- Medios de pago: los botones los arma cobro.js -->

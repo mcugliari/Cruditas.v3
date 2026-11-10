@@ -258,7 +258,20 @@ const MENSAJES_FUNCIONES = {
   referencia_requerida: 'Indicá un nombre o referencia. Solo podés omitirlo si cobrás y entregás en el momento.',
   producto_invalido:    'Algún producto no existe, no tiene precio en la lista elegida o la cantidad no es válida.',
   pedido_inexistente:   'El pedido no existe.',
-  pedido_no_editable:   'Este pedido ya no se puede editar: solo se editan los pedidos en preparación o preparados.',
+  pedido_no_editable:   'Este pedido ya no se puede editar: solo se editan los pedidos en preparación o listos que todavía no tengan pagos.',
+  // Pagos de pedidos (scripts 49 y 50)
+  pedido_con_pagos:     'Este pedido ya tiene pagos registrados, por eso no se puede editar. Para cambiarlo: anulalo, cargá uno nuevo y traspasá el pago.',
+  // Devoluciones y traspasos de pagos (script 51)
+  nada_para_devolver:   'Este pedido no tiene plata para devolver.',
+  pedido_origen_invalido:  'El pago solo se traspasa desde un pedido anulado.',
+  pedido_destino_invalido: 'El pedido que recibe el pago no puede estar anulado.',
+  mismo_pedido:         'El pedido que recibe el pago tiene que ser otro.',
+  pagos_insuficientes:  'El pedido no tiene pagos suficientes para traspasar ese monto.',
+  devolucion_excede_pagado: 'No se puede devolver más de lo que se pagó.',
+  sin_saldo:            'Este pedido no tiene saldo pendiente de cobro.',
+  pedido_anulado:       'El pedido está anulado.',
+  cobro_excede_saldo:   'El cobro supera lo que falta pagar del pedido.',
+  pagos_inmutables:     'Los pagos registrados no se pueden modificar ni borrar.',
   transicion_invalida:  'Ese cambio de estado no está permitido para este pedido. Recargá la lista: puede que ya haya cambiado.',
   // Reportes de compras (script 28)
   rango_invalido:       'La fecha Desde no puede ser posterior a la fecha Hasta.',

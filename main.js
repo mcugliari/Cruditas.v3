@@ -4,7 +4,7 @@ import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial, permitirSalirDeListas } from './listas.js';
 import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito, iniciarCobroPOS, cancelarEdicionPOS } from './pos.js';
-import { cargarTablaPedidos, cambiarEstadoPedido, editarPedido, verDetallePedido, abrirListadoPedidos, cambiarModoPedidos, marcarPedidoVisto, marcarTodosLosPedidosVistos } from './pedidos.js';
+import { cargarTablaPedidos, cambiarEstadoPedido, cobrarPedido, devolverPedido, traspasarPago, editarPedido, verDetallePedido, abrirListadoPedidos, cambiarModoPedidos, marcarPedidoVisto, marcarTodosLosPedidosVistos } from './pedidos.js';
 import { iniciarReloj } from './reloj.js';   // fecha y hora de la barra superior
 import { iniciarAvisoPedidos } from './avisoPedidos.js';   // aviso de pedidos web nuevos + contador de pendientes
 import { confirmarCobro, elegirMedioCobro, actualizarVueltoCobro } from './cobro.js';
@@ -194,8 +194,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const action = btn.dataset.action;
     if (action === 'guardar-pedido') {
       const estado = btn.dataset.estado;
-      // "Cobrar y Entregar" abre primero la ventana de cobro; el guardado lo hace la ventana al confirmar.
-      if (estado === 'COMPLETADO') iniciarCobroPOS();
+      // "Cobrar" abre primero la ventana de cobro (ahí se elige medio y si se entrega ahora o queda en preparación);
+      // el guardado lo hace la ventana al confirmar.
+      if (estado === 'COBRAR') iniciarCobroPOS();
       else guardarPedido(estado);
     } else if (action === 'vaciar-carrito') {
       vaciarCarrito();
@@ -227,6 +228,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (action === 'cambiar-estado') {
       const estado = btn.dataset.estado;
       cambiarEstadoPedido(id, estado);
+    } else if (action === 'cobrar-pedido') {
+      // Registrar un cobro (con o sin entrega). data-entregar="1": cobra y entrega; "0": solo cobra.
+      cobrarPedido(id, btn.dataset.entregar === '1');
+    } else if (action === 'devolver-pedido') {
+      devolverPedido(id);      // devolver plata de un pedido anulado (o pagado de más)
+    } else if (action === 'traspasar-pago') {
+      traspasarPago(id);       // pasar el pago de un pedido anulado a un pedido nuevo
     } else if (action === 'editar-pedido') {
       editarPedido(id);
     } else if (action === 'ver-detalle') {

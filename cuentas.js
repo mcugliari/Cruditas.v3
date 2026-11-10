@@ -74,7 +74,10 @@ const TIPOS_MOV = {
   RETIRO:                { texto: 'Retiro',         clase: 'badge-dark' },
   TRANSFERENCIA_ENTRADA: { texto: 'Transferencia',  clase: 'badge-primary' },
   TRANSFERENCIA_SALIDA:  { texto: 'Transferencia',  clase: 'badge-primary' },
-  AJUSTE:                { texto: 'Ajuste',         clase: 'badge-secondary' }
+  AJUSTE:                { texto: 'Ajuste',         clase: 'badge-secondary' },
+  // Pagos de pedidos (scripts 49 y 50): una devolución resta; un traspaso mueve un pago de un pedido anulado a otro
+  DEVOLUCION:            { texto: 'Devolución',     clase: 'badge-danger' },
+  TRASPASO_PEDIDO:       { texto: 'Traspaso de pago', clase: 'badge-secondary' }
 };
 
 const TIPOS = {

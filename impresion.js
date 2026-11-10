@@ -12,7 +12,7 @@ export async function obtenerPedidoParaImprimir(idPedido) {
   // Se agregan id, id_categoria e id_producto al SELECT para que el filtro funcione
   const { data: pedido, error } = await supabaseAdmin
     .from('TB_TPEDIDOS')
-    .select('*, TB_BCLIENTES(nombre), TB_BMEDIO_PAGO(nombre), TB_DPEDIDOS(id_producto, cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(id, id_categoria, nombre, TB_BCATEGORIAS(nombre)))')
+    .select('*, TB_BCLIENTES(nombre), TB_DPEDIDOS(id_producto, cantidad, precioUnitario, subTotal, TB_BPRODUCTOS(id, id_categoria, nombre, TB_BCATEGORIAS(nombre)))')
     .eq('id', idPedido)
     .single();
 
@@ -20,6 +20,15 @@ export async function obtenerPedidoParaImprimir(idPedido) {
     console.error('Error al obtener pedido para imprimir:', error);
     return null;
   }
+
+  // Cobros del pedido (script 49): medios, lo pagado y lo que falta. Si no se pueden leer, el ticket
+  // sale igual y dice "Sin cobrar".
+  const { data: pago } = await supabaseAdmin
+    .from('VW_PEDIDO_SALDO')
+    .select('pagado, saldo, medios')
+    .eq('id_pedido', idPedido)
+    .maybeSingle();
+  pedido._pago = pago || null;
   return pedido;
 }
 
@@ -39,6 +48,14 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
   });
 
   const clienteNombre = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
+
+  // Línea "Pago:" del ticket: medios si ya se cobró; "resta $X" si el pago es parcial; "Sin cobrar" si no hay pagos.
+  const pago = pedido._pago;
+  let textoPago = 'Sin cobrar';
+  if (pago && Number(pago.pagado) > 0) {
+    textoPago = pago.medios || 'Pagado';
+    if (Number(pago.saldo) > 0) textoPago += ` · resta $${formatearMoneda(pago.saldo)}`;
+  }
   
   // Formatear hora de creación
   const horaPedido = pedido.created_at 
@@ -107,7 +124,7 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
         <hr class="dashed">
         <p><strong>Pedido #${pedido.id}</strong> | ${horaPedido} hs</p>
         <p><strong>Cliente:</strong> ${esc(clienteNombre)}</p>
-        ${!esComandaCocina ? `<p><strong>Pago:</strong> ${esc(pedido.TB_BMEDIO_PAGO?.nombre || 'Sin cobrar')}</p>` : ''}
+        ${!esComandaCocina ? `<p><strong>Pago:</strong> ${esc(textoPago)}</p>` : ''}
       </div>
       
       <hr class="dashed">
@@ -164,7 +181,7 @@ export async function imprimirPrueba() {
     created_at: new Date().toISOString(),
     nombre_referencia: 'Prueba de impresión',
     importe_total: 3000,
-    TB_BMEDIO_PAGO: { nombre: 'Efectivo' },
+    _pago: { pagado: 3000, saldo: 0, medios: 'Efectivo' },
     TB_DPEDIDOS: [
       { cantidad: 12, subTotal: 2400, TB_BPRODUCTOS: { id: 0, id_categoria: 0, nombre: 'Producto de prueba', TB_BCATEGORIAS: { nombre: 'Empanada' } } },
       { cantidad: 1,  subTotal: 600,  TB_BPRODUCTOS: { id: 0, id_categoria: 0, nombre: 'Otro producto',    TB_BCATEGORIAS: { nombre: 'Pizza' } } }
