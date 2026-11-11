@@ -5,7 +5,8 @@ import {
   cachePrecios, setCachePrecios, 
   cacheCategorias, setCacheCategorias, 
   pedidoEditandoId, setPedidoEditandoId,
-  pedidoEditandoEstado, setPedidoEditandoEstado
+  pedidoEditandoEstado, setPedidoEditandoEstado,
+  pedidoPagoOrigen, setPedidoPagoOrigen
 } from './state.js';
 
 import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion, formatearPesos } from './utils.js';
@@ -772,6 +773,7 @@ export async function resetearPedido() {
 
   setPedidoEditandoId(null);
   setPedidoEditandoEstado(null);
+  setPedidoPagoOrigen(null);    // y se corta el vínculo con el pago de un pedido anulado (opción B)
   actualizarModoEdicionPOS();   // vuelve el título, los colores y los botones de un pedido nuevo
   setCarrito({});
 
@@ -791,28 +793,53 @@ const ROTULO_ESTADO_EDICION = { EN_PREPARACION: 'En preparación', LISTO: 'Listo
 
 export function actualizarModoEdicionPOS() {
   const editando = Boolean(pedidoEditandoId);
+  // Opción B: pedido NUEVO que va a recibir el pago de uno anulado (si se está editando otro pedido, manda la edición).
+  const conPago = Boolean(pedidoPagoOrigen) && !editando;
+  const modoEspecial = editando || conPago;
 
-  document.querySelector('.pos-order-card')?.classList.toggle('pos-modo-edicion', editando);
+  document.querySelector('.pos-order-card')?.classList.toggle('pos-modo-edicion', modoEspecial);
 
   const titulo = document.getElementById('pos-titulo-texto');
-  if (titulo) titulo.textContent = editando ? `Editando pedido #${pedidoEditandoId}` : 'Pedido Actual';
+  if (titulo) {
+    titulo.textContent = editando ? `Editando pedido #${pedidoEditandoId}`
+      : conPago ? `Pedido nuevo con el pago del #${pedidoPagoOrigen.id}`
+      : 'Pedido Actual';
+  }
 
   const sub = document.getElementById('pos-titulo-estado');
   if (sub) {
-    sub.classList.toggle('d-none', !editando);
+    sub.classList.toggle('d-none', !modoEspecial);
     const rotulo = ROTULO_ESTADO_EDICION[pedidoEditandoEstado] || pedidoEditandoEstado || '';
-    sub.textContent = editando && rotulo ? `Estado actual: ${rotulo} · no cambia al guardar` : '';
+    sub.textContent = editando && rotulo ? `Estado actual: ${rotulo} · no cambia al guardar`
+      : conPago ? `Al guardar, el pago del pedido anulado #${pedidoPagoOrigen.id} (hasta $${Number(pedidoPagoOrigen.aDevolver).toLocaleString('es-AR')}) pasa a este pedido`
+      : '';
   }
 
   document.getElementById('btn-pos-preparar')?.classList.toggle('d-none', editando);
   document.getElementById('btn-pos-guardar-cambios')?.classList.toggle('d-none', !editando);
-  document.getElementById('btn-limpiar-todo')?.classList.toggle('d-none', editando);
-  document.getElementById('btn-cancelar-edicion')?.classList.toggle('d-none', !editando);
+  // Con el pago del pedido anulado no se ofrece "Cobrar" (el pago ya viene del otro pedido; la diferencia se cobra después desde el listado).
+  document.querySelector('.btn-pos-cobrar')?.classList.toggle('d-none', conPago);
+  document.getElementById('btn-limpiar-todo')?.classList.toggle('d-none', modoEspecial);
+  document.getElementById('btn-cancelar-edicion')?.classList.toggle('d-none', !modoEspecial);
 }
 
 // "Cancelar edición": descarta lo que se cambió en pantalla (el pedido guardado no se toca)
 // y deja el POS listo para un pedido nuevo.
 export async function cancelarEdicionPOS() {
+  // Opción B: se descarta el pedido nuevo en pantalla; el pago sigue en el pedido anulado (queda en Pendientes).
+  if (!pedidoEditandoId && pedidoPagoOrigen) {
+    const origen = pedidoPagoOrigen.id;
+    const sigue = await confirmarAccion({
+      titulo: 'Cancelar pedido nuevo',
+      mensaje: `Se descarta el pedido que estás armando. El pago del pedido anulado #${origen} no se traspasa y sigue en Pendientes para resolverlo después. ¿Querés continuar?`,
+      textoConfirmar: 'Sí, descartar',
+      peligro: true
+    });
+    if (!sigue) return;
+    await resetearPedido();
+    mostrarNotificacion(`Pedido nuevo descartado. El pago del #${origen} sigue pendiente.`, 'info');
+    return;
+  }
   if (!pedidoEditandoId) return;
   const id = pedidoEditandoId;
   const ok = await confirmarAccion({
@@ -1161,13 +1188,54 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
 
   mostrarNotificacion(`¡Pedido #${data.id_pedido} ${eraEdicion ? 'actualizado' : 'registrado'} con éxito!`, 'success');
 
+  // Opción B: pedido nuevo con el pago de uno anulado. Guardar y traspasar son DOS llamadas (no una sola operación): si el
+  // traspaso falla, el pedido nuevo igual queda guardado y se avisa cómo resolverlo desde Pendientes.
+  const origenPago = (!eraEdicion && pedidoPagoOrigen) ? pedidoPagoOrigen : null;
+  const huboTraspaso = origenPago ? await traspasarPagoAlNuevo(origenPago, data.id_pedido) : false;
+
   if (inputRef) inputRef.value = '';
 
   setPedidoEditandoId(null);
   resetearPedido();
 
   // Impresión automática (si este equipo la tiene activada en la pantalla "Impresión").
-  programarImpresion(data.id_pedido, estadoInicial, eraEdicion, Boolean(cobro));
+  programarImpresion(data.id_pedido, estadoInicial, eraEdicion, Boolean(cobro) || huboTraspaso);
+}
+
+// -----------------------------------------------------------------------------
+// traspasarPagoAlNuevo  (interna)
+//   Opción B: pasa el pago del pedido anulado (origen) al pedido recién guardado. Devuelve true si se traspasó.
+//   Si falla, avisa con claridad (el pedido nuevo queda guardado, sin pago) y devuelve false.
+// -----------------------------------------------------------------------------
+async function traspasarPagoAlNuevo(origen, idNuevo) {
+  let data = null;
+  let error = null;
+  try {
+    ({ data, error } = await supabaseAdmin.rpc('traspasar_pago_pedido', {
+      p_id_origen: Number(origen.id),
+      p_id_destino: Number(idNuevo)
+    }));
+  } catch (fallo) {
+    error = fallo;
+  }
+
+  if (error) {
+    mostrarAvisoConAccion({
+      mensaje: `El pedido #${idNuevo} se guardó, pero NO se pudo traspasar el pago del pedido anulado #${origen.id}: ${mensajeErrorFuncion(error, 'pedido')} `
+        + `Hacelo desde el Listado de Pedidos → Pendientes, con "Traspasar pago" en el #${origen.id}.`,
+      textoAccion: 'Entendido',
+      duracionMs: 0,
+      tipo: 'peligro'
+    });
+    return false;
+  }
+
+  const pesos = (n) => `$${Number(n || 0).toLocaleString('es-AR')}`;
+  let mensaje = `Pago traspasado: ${pesos(data?.traspasado)} del pedido #${origen.id} al #${idNuevo}.`;
+  if (Number(data?.a_devolver_origen) > 0) mensaje += ` Quedan ${pesos(data.a_devolver_origen)} a devolver en el #${origen.id}.`;
+  if (Number(data?.saldo_destino) > 0) mensaje += ` Al #${idNuevo} le faltan cobrar ${pesos(data.saldo_destino)}.`;
+  mostrarNotificacion(mensaje, Number(data?.a_devolver_origen) > 0 || Number(data?.saldo_destino) > 0 ? 'warning' : 'success');
+  return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -1218,6 +1286,10 @@ function programarImpresion(idPedido, estado, eraEdicion, huboCobro) {
 //   (cobrar y entregar) o si el cliente paga por adelantado (el pedido queda en preparación).
 // -----------------------------------------------------------------------------
 export async function iniciarCobroPOS() {
+  if (pedidoPagoOrigen && !pedidoEditandoId) {
+    mostrarNotificacion('Este pedido recibe el pago de un pedido anulado: guardalo con "Solo preparar" y la diferencia se cobra después desde el listado.', 'warning');
+    return;
+  }
   if (Object.keys(carrito).length === 0) {
     mostrarNotificacion('Agregá al menos un producto al carrito.', 'warning');
     return;

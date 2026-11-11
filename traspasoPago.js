@@ -16,6 +16,13 @@
 //     id del pedido elegido (número)  -> la persona eligió y confirmó
 //     null                            -> cerró la ventana sin confirmar
 //
+//   elegirQueHacerConElPago({ idOrigen, aDevolver }) es la pregunta que se hace apenas se anula un pedido pagado
+//   (y desde el menú del pedido anulado): ¿qué se hace con la plata? Devuelve, también como promesa:
+//     'NUEVO'     -> cargar un pedido nuevo en el POS con este pago (opción B)
+//     'TRASPASAR' -> pasar el pago a un pedido que ya está cargado (opción A)
+//     'DEVOLVER'  -> devolver la plata ahora
+//     null        -> resolverlo después (queda en Pendientes)
+//
 // CÓMO SE CONECTA: pedidos.js la llama desde traspasarPago. La ventana se crea sola por código.
 // =============================================================================
 
@@ -158,6 +165,72 @@ export async function elegirPedidoDestino({ idOrigen, aDevolver }) {
     $(modal).on('shown.bs.modal', () => {
       $('.modal-backdrop').last().css('z-index', 1065);   // el fondo oscuro de la segunda ventana, por encima de la primera
       modal.querySelector('#traspaso-buscar')?.focus();
+    });
+    $(modal).on('hidden.bs.modal', () => {
+      modal.remove();
+      if (document.querySelector('.modal.show')) document.body.classList.add('modal-open');
+      resolve(resultado);
+    });
+    $(modal).modal('show');
+  });
+}
+
+
+// -----------------------------------------------------------------------------
+// elegirQueHacerConElPago: pregunta qué hacer con la plata de un pedido anulado.
+// -----------------------------------------------------------------------------
+const ID_MODAL_ELEGIR = 'modal-que-hacer-con-el-pago';
+
+export function elegirQueHacerConElPago({ idOrigen, aDevolver }) {
+  return new Promise((resolve) => {
+    document.getElementById(ID_MODAL_ELEGIR)?.remove();
+    let resultado = null;   // si se cierra sin elegir: se resuelve después
+
+    const modal = document.createElement('div');
+    modal.id = ID_MODAL_ELEGIR;
+    modal.className = 'modal fade';
+    modal.tabIndex = -1;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('data-backdrop', 'static');
+    modal.style.zIndex = 1070;
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered" role="document" style="max-width: 460px;">
+        <div class="modal-content">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title font-weight-bold"><i class="fas fa-hand-holding-usd text-primary mr-2"></i>¿Qué hacemos con el pago?</h5>
+          </div>
+          <div class="modal-body">
+            <p class="mb-3">El pedido #${esc(idOrigen)} tenía <strong>${esc(pesos(aDevolver))}</strong> pagados.</p>
+            <div class="list-group">
+              <button type="button" class="list-group-item list-group-item-action" data-opcion="NUEVO">
+                <strong><i class="fas fa-plus-circle mr-2 text-success"></i>Cargar un pedido nuevo con este pago</strong>
+                <div class="small text-muted">Abre el POS con los productos del pedido para cambiarlos. Al guardar, el pago pasa al nuevo.</div>
+              </button>
+              <button type="button" class="list-group-item list-group-item-action" data-opcion="TRASPASAR">
+                <strong><i class="fas fa-exchange-alt mr-2 text-primary"></i>Pasarlo a un pedido que ya cargué</strong>
+                <div class="small text-muted">Elegís el pedido de una lista.</div>
+              </button>
+              <button type="button" class="list-group-item list-group-item-action" data-opcion="DEVOLVER">
+                <strong><i class="fas fa-undo mr-2 text-danger"></i>Devolver la plata ahora</strong>
+                <div class="small text-muted">Por efectivo del cajón o desde una cuenta.</div>
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-light" data-opcion="DESPUES">Resolverlo después</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-opcion]');
+      if (!btn) return;
+      resultado = btn.dataset.opcion === 'DESPUES' ? null : btn.dataset.opcion;
+      $(modal).modal('hide');
+    });
+    $(modal).on('shown.bs.modal', () => {
+      $('.modal-backdrop').last().css('z-index', 1065);
     });
     $(modal).on('hidden.bs.modal', () => {
       modal.remove();

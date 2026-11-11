@@ -4,7 +4,7 @@ import { cargarClientes, guardarCliente, abrirModalEditar, guardarEdicionCliente
 import { cargarProductos, abrirModalNuevoProducto, abrirModalEditarProducto, guardarProducto, eliminarProducto } from './productos.js';
 import { inicializarModuloListas, cargarMatrizPrecios, guardarPrecioCategoria, abrirModalPrecioEspecial, guardarPrecioEspecial, eliminarPrecioEspecial, permitirSalirDeListas } from './listas.js';
 import { inicializarPOS, cargarPOS, alCambiarCliente, alterarCantidad, vaciarCarrito, guardarPedido, setFiltroBusquedaPOS, setCategoriaActivaPOS, eliminarItemCarrito, iniciarCobroPOS, cancelarEdicionPOS } from './pos.js';
-import { cargarTablaPedidos, cambiarEstadoPedido, cobrarPedido, devolverPedido, traspasarPago, editarPedido, verDetallePedido, abrirListadoPedidos, cambiarModoPedidos, marcarPedidoVisto, marcarTodosLosPedidosVistos } from './pedidos.js';
+import { cargarTablaPedidos, cambiarEstadoPedido, cobrarPedido, devolverPedido, traspasarPago, cargarPedidoConPago, editarPedido, verDetallePedido, abrirListadoPedidos, cambiarModoPedidos, marcarPedidoVisto, marcarTodosLosPedidosVistos } from './pedidos.js';
 import { iniciarReloj } from './reloj.js';   // fecha y hora de la barra superior
 import { iniciarAvisoPedidos } from './avisoPedidos.js';   // aviso de pedidos web nuevos + contador de pendientes
 import { confirmarCobro, elegirMedioCobro, actualizarVueltoCobro } from './cobro.js';
@@ -234,7 +234,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (action === 'devolver-pedido') {
       devolverPedido(id);      // devolver plata de un pedido anulado (o pagado de más)
     } else if (action === 'traspasar-pago') {
-      traspasarPago(id);       // pasar el pago de un pedido anulado a un pedido nuevo
+      traspasarPago(id);       // pasar el pago de un pedido anulado a un pedido ya cargado
+    } else if (action === 'pedido-con-pago') {
+      cargarPedidoConPago(id); // abrir el POS con un pedido nuevo que recibe el pago de un pedido anulado
     } else if (action === 'editar-pedido') {
       editarPedido(id);
     } else if (action === 'ver-detalle') {

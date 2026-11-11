@@ -6,6 +6,11 @@ export function setPedidoEditandoId(val) { pedidoEditandoId = val; }
 export let pedidoEditandoEstado = null;
 export function setPedidoEditandoEstado(val) { pedidoEditandoEstado = val; }
 
+// Opción B (pedido nuevo con el pago de uno anulado): { id, aDevolver } del pedido anulado cuyo pago se va a traspasar
+// al pedido que se está armando en el POS. null = el pedido del POS es uno común.
+export let pedidoPagoOrigen = null;
+export function setPedidoPagoOrigen(val) { pedidoPagoOrigen = val; }
+
 export let carrito = {};
 export function setCarrito(nuevo) { carrito = nuevo; }
 

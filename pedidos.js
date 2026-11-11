@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './config.js';
-import { setPedidoEditandoId, setPedidoEditandoEstado, setCarrito } from './state.js';
+import { carrito, setPedidoEditandoId, setPedidoEditandoEstado, setPedidoPagoOrigen, setCarrito } from './state.js';
 import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, confirmarAccion } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
 import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarModoEdicionPOS } from './pos.js';
@@ -11,7 +11,7 @@ import { telefonoParaWhatsApp } from './telefono.js';   // teléfono del cliente
 import { esPedidoNuevoSinVer, marcarVistos, marcarTodosVistos } from './avisoPedidos.js';   // "NUEVO" / visto de los pedidos web
 import { pedirMotivoAnulacion } from './motivoAnulacion.js';   // ventana que pide el motivo al anular
 import { verHistorialPedido } from './historialPedido.js';   // ventana "Ver historial" de un pedido
-import { elegirPedidoDestino } from './traspasoPago.js';   // ventana para elegir el pedido que recibe un pago traspasado
+import { elegirPedidoDestino, elegirQueHacerConElPago } from './traspasoPago.js';   // ventana para elegir el pedido que recibe un pago traspasado
 
 // Escapa texto antes de insertarlo con innerHTML (evita inyección de HTML/JS).
 // nombre_referencia y observaciones los escribe un cliente anónimo desde la web.
@@ -321,6 +321,10 @@ function filaPedidoHtml(p, s) {
   if (!hayVerDetalleVisible) {
     enMenu.push(itemMenuMas('fa-eye', 'Ver detalle', accionVer));
   }
+  // Anulado con plata: además de Devolver / Traspasar pago, armar el pedido nuevo con ese pago (opción B).
+  if (puedeDevolver && p.estado === 'ANULADO') {
+    enMenu.push(itemMenuMas('fa-plus-circle', 'Cargar pedido nuevo con este pago', `data-action="pedido-con-pago" data-id="${idPed}"`));
+  }
   // Cobrar sin entregar un pedido que ya está listo (el botón visible cobra y entrega).
   if (p.estado === 'LISTO' && debe) {
     enMenu.push(itemMenuMas('fa-dollar-sign', 'Cobrar (sin entregar)', cobrar(false)));
@@ -536,11 +540,24 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
     // y mensajeErrorFuncion lo traduce a un mensaje claro.
     mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
   } else {
-    if (nuevoEstado === 'ANULADO' && Number(resultado?.a_devolver) > 0) {
-      mostrarNotificacion(`Pedido #${idPedido} anulado. Quedaron ${pesos(resultado.a_devolver)} para devolver o traspasar a otro pedido.`, 'warning');
-    }
     cargarTablaPedidos();
+    if (nuevoEstado === 'ANULADO' && Number(resultado?.a_devolver) > 0) {
+      await resolverPagoDeAnulado(Number(idPedido), Number(resultado.a_devolver));
+    }
   }
+}
+
+// -----------------------------------------------------------------------------
+// resolverPagoDeAnulado  (interna)
+//   Apenas se anula un pedido pagado, se pregunta qué hacer con la plata: cargar un pedido nuevo con ese pago (B),
+//   pasarlo a un pedido ya cargado (A), devolverlo, o resolverlo después (queda en Pendientes).
+// -----------------------------------------------------------------------------
+async function resolverPagoDeAnulado(idPedido, aDevolver) {
+  const eleccion = await elegirQueHacerConElPago({ idOrigen: idPedido, aDevolver });
+  if (eleccion === 'NUEVO') await cargarPedidoConPago(idPedido);
+  else if (eleccion === 'TRASPASAR') await traspasarPago(idPedido);
+  else if (eleccion === 'DEVOLVER') await devolverPedido(idPedido);
+  else mostrarNotificacion(`Pedido #${idPedido} anulado. Quedaron ${pesos(aDevolver)} para devolver o traspasar: lo ves en Pendientes.`, 'warning');
 }
 
 // =============================================================================
@@ -713,6 +730,104 @@ export async function cobrarPedido(idPedido, entregar = false) {
   });
 }
 
+// -----------------------------------------------------------------------------
+// volcarPedidoEnPOS  (interna)
+//   Lleva a la pantalla del POS los datos de un pedido (cliente, lista, referencia y productos). La usan
+//   editarPedido (para editar ese pedido) y cargarPedidoConPago (para armar uno nuevo parecido).
+// -----------------------------------------------------------------------------
+async function volcarPedidoEnPOS(pedido) {
+  const linkPedidos = document.querySelector('#menu-navegacion .nav-link[data-section="pedidos"]');
+  navegarA('pedidos', linkPedidos);
+
+  // navegarA arranca inicializarPOS(), que reconstruye los selects (cliente, lista, medio de pago) cuando le
+  // llegan los datos de la base. Si pusiéramos los valores del pedido antes de que termine, esa reconstrucción
+  // los pisaría. Por eso esperamos acá.
+  await esperarPOSListo();
+
+  // Cliente. El cliente usa Select2, que dibuja su propio cuadro encima del <select>: cambiar solo .value no
+  // actualiza lo que se ve. trigger('change.select2') le avisa SOLO a Select2, sin disparar alCambiarCliente.
+  if (document.getElementById('select-cliente-pedido')) {
+    $('#select-cliente-pedido').val(pedido.id_cliente).trigger('change.select2');
+    // alCambiarCliente ajusta la etiqueta de "Referencia" y pone la lista predeterminada: la pisamos abajo.
+    await alCambiarCliente();
+  }
+
+  // Lista de precios del pedido (la que se usó al crearlo, no la predeterminada).
+  const selectLista = document.getElementById('select-lista-pedido');
+  if (selectLista && pedido.id_lista_precio) selectLista.value = pedido.id_lista_precio;
+
+  // Referencia: va DESPUÉS de alCambiarCliente porque esa función la limpia.
+  const inputRef = document.getElementById('input-ref-cliente');
+  if (inputRef) inputRef.value = pedido.nombre_referencia || '';
+
+  // Recarga los precios con la lista del pedido
+  await cargarPOS();
+
+  const nuevoCarrito = {};
+  (pedido.TB_DPEDIDOS || []).forEach(item => {
+    const idProd = item.id_producto;
+    if (Number(idProd) === 999) return; // el descuento por docena se recalcula al guardar
+    nuevoCarrito[idProd] = (nuevoCarrito[idProd] || 0) + item.cantidad;
+  });
+  setCarrito(nuevoCarrito);
+
+  renderizarGrillaPOS();
+  actualizarModoEdicionPOS();
+}
+
+// -----------------------------------------------------------------------------
+// cargarPedidoConPago  (opción B)
+//   Desde un pedido ANULADO con plata: abre el POS con sus mismos productos, cliente y referencia para armar el
+//   pedido nuevo (cambiarle lo que pidió el cliente). Al guardarlo con "Solo preparar", el POS traspasa el pago
+//   del anulado al nuevo (pos.js). Si cancelás, el pago sigue en Pendientes.
+// -----------------------------------------------------------------------------
+export async function cargarPedidoConPago(idOrigen) {
+  marcarVistos([idOrigen]);
+  const datos = await traerPedidoYDevolucion(idOrigen);
+  if (!datos) return;
+  if (datos.pedido.estado !== 'ANULADO') {
+    mostrarNotificacion(mensajeErrorFuncion({ message: 'pedido_origen_invalido' }, 'pedido'), 'warning');
+    return;
+  }
+
+  // Si ya hay un pedido armado en el POS, se pregunta antes de pisarlo.
+  if (Object.keys(carrito).length > 0) {
+    const sigue = await confirmarAccion({
+      titulo: 'Reemplazar el pedido del POS',
+      mensaje: 'Ya hay un pedido armado en el POS. Si seguís, se reemplaza por el nuevo pedido con el pago del #' + idOrigen + '.',
+      textoConfirmar: 'Sí, reemplazar',
+      peligro: true
+    });
+    if (!sigue) return;
+  }
+
+  try {
+    const { data: pedido, error } = await supabaseAdmin
+      .from('TB_TPEDIDOS')
+      .select('*, TB_DPEDIDOS(id_producto, cantidad)')
+      .eq('id', idOrigen)
+      .single();
+    if (error || !pedido) {
+      mostrarNotificacion('No se pudo cargar el pedido anulado.', 'danger');
+      return;
+    }
+
+    // Es un pedido NUEVO (no se edita ninguno): solo queda anotado de dónde viene el pago.
+    setPedidoEditandoId(null);
+    setPedidoEditandoEstado(null);
+    setPedidoPagoOrigen({ id: Number(idOrigen), aDevolver: datos.aDevolver });
+    actualizarModoEdicionPOS();
+
+    await volcarPedidoEnPOS(pedido);
+    mostrarNotificacion(`Pedido nuevo con el pago del #${idOrigen}: cambialo si hace falta y guardalo con "Solo preparar".`, 'info');
+  } catch (err) {
+    console.error('Error en cargarPedidoConPago:', err);
+    setPedidoPagoOrigen(null);
+    actualizarModoEdicionPOS();
+    mostrarNotificacion('Ocurrió un error al armar el pedido nuevo.', 'danger');
+  }
+}
+
 export async function editarPedido(idPedido) {
   marcarVistos([idPedido]);
   try {
@@ -729,51 +844,10 @@ export async function editarPedido(idPedido) {
 
     setPedidoEditandoId(pedido.id);
     setPedidoEditandoEstado(pedido.estado);   // EN_PREPARACION o LISTO: el POS lo muestra y lo conserva al guardar
+    setPedidoPagoOrigen(null);                // editar un pedido corta cualquier vínculo con un pago pendiente (opción B)
     actualizarModoEdicionPOS();
 
-    const linkPedidos = document.querySelector('#menu-navegacion .nav-link[data-section="pedidos"]');
-    navegarA('pedidos', linkPedidos);
-
-    // navegarA arranca inicializarPOS(), que reconstruye los selects (cliente,
-    // lista, medio de pago) cuando le llegan los datos de la base. Si pusiéramos
-    // los valores del pedido antes de que termine, esa reconstrucción los pisaría.
-    // Por eso esperamos acá.
-    await esperarPOSListo();
-
-    // Cliente. El cliente usa Select2, que dibuja su propio cuadro encima del
-    // <select>: cambiar solo .value no actualiza lo que se ve.
-    // trigger('change.select2') le avisa SOLO a Select2 (el sufijo ".select2" es
-    // un "espacio de nombres" del evento), sin disparar alCambiarCliente por su cuenta.
-    if (document.getElementById('select-cliente-pedido')) {
-      $('#select-cliente-pedido').val(pedido.id_cliente).trigger('change.select2');
-      // Esperamos a alCambiarCliente para que ajuste la etiqueta de "Referencia"
-      // según el cliente. También pone la lista predeterminada: la pisamos abajo.
-      await alCambiarCliente();
-    }
-
-    // Lista de precios del pedido (la que se usó al crearlo, no la predeterminada).
-    // El "if" evita escribir null en pedidos viejos sin lista.
-    const selectLista = document.getElementById('select-lista-pedido');
-    if (selectLista && pedido.id_lista_precio) selectLista.value = pedido.id_lista_precio;
-
-    // Referencia: va DESPUÉS de alCambiarCliente porque esa función la limpia.
-    const inputRef = document.getElementById('input-ref-cliente');
-    if (inputRef) inputRef.value = pedido.nombre_referencia || '';
-
-
-    // Recarga los precios con la lista del pedido
-    await cargarPOS();
-
-    const nuevoCarrito = {};
-    (pedido.TB_DPEDIDOS || []).forEach(item => {
-      const idProd = item.id_producto;
-      if (Number(idProd) === 999) return; // el descuento por docena se recalcula al guardar
-      nuevoCarrito[idProd] = (nuevoCarrito[idProd] || 0) + item.cantidad;
-    });
-    setCarrito(nuevoCarrito);
-
-    renderizarGrillaPOS();
-    actualizarModoEdicionPOS();
+    await volcarPedidoEnPOS(pedido);
     mostrarNotificacion(`Editando Pedido #${pedido.id}`, 'info');
 
   } catch (err) {
