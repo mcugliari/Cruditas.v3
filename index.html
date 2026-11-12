@@ -35,7 +35,7 @@
   <nav class="main-header navbar navbar-expand navbar-dark cruditas-header">
     <ul class="navbar-nav align-items-center">
       <li class="nav-item">
-        <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+        <a class="nav-link" data-widget="pushmenu" data-auto-collapse-size="1400" href="#" role="button"><i class="fas fa-bars"></i></a>
       </li>
       <li class="nav-item d-none d-sm-flex align-items-center ml-2">
         <img src="img/logo.png" alt="" class="cruditas-header-logo mr-2">
@@ -226,7 +226,7 @@
             <!-- NUEVO HEADER: Título, subtítulo y buscador -->
             <div class="card-header bg-white pos-main-card-header">
               <div class="d-flex justify-content-between align-items-center">
-                <div>
+                <div class="pos-main-titulo">
                   <div class="d-flex flex-column">
                     <h4 class="font-weight-bold text-dark mb-0" style="font-size: 1.25rem;">Menú de Productos</h4>
                     <span class="text-muted small mt-1">Seleccioná una categoría para ver sus productos.</span>
@@ -2326,6 +2326,17 @@
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+<script>
+  // Menú superpuesto (menos de 1400 px): al elegir una opción se cierra solo.
+  // Con el menú fijo (pantalla grande) no hace nada.
+  $(function () {
+    $('#menu-navegacion').on('click', 'a.nav-link[data-section]', function () {
+      if (document.body.classList.contains('sidebar-open')) {
+        $('[data-widget="pushmenu"]').first().PushMenu('collapse');
+      }
+    });
+  });
+</script>
 
 <!-- NUEVO: JS de Select2 -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>

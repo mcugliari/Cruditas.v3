@@ -1420,15 +1420,21 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   #sec-pedidos .pos-order-dark > .card-body > .form-group:nth-child(3) { grid-column: 2; grid-row: 1; }
 }
 
-/* Pantallas BAJAS (tablet apaisada con la barra del navegador): se compacta lo de arriba
-   para que entren más productos y más líneas del carrito */
+/* Pantallas BAJAS (tablet apaisada con la barra del navegador, hasta 820 px de alto): se compacta lo de
+   arriba para que entren DOS filas completas de productos y más líneas del carrito.
+   Lo táctil NO se achica: − / + y +6 / +12 siguen en 44 px. Se achican la foto, los espacios y la letra del nombre. */
 @media (min-width: 768px) and (max-height: 820px) {
   #sec-pedidos .pos-main-card-header { padding: 10px 16px; min-height: 0; }
   #sec-pedidos .pos-main-card-header .text-muted.small { display: none; }
   #sec-pedidos .pos-category-tabs { padding: 8px 14px; }
-  #sec-pedidos .pos-card-producto { padding: 9px; gap: 6px; }
-  #sec-pedidos .pos-card-producto .pos-prod-title { min-height: 0; }
-  #sec-pedidos .pos-prod-img { aspect-ratio: 16 / 9; }
+  #sec-pedidos .pos-catalog-content { padding: 10px 12px; }
+  #sec-pedidos .pos-product-grid { gap: 10px; }
+  #sec-pedidos .pos-card-producto { padding: 8px; gap: 5px; }
+  #sec-pedidos .pos-prod-img { aspect-ratio: 16 / 7; }              /* antes 16/9: foto ~22 % más baja */
+  #sec-pedidos .pos-prod-ph { font-size: 1.5rem; }
+  #sec-pedidos .pos-card-producto .pos-prod-title { min-height: 0; max-height: 2.3em; font-size: 1.05rem; line-height: 1.15; }
+  #sec-pedidos .pos-card-producto .pos-prod-price { font-size: .9rem; line-height: 1.1; }
+  #sec-pedidos .pos-card-producto .pos-qty-pill { min-height: 50px; }
   #sec-pedidos .pos-order-card .form-group { margin-bottom: 6px; }
 }
 
@@ -1454,6 +1460,87 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   #sec-pedidos .btn-pos-action,
   #sec-pedidos .pos-order-dark .btn-pos-cobrar { min-height: 54px; }
 }
+
+
+/* =============================================================================
+   TABLET (Lenovo Idea Tab Plus 12,1" ≈ 1280×800 px CSS, ~710-740 px de alto útil con la barra de Chrome)
+   (a) Solapas y buscador en UNA sola fila (≥ 992 px): se recuperan ~64 px de alto para las tarjetas.
+   (b) Carrito en una fila por ítem y resumen de totales en una fila (pantallas bajas, menos de 1500 px).
+   (c) El menú lateral se SUPERPONE en menos de 1400 px (no empuja el contenido): el POS se ve igual
+       con el menú abierto o cerrado. En pantalla grande (≥ 1400 px) sigue fijo como antes.
+   Va al FINAL de las reglas del POS a propósito: con igual especificidad gana lo último.
+   PARA REVERTIR: borrar desde este comentario hasta el de la ETAPA 10 (y volver al index.html anterior).
+   ============================================================================= */
+
+/* (a) Una sola fila: solapas a la izquierda, buscador a la derecha. El título "Menú de Productos" se oculta
+   (el menú ya dice "Nuevo Pedido"). Por debajo de 992 px quedan las dos filas de antes. */
+@media (min-width: 992px) {
+  #sec-pedidos .pos-main-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
+  #sec-pedidos .pos-main-card .pos-category-tabs { grid-column: 1; grid-row: 1; padding: 8px 8px 8px 14px; border-bottom: 1px solid #e8ebef; }
+  #sec-pedidos .pos-main-card .pos-main-card-header {
+    grid-column: 2; grid-row: 1; display: flex; align-items: center;
+    padding: 8px 14px 8px 6px; min-height: 0; border-bottom: 1px solid #e8ebef;
+  }
+  #sec-pedidos .pos-main-card .pos-catalog-scroll { grid-column: 1 / -1; grid-row: 2; min-height: 0; }
+  #sec-pedidos .pos-main-card .pos-main-titulo { display: none; }
+  #sec-pedidos .pos-main-card .pos-main-card-header .input-group { width: 240px !important; }
+}
+
+/* (b) Tablet apaisada: cada ítem del carrito en UNA fila (nombre y precio a la izquierda, − n + , subtotal y tacho).
+   Pasa de ~100 px a ~52 px por ítem: en el mismo alto entran 4 ítems en vez de 2. Sin foto chica (el nombre gana lugar). */
+@media (min-width: 768px) and (max-width: 1499.98px) and (max-height: 820px) {
+  #sec-pedidos .pos-cart-line {
+    grid-template-columns: minmax(0, 1fr) auto auto 38px;
+    grid-template-areas: "info qty total del";
+    align-items: center; column-gap: 8px; row-gap: 0; padding: 6px 2px;
+  }
+  #sec-pedidos .pos-cart-thumb { display: none; }
+  /* El nombre completo (hasta 2 líneas) vale más que "Empanada $ 1.500 c/u", que ya se ve en la tarjeta del catálogo */
+  #sec-pedidos .pos-cart-sub { display: none; }
+  #sec-pedidos .pos-cart-name {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    white-space: normal; overflow: hidden; font-size: 1rem; line-height: 1.12;
+  }
+  #sec-pedidos .pos-cart-qty,
+  #sec-pedidos .pos-cart-total { justify-self: auto; }
+  #sec-pedidos .pos-cart-total { min-width: 3.6em; }
+  #sec-pedidos .pos-cart-del { width: 38px; }
+}
+/* Resumen: unidades a la izquierda y subtotal / descuento a la derecha (en una fila, no apilados).
+   Desde 1200 px el panel tiene lugar; por debajo queda apilado como antes. */
+@media (min-width: 1200px) and (max-width: 1499.98px) and (max-height: 820px) {
+  #sec-pedidos .pos-totales { flex-wrap: nowrap; align-items: center; }
+  #sec-pedidos .pos-tot-unidades { flex: 0 0 auto; }
+  #sec-pedidos .pos-desglose { flex: 1 1 0; min-width: 0; }
+  #sec-pedidos .pos-desglose dt small { display: none; }     /* "(1 doc.)": se ve en el reporte y el ticket */
+}
+
+/* Tablet de 710-760 px de alto útil: un poco menos de aire (la segunda fila de productos justo entra) */
+@media (min-width: 768px) and (max-height: 760px) {
+  #sec-pedidos .pos-catalog-content { padding: 8px 12px; }
+  #sec-pedidos .pos-product-grid { gap: 8px; }
+  #sec-pedidos .pos-card-producto { gap: 4px; }
+}
+@media (min-width: 992px) and (max-height: 760px) {
+  #sec-pedidos .pos-main-card .pos-category-tabs { padding-top: 6px; padding-bottom: 6px; }
+  #sec-pedidos .pos-main-card .pos-main-card-header { padding-top: 6px; padding-bottom: 6px; }
+}
+
+/* (c) Menú lateral superpuesto entre 992 y 1399 px (por debajo de 992 ya lo hace AdminLTE). Requiere
+   data-auto-collapse-size="1400" en el botón del menú (index.html), que hace que AdminLTE ponga "sidebar-open". */
+@media (min-width: 992px) and (max-width: 1399.98px) {
+  body:not(.sidebar-collapse) .content-wrapper,
+  body:not(.sidebar-collapse) .main-header,
+  body:not(.sidebar-collapse) .main-footer { margin-left: 0 !important; }
+  body.sidebar-open #sidebar-overlay {
+    display: block; position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 1037; background: rgba(8, 13, 24, .5);
+  }
+}
+
+/* Barra superior: nada se parte en dos líneas y en pantallas medianas se oculta el subtítulo */
+.nav-estado-caja, #nav-usuario-conectado { white-space: nowrap; }
+@media (max-width: 1199.98px) { .cruditas-header-sub { display: none; } }
 
 
 /* =============================================================================
