@@ -4,8 +4,9 @@
 //
 // QUÉ HACE
 //   Al tocar "Anular pedido" (menú "Más" del listado) se abre esta ventana: hay que elegir un
-//   motivo de una lista corta. Si el motivo es "Otro" aparece un cuadro para una aclaración
-//   (opcional). Sirve también de confirmación: hasta ahora anular no preguntaba nada.
+//   motivo de una lista corta, con BOTONES GRANDES (pensados para tocar con el dedo en una tablet).
+//   Si el motivo es "Otro" aparece un cuadro para una aclaración (opcional).
+//   Sirve también de confirmación: hasta ahora anular no preguntaba nada.
 //   La base vuelve a validar el motivo (cambiar_estado_pedido, script 48): esto es solo la parte
 //   visual.
 //
@@ -22,11 +23,13 @@
 import { esc } from './utils.js';
 
 // Códigos (los mismos que acepta la base) y cómo se muestran. El orden es el de la pantalla.
+// "icono" es de Font Awesome; "ancho: 'completo'" ocupa toda la fila (el resto va de a dos por fila).
 export const MOTIVOS_ANULACION = [
-  { codigo: 'ERROR_CARGA',         texto: 'Error de carga' },
-  { codigo: 'CLIENTE_CANCELO',     texto: 'El cliente canceló' },
-  { codigo: 'NO_SE_PUDO_PREPARAR', texto: 'No se pudo preparar' },
-  { codigo: 'OTRO',                texto: 'Otro' }
+  { codigo: 'ERROR_CARGA',          texto: 'Error de carga',               icono: 'fa-exclamation-triangle' },
+  { codigo: 'CLIENTE_PIDIO_CAMBIO', texto: 'El cliente pidió un cambio',   icono: 'fa-sync-alt' },
+  { codigo: 'CLIENTE_CANCELO',      texto: 'El cliente canceló',           icono: 'fa-user-times' },
+  { codigo: 'NO_SE_PUDO_PREPARAR',  texto: 'No se pudo preparar',          icono: 'fa-ban' },
+  { codigo: 'OTRO',                 texto: 'Otro',                         icono: 'fa-ellipsis-h', ancho: 'completo' }
 ];
 
 // { ERROR_CARGA: 'Error de carga', ... } para buscar el texto por código.
@@ -59,22 +62,27 @@ export function pedirMotivoAnulacion(idPedido) {
           </div>
           <div class="modal-body">
             <p class="mb-2">¿Por qué se anula el pedido?</p>
-            <div id="motivo-anul-lista">
+            <!-- Botones grandes en vez de casillas: se tocan fácil con el dedo. Uno solo queda elegido (como una casilla de opción). -->
+            <div class="row mx-n1" id="motivo-anul-lista" role="radiogroup" aria-label="Motivo de la anulación">
               ${MOTIVOS_ANULACION.map(m => `
-              <div class="custom-control custom-radio mb-1">
-                <input type="radio" class="custom-control-input" name="motivo-anulacion" id="motivo-anul-${m.codigo}" value="${m.codigo}">
-                <label class="custom-control-label" for="motivo-anul-${m.codigo}">${esc(m.texto)}</label>
+              <div class="${m.ancho === 'completo' ? 'col-12' : 'col-6'} px-1 mb-2">
+                <button type="button" id="motivo-anul-${m.codigo}" data-motivo="${m.codigo}" role="radio" aria-checked="false"
+                        class="btn btn-outline-secondary btn-block motivo-anul-btn d-flex flex-column align-items-center justify-content-center"
+                        style="min-height: 72px; white-space: normal; line-height: 1.2;">
+                  <i class="fas ${m.icono} mb-1" style="font-size: 1.35rem;" aria-hidden="true"></i>
+                  <span>${esc(m.texto)}</span>
+                </button>
               </div>`).join('')}
             </div>
             <div class="small text-danger d-none mt-1" id="motivo-anul-error">Elegí un motivo para continuar.</div>
             <div class="form-group mt-3 mb-0 d-none" id="motivo-anul-grupo-detalle">
               <label for="motivo-anul-detalle" class="small text-muted mb-1">Aclaración (opcional)</label>
-              <textarea class="form-control" id="motivo-anul-detalle" rows="2" maxlength="200" placeholder="Si querés, contá qué pasó..."></textarea>
+              <textarea class="form-control" id="motivo-anul-detalle" rows="3" maxlength="200" style="font-size: 16px;" placeholder="Si querés, contá qué pasó..."></textarea>
             </div>
           </div>
           <div class="modal-footer border-0 pt-0">
-            <button type="button" class="btn btn-light" data-dismiss="modal">Volver</button>
-            <button type="button" class="btn btn-danger font-weight-bold" id="motivo-anul-aceptar">Anular pedido</button>
+            <button type="button" class="btn btn-light btn-lg px-4" data-dismiss="modal">Volver</button>
+            <button type="button" class="btn btn-danger btn-lg font-weight-bold px-4" id="motivo-anul-aceptar">Anular pedido</button>
           </div>
         </div>
       </div>`;
@@ -83,13 +91,24 @@ export function pedirMotivoAnulacion(idPedido) {
     const lista = document.getElementById('motivo-anul-lista');
     const error = document.getElementById('motivo-anul-error');
     const grupoDetalle = document.getElementById('motivo-anul-grupo-detalle');
-    const eleccion = () => modal.querySelector('input[name="motivo-anulacion"]:checked')?.value || null;
+    let motivoElegido = null;   // código del botón tocado
+    const eleccion = () => motivoElegido;
 
-    // Al elegir un motivo: se saca el aviso de error y, solo con "Otro", aparece la aclaración.
-    lista.addEventListener('change', () => {
+    // Al tocar un motivo: queda marcado (el anterior se desmarca), se saca el aviso de error y, solo con "Otro",
+    // aparece la aclaración.
+    lista.addEventListener('click', (e) => {
+      const btn = e.target.closest('.motivo-anul-btn');
+      if (!btn) return;
+      motivoElegido = btn.dataset.motivo;
+      lista.querySelectorAll('.motivo-anul-btn').forEach(b => {
+        const activo = b === btn;
+        b.classList.toggle('btn-danger', activo);
+        b.classList.toggle('btn-outline-secondary', !activo);
+        b.setAttribute('aria-checked', String(activo));
+      });
       error.classList.add('d-none');
-      grupoDetalle.classList.toggle('d-none', eleccion() !== 'OTRO');
-      if (eleccion() === 'OTRO') document.getElementById('motivo-anul-detalle').focus();
+      grupoDetalle.classList.toggle('d-none', motivoElegido !== 'OTRO');
+      if (motivoElegido === 'OTRO') document.getElementById('motivo-anul-detalle').focus();
     });
 
     document.getElementById('motivo-anul-aceptar').addEventListener('click', () => {
@@ -109,7 +128,6 @@ export function pedirMotivoAnulacion(idPedido) {
     $(modal).on('shown.bs.modal', () => {
       // Bootstrap 4 pone el fondo oscuro de la segunda ventana debajo de la primera: lo subimos.
       $('.modal-backdrop').last().css('z-index', 1065);
-      modal.querySelector('input[name="motivo-anulacion"]')?.focus();
     });
 
     $(modal).on('hidden.bs.modal', () => {

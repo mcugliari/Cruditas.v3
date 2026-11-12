@@ -2,7 +2,7 @@ import { supabaseAdmin } from './config.js';
 import { carrito, setPedidoEditandoId, setPedidoEditandoEstado, setPedidoPagoOrigen, setCarrito } from './state.js';
 import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, confirmarAccion } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
-import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarModoEdicionPOS } from './pos.js';
+import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarModoEdicionPOS, guardarFotoPedidoEditando } from './pos.js';
 import { navegarA } from './main.js';
 import { obtenerPedidoParaImprimir, imprimirComprobante } from './impresion.js';
 import { btnFila, itemMenuMas } from './menuMas.js';   // botones de la fila y menú "Más"
@@ -219,7 +219,7 @@ function filaPedidoHtml(p, s) {
     : '';
   const nuevoSinVer = esPedidoNuevoSinVer(p);   // pedido web que este equipo todavía no vio
   const etiquetaNuevo = nuevoSinVer ? ' <span class="badge badge-danger ml-1">NUEVO</span>' : '';
-  const hora = new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const hora = new Date(p.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' });
   
   const htmlObservaciones = p.observaciones 
   ? `<div class="mt-1"><span class="badge badge-warning text-dark border"><i class="fas fa-comment-alt mr-1"></i> ${esc(p.observaciones)}</span></div>` 
@@ -701,29 +701,61 @@ export async function cobrarPedido(idPedido, entregar = false) {
     etiquetaTotal: s.pagado > 0 ? 'Saldo a cobrar' : 'Total a cobrar',
     total: s.saldo,
     unidades,
+    // Cobro parcial (seña o pago en dos veces): el monto arranca en el saldo y se puede bajar.
+    permiteMontoParcial: true,
+    ayudaParcial: entregar ? 'El pedido se entrega igual y queda con ese saldo por cobrar.' : '',
     // Callback: la ventana lo llama al confirmar. true = se guardó (la ventana se cierra).
-    alConfirmar: async (idMedio, idCuenta) => {
-      // Entregar y cobrar van en la MISMA llamada: se guardan juntos o no se guarda nada.
-      const { error: errorCobro } = entregar
-        ? await supabaseAdmin.rpc('cambiar_estado_pedido', {
-            p_id_pedido: Number(pedido.id),
-            p_nuevo_estado: 'ENTREGADO',
-            p_id_medio: idMedio,
-            p_id_cuenta: idCuenta
-          })
-        : await supabaseAdmin.rpc('registrar_cobro_pedido', {
-            p_id_pedido: Number(pedido.id),
-            p_id_medio: idMedio,
-            p_id_cuenta: idCuenta
-          });
+    alConfirmar: async (idMedio, idCuenta, _entregar, monto) => {
+      const pesos = (n) => `$${(Math.round(Number(n) * 100) / 100).toLocaleString('es-AR')}`;
+      const esParcial = Math.round(Number(monto) * 100) < Math.round(Number(s.saldo) * 100);
 
+      if (entregar && !esParcial) {
+        // Entregar y cobrar todo van en la MISMA llamada: se guardan juntos o no se guarda nada.
+        const { error: errorCobro } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
+          p_id_pedido: Number(pedido.id),
+          p_nuevo_estado: 'ENTREGADO',
+          p_id_medio: idMedio,
+          p_id_cuenta: idCuenta
+        });
+        if (errorCobro) {
+          // Por ejemplo, si la caja de hoy ya está cerrada.
+          mostrarNotificacion(mensajeErrorFuncion(errorCobro, 'pedido'), 'danger');
+          return false;
+        }
+        mostrarNotificacion('Cobro registrado.');
+        cargarTablaPedidos();
+        return true;
+      }
+
+      // Cobro (completo o parcial) sin entregar. Con monto parcial se manda p_monto; sin él, la base cobra el saldo.
+      const { error: errorCobro } = await supabaseAdmin.rpc('registrar_cobro_pedido', {
+        p_id_pedido: Number(pedido.id),
+        p_id_medio: idMedio,
+        p_id_cuenta: idCuenta,
+        ...(esParcial ? { p_monto: Number(monto) } : {})
+      });
       if (errorCobro) {
-        // Por ejemplo, si la caja de hoy ya está cerrada.
         mostrarNotificacion(mensajeErrorFuncion(errorCobro, 'pedido'), 'danger');
         return false;
       }
 
-      mostrarNotificacion('Cobro registrado.');
+      // "Cobrar y entregar" con cobro parcial: son DOS pasos (cobro y después entrega sin cobrar el resto). Si la entrega
+      // falla, el cobro ya quedó registrado: se avisa y la ventana se cierra para no cobrar dos veces.
+      if (entregar) {
+        const { error: errorEntrega } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
+          p_id_pedido: Number(pedido.id),
+          p_nuevo_estado: 'ENTREGADO'
+        });
+        if (errorEntrega) {
+          mostrarNotificacion(`Se registró el cobro de ${pesos(monto)}, pero no se pudo marcar el pedido como entregado: ${mensajeErrorFuncion(errorEntrega, 'pedido')} Entregalo desde el listado.`, 'warning');
+          cargarTablaPedidos();
+          return true;
+        }
+      }
+
+      mostrarNotificacion(esParcial
+        ? `Cobro parcial registrado: ${pesos(monto)}. Faltan ${pesos(Number(s.saldo) - Number(monto))}${entregar ? '. Pedido entregado.' : '.'}`
+        : 'Cobro registrado.');
       cargarTablaPedidos();
       return true;
     }
@@ -848,6 +880,7 @@ export async function editarPedido(idPedido) {
     actualizarModoEdicionPOS();
 
     await volcarPedidoEnPOS(pedido);
+    guardarFotoPedidoEditando();   // para detectar "Guardar cambios" sin cambios
     mostrarNotificacion(`Editando Pedido #${pedido.id}`, 'info');
 
   } catch (err) {

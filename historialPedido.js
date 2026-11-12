@@ -92,9 +92,14 @@ function textoCambio(f) {
     return `↩️ <strong>Devolución registrada</strong> <span class="text-muted">(${textoEstado(f.r_estado_nuevo)})</span><br><small>${esc(formatearPesos(Math.abs(Number(f.r_importe_nuevo))))}</small>`;
   }
   // Traspaso de un pago entre pedidos (script 51): negativo = sale de este pedido, positivo = llega a este pedido.
+  // Desde el script 57 el movimiento guarda el pedido del otro lado (r_id_pedido_relacionado); los traspasos anteriores no lo tienen.
   if (f.r_evento === 'TRASPASO') {
     const sale = Number(f.r_importe_nuevo) < 0;
-    return `🔁 <strong>${sale ? 'Pago traspasado a otro pedido' : 'Pago recibido por traspaso'}</strong> <span class="text-muted">(${textoEstado(f.r_estado_nuevo)})</span><br><small>${esc(formatearPesos(Math.abs(Number(f.r_importe_nuevo))))}</small>`;
+    const otro = Number(f.r_id_pedido_relacionado);
+    const titulo = sale
+      ? (otro ? `Pago traspasado al pedido #${otro}` : 'Pago traspasado a otro pedido')
+      : (otro ? `Pago recibido del pedido #${otro}` : 'Pago recibido por traspaso');
+    return `🔁 <strong>${esc(titulo)}</strong> <span class="text-muted">(${textoEstado(f.r_estado_nuevo)})</span><br><small>${esc(formatearPesos(Math.abs(Number(f.r_importe_nuevo))))}</small>`;
   }
   // Pago (script 49): cobro (monto positivo). El estado no cambia.
   if (f.r_evento === 'PAGO') {

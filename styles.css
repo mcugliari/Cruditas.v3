@@ -1797,3 +1797,28 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
 }
+
+/* =============================================================================
+   BOTONES DE LOS ENCABEZADOS DE PANTALLA (Productos, Gastos y Retiros, Insumos, Cuentas, Compras, Proveedores, Usuarios)
+   Se activa poniendo la clase "acciones-encabezado" en el contenedor de los botones del encabezado (en index.html).
+   Una sola regla para todos: misma forma (píldora), mismo alto y mismo espacio entre botones, sin depender del color.
+   Para sumar otra pantalla alcanza con poner esa clase en su contenedor.
+   ============================================================================= */
+.acciones-encabezado { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; }
+.acciones-encabezado .btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 42px; padding: 0 1.2rem; border-radius: 999px; font-weight: 700;
+}
+/* Principal (amarillo) */
+.acciones-encabezado .btn-warning { border: 0; background: var(--cruditas-brand); color: #1b2d47; }
+.acciones-encabezado .btn-warning:hover { background: #deab2e; color: #1b2d47; }
+/* Secundario (contorno): "Categorías", "Transferir"... */
+.acciones-encabezado .btn-outline-dark { background: #fff; border: 1.5px solid #cfd6df; color: var(--cruditas-ink); }
+.acciones-encabezado .btn-outline-dark:hover { background: #f1f4f8; border-color: #b8c2cf; color: var(--cruditas-ink); }
+/* Oscuro: acción distinta de "nuevo" (por ejemplo "Nuevo Retiro") */
+.acciones-encabezado .btn-dark { border: 0; background: var(--cruditas-ink); color: #fff; }
+.acciones-encabezado .btn-dark:hover { background: var(--cruditas-ink-soft); color: #fff; }
+
+/* Cobro parcial: texto de ayuda bajo el campo "Monto a cobrar ahora" (cobro.js) */
+.cobro-monto-ayuda { margin-top: 6px; font-size: .88rem; color: #5b6878; min-height: 1.2em; }
+.cobro-monto-ayuda.text-warning-dark { color: #8a5a00; font-weight: 600; }

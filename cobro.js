@@ -73,7 +73,11 @@ function estiloMedio(m) {
 //     subtitulo   -> línea chica debajo del título
 //     total       -> importe a cobrar (número)
 //     unidades    -> cantidad de unidades (número)
-//     alConfirmar -> async (idMedio, idCuenta, entregar) => true | false   (entregar solo cambia con permiteAnticipado)
+//     permiteMontoParcial -> true = muestra "Monto a cobrar ahora" (arranca en el total y se puede bajar: seña o pago
+//                            en dos veces). El listado de pedidos lo usa. Sin esto se cobra siempre el total.
+//     ayudaParcial -> texto extra que se muestra cuando el monto es menor al total (opcional)
+//     alConfirmar -> async (idMedio, idCuenta, entregar, monto) => true | false
+//                    (entregar solo cambia con permiteAnticipado; monto es lo que se cobra ahora: el total, salvo cobro parcial)
 // -----------------------------------------------------------------------------
 export async function abrirModalCobro(ctx) {
   // Las dos consultas salen AL MISMO TIEMPO (Promise.all) y se espera a ambas.
@@ -111,6 +115,17 @@ export async function abrirModalCobro(ctx) {
     `<i class="fas fa-check mr-1"></i> ${esc(ctx.textoConfirmar || 'Confirmar cobro')}`;
   document.getElementById('cobro-paga-con').value = '';
   document.getElementById('cobro-cuenta').value = '';   // sin cuenta elegida al abrir
+
+  // "Monto a cobrar ahora": solo si quien abre la ventana lo permite. Arranca en el total (cobro completo).
+  document.getElementById('cobro-grupo-monto').classList.toggle('d-none', !ctx.permiteMontoParcial);
+  document.getElementById('cobro-monto').value = ctx.permiteMontoParcial ? String(Math.round(Number(ctx.total) * 100) / 100) : '';
+  document.getElementById('cobro-monto').oninput = () => { actualizarAyudaMonto(); actualizarVueltoCobro(); };
+  document.getElementById('cobro-monto-todo').onclick = () => {
+    document.getElementById('cobro-monto').value = String(Math.round(Number(contexto.total) * 100) / 100);
+    actualizarAyudaMonto();
+    actualizarVueltoCobro();
+  };
+  actualizarAyudaMonto();
 
   // "¿Se entrega ahora?": solo se ofrece cuando quien abre la ventana lo permite. Arranca en "Entregar ahora".
   document.getElementById('cobro-grupo-entrega').classList.toggle('d-none', !ctx.permiteAnticipado);
@@ -158,6 +173,50 @@ function elegirEntrega(entregar) {
     btn.classList.toggle('active', activo);
     btn.setAttribute('aria-checked', String(activo));
   });
+}
+
+
+// -----------------------------------------------------------------------------
+// montoElegido  (interna)
+//   Lo que se cobra ahora, en pesos con centavos. Sin cobro parcial es siempre el total. Devuelve NaN si el campo
+//   está vacío o no es un número.
+// -----------------------------------------------------------------------------
+function montoElegido() {
+  if (!contexto) return NaN;
+  if (!contexto.permiteMontoParcial) return Math.round(Number(contexto.total) * 100) / 100;
+  const valor = parseFloat(document.getElementById('cobro-monto').value);
+  return Number.isFinite(valor) ? Math.round(valor * 100) / 100 : NaN;
+}
+
+// ¿El monto está entre 0,01 y el total? (comparación en centavos para evitar errores de redondeo)
+function montoValido(monto) {
+  return Number.isFinite(monto) && Math.round(monto * 100) > 0
+    && Math.round(monto * 100) <= Math.round(Number(contexto.total) * 100);
+}
+
+// -----------------------------------------------------------------------------
+// actualizarAyudaMonto  (interna)
+//   Debajo del campo: cuánto queda por cobrar después de este pago, o un aviso si el monto no sirve.
+// -----------------------------------------------------------------------------
+function actualizarAyudaMonto() {
+  const ayuda = document.getElementById('cobro-monto-ayuda');
+  if (!ayuda) return;
+  if (!contexto || !contexto.permiteMontoParcial) { ayuda.textContent = ''; return; }
+
+  const monto = montoElegido();
+  if (!montoValido(monto)) {
+    ayuda.textContent = `Ingresá un monto entre ${formatearPesos(0.01)} y ${formatearPesos(contexto.total)}.`;
+    ayuda.className = 'cobro-monto-ayuda text-danger';
+    return;
+  }
+  const falta = Math.round((Number(contexto.total) - monto) * 100) / 100;
+  if (falta > 0) {
+    ayuda.textContent = `Después de este pago quedan ${formatearPesos(falta)} por cobrar.` + (contexto.ayudaParcial ? ` ${contexto.ayudaParcial}` : '');
+    ayuda.className = 'cobro-monto-ayuda text-warning-dark';
+  } else {
+    ayuda.textContent = 'Se cobra todo el saldo.';
+    ayuda.className = 'cobro-monto-ayuda';
+  }
 }
 
 
@@ -265,7 +324,10 @@ export function actualizarVueltoCobro() {
     return;
   }
 
-  const diferencia = pagaCon - Number(contexto.total);
+  // El vuelto se calcula contra lo que se cobra ahora (el total, salvo cobro parcial).
+  const aCobrar = montoElegido();
+  if (!Number.isFinite(aCobrar)) { salida.textContent = ''; return; }
+  const diferencia = pagaCon - aCobrar;
   if (diferencia >= 0) {
     salida.textContent = `Vuelto: ${formatearPesos(diferencia)}`;
     salida.className = 'cobro-vuelto text-success';
@@ -302,6 +364,14 @@ export async function confirmarCobro(e) {
     return;
   }
 
+  // Monto: con cobro parcial tiene que estar entre 0,01 y el total.
+  const monto = montoElegido();
+  if (contexto.permiteMontoParcial && !montoValido(monto)) {
+    mostrarNotificacion('Ingresá un monto válido para cobrar.', 'warning');
+    document.getElementById('cobro-monto').focus();
+    return;
+  }
+
   // Mientras se procesa: el botón muestra "Guardando…", no se puede cancelar ni cerrar la ventana
   // (ni con la X ni con Esc) y no se puede apretar de nuevo (evita un doble clic que cobre dos veces).
   const boton = document.getElementById('btn-confirmar-cobro');
@@ -320,7 +390,7 @@ export async function confirmarCobro(e) {
   let guardado = false;
   // try / finally: "finally" se ejecuta SIEMPRE al salir, así el botón nunca queda trabado.
   try {
-    guardado = await contexto.alConfirmar(Number(medio.id), idCuenta, contexto.permiteAnticipado ? entregarAhora : true);
+    guardado = await contexto.alConfirmar(Number(medio.id), idCuenta, contexto.permiteAnticipado ? entregarAhora : true, monto);
   } finally {
     $('#modal-cobro-pedido').off('hide.bs.modal', impedirCierre);   // antes de cerrar: si no, el cierre quedaría bloqueado
     procesandoCobro = false;

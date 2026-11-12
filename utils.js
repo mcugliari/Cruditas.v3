@@ -66,10 +66,16 @@ export function formatearFechaAR(fechaISO) {
   return `${dia}/${mes}/${anio}`;
 }
 
+// Fecha de HOY (AAAA-MM-DD) siempre en hora de Argentina, aunque el equipo tenga mal la zona horaria (igual que el
+// reloj de la barra y que fn_hoy_ar() en la base). Así el listado, los reportes y la caja arrancan en el mismo día
+// que la base.
+const ZONA_HORARIA_AR = 'America/Argentina/Buenos_Aires';
 export function obtenerFechaActualISO() {
-  const hoyObj = new Date();
-  const offset = hoyObj.getTimezoneOffset() * 60000;
-  return new Date(hoyObj.getTime() - offset).toISOString().split('T')[0];
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONA_HORARIA_AR, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  const valor = (tipo) => partes.find(p => p.type === tipo).value;
+  return `${valor('year')}-${valor('month')}-${valor('day')}`;
 }
 
 // =============================================================================
@@ -263,6 +269,7 @@ const MENSAJES_FUNCIONES = {
   // Devoluciones y traspasos de pagos (script 51)
   nada_para_devolver:   'Este pedido no tiene plata para devolver.',
   pedido_origen_invalido:  'El pago solo se traspasa desde un pedido anulado.',
+  origen_pago_invalido: 'El pago de un pedido anulado solo se puede traspasar a un pedido nuevo y sin cobrarlo en el mismo paso.',
   pedido_destino_invalido: 'El pedido que recibe el pago no puede estar anulado.',
   mismo_pedido:         'El pedido que recibe el pago tiene que ser otro.',
   pagos_insuficientes:  'El pedido no tiene pagos suficientes para traspasar ese monto.',

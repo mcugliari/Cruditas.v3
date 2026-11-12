@@ -6,6 +6,7 @@ import {
   cacheCategorias, setCacheCategorias, 
   pedidoEditandoId, setPedidoEditandoId,
   pedidoEditandoEstado, setPedidoEditandoEstado,
+  pedidoEditandoOriginal, setPedidoEditandoOriginal,
   pedidoPagoOrigen, setPedidoPagoOrigen
 } from './state.js';
 
@@ -758,6 +759,29 @@ export function actualizarResumenCarrito() {
   anunciarCambioCarrito(totalItems, montoTotalFinal);
 }
 
+// -----------------------------------------------------------------------------
+// fotoPedidoEnPantalla / guardarFotoPedidoEditando
+//   Texto que resume lo que hay en el POS (cliente, lista, referencia y productos con su cantidad). Al abrir un pedido
+//   para editarlo se guarda una foto (pedidos.js llama a guardarFotoPedidoEditando); al apretar "Guardar cambios" se
+//   compara con la de ese momento: si son iguales, no hubo cambios y no se guarda nada.
+// -----------------------------------------------------------------------------
+function fotoPedidoEnPantalla() {
+  const items = Object.entries(carrito)
+    .map(([id, cant]) => [Number(id), Number(cant) || 0])
+    .filter(([, cant]) => cant > 0)
+    .sort((a, b) => a[0] - b[0]);
+  return JSON.stringify({
+    cliente: String(document.getElementById('select-cliente-pedido')?.value || ''),
+    lista: String(document.getElementById('select-lista-pedido')?.value || ''),
+    referencia: (document.getElementById('input-ref-cliente')?.value || '').trim(),
+    items
+  });
+}
+
+export function guardarFotoPedidoEditando() {
+  setPedidoEditandoOriginal(fotoPedidoEnPantalla());
+}
+
 export async function resetearPedido() {
   descartarDeshacer();   // al empezar de cero (guardar, cancelar edición...) un "Deshacer" anterior ya no corresponde
   const inputRef = document.getElementById('input-ref-cliente');
@@ -773,6 +797,7 @@ export async function resetearPedido() {
 
   setPedidoEditandoId(null);
   setPedidoEditandoEstado(null);
+  setPedidoEditandoOriginal(null);
   setPedidoPagoOrigen(null);    // y se corta el vínculo con el pago de un pedido anulado (opción B)
   actualizarModoEdicionPOS();   // vuelve el título, los colores y los botones de un pedido nuevo
   setCarrito({});
@@ -810,7 +835,10 @@ export function actualizarModoEdicionPOS() {
   if (sub) {
     sub.classList.toggle('d-none', !modoEspecial);
     const rotulo = ROTULO_ESTADO_EDICION[pedidoEditandoEstado] || pedidoEditandoEstado || '';
-    sub.textContent = editando && rotulo ? `Estado actual: ${rotulo} · no cambia al guardar`
+    sub.textContent = editando && rotulo
+      ? (pedidoEditandoEstado === 'LISTO'
+          ? `Estado actual: ${rotulo} · al guardar vuelve a En preparación (la cocina lo rehace)`
+          : `Estado actual: ${rotulo} · no cambia al guardar`)
       : conPago ? `Al guardar, el pago del pedido anulado #${pedidoPagoOrigen.id} (hasta $${Number(pedidoPagoOrigen.aDevolver).toLocaleString('es-AR')}) pasa a este pedido`
       : '';
   }
@@ -1101,6 +1129,24 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
     return;
   }
 
+  // "Guardar cambios" sin haber cambiado nada: no se guarda (y un pedido LISTO no vuelve a preparación para nada).
+  // Se sigue en la edición por si se quiere cambiar algo; "Cancelar edición" sale sin guardar.
+  if (estadoInicial === 'MANTENER' && !cobro && pedidoEditandoOriginal !== null
+      && fotoPedidoEnPantalla() === pedidoEditandoOriginal) {
+    mostrarNotificacion(`No hiciste ningún cambio en el pedido #${pedidoEditandoId}.`, 'info');
+    return;
+  }
+
+  // Cobrar un pedido que se abrió para editar pero NO se modificó: se registra solo el cobro, sin tocar el pedido (no cuenta
+  // como una edición: un pedido LISTO no vuelve a preparación). Lo único que no se puede por este camino es entregar
+  // directo un pedido que todavía está EN_PREPARACION (la base exige pasar por LISTO): ese caso sigue por guardar_pedido.
+  if (cobro && pedidoEditandoId && pedidoEditandoOriginal !== null
+      && fotoPedidoEnPantalla() === pedidoEditandoOriginal
+      && (estadoInicial === 'MANTENER' || (estadoInicial === 'ENTREGADO' && pedidoEditandoEstado === 'LISTO'))) {
+    await cobrarPedidoSinCambios(estadoInicial === 'ENTREGADO', cobro);
+    return;
+  }
+
   const keys = Object.keys(carrito);
   if (keys.length === 0) {
     mostrarNotificacion('Agregá al menos un producto al carrito.', 'warning');
@@ -1150,6 +1196,11 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   }
 
   const eraEdicion = Boolean(pedidoEditandoId);
+  // Opción B: pedido nuevo con el pago de uno anulado. El traspaso va DENTRO de guardar_pedido (script 55): se guarda el
+  // pedido y se traspasa el pago en una sola operación; si el traspaso falla, el pedido tampoco se guarda.
+  const origenPago = (!eraEdicion && pedidoPagoOrigen) ? pedidoPagoOrigen : null;
+  // Si se edita un pedido que estaba LISTO, la base lo devuelve a EN_PREPARACION (script 54): la cocina tiene que rehacerlo.
+  const volvioAPreparacion = eraEdicion && estadoInicial === 'MANTENER' && pedidoEditandoEstado === 'LISTO';
 
   let data = null;
   let error = null;
@@ -1162,7 +1213,9 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
     p_estado: estadoInicial,
     p_items: items,
     p_id_medio: cobro ? cobro.idMedio : null,
-    p_id_cuenta: cobro ? cobro.idCuenta : null
+    p_id_cuenta: cobro ? cobro.idCuenta : null,
+    // Solo se manda en la opción B (así un pedido común no depende de la función nueva).
+    ...(origenPago ? { p_id_origen_pago: Number(origenPago.id) } : {})
   }));
   } catch (fallo) {
     error = fallo;   // una excepción de red cuenta como error de conexión
@@ -1186,12 +1239,13 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
     return;
   }
 
-  mostrarNotificacion(`¡Pedido #${data.id_pedido} ${eraEdicion ? 'actualizado' : 'registrado'} con éxito!`, 'success');
+  mostrarNotificacion(volvioAPreparacion
+    ? `Pedido #${data.id_pedido} actualizado: vuelve a En Preparación para que la cocina lo rehaga.`
+    : `¡Pedido #${data.id_pedido} ${eraEdicion ? 'actualizado' : 'registrado'} con éxito!`, 'success');
 
-  // Opción B: pedido nuevo con el pago de uno anulado. Guardar y traspasar son DOS llamadas (no una sola operación): si el
-  // traspaso falla, el pedido nuevo igual queda guardado y se avisa cómo resolverlo desde Pendientes.
-  const origenPago = (!eraEdicion && pedidoPagoOrigen) ? pedidoPagoOrigen : null;
-  const huboTraspaso = origenPago ? await traspasarPagoAlNuevo(origenPago, data.id_pedido) : false;
+  // Opción B: el pago ya se traspasó dentro de guardar_pedido (misma transacción). Acá solo se avisa el resultado.
+  const huboTraspaso = Boolean(origenPago);
+  if (origenPago) avisarTraspaso(origenPago, data.id_pedido, data.traspaso);
 
   if (inputRef) inputRef.value = '';
 
@@ -1199,43 +1253,75 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   resetearPedido();
 
   // Impresión automática (si este equipo la tiene activada en la pantalla "Impresión").
-  programarImpresion(data.id_pedido, estadoInicial, eraEdicion, Boolean(cobro) || huboTraspaso);
+  programarImpresion(data.id_pedido, estadoInicial, eraEdicion, Boolean(cobro) || huboTraspaso, volvioAPreparacion);
 }
 
 // -----------------------------------------------------------------------------
-// traspasarPagoAlNuevo  (interna)
-//   Opción B: pasa el pago del pedido anulado (origen) al pedido recién guardado. Devuelve true si se traspasó.
-//   Si falla, avisa con claridad (el pedido nuevo queda guardado, sin pago) y devuelve false.
+// cobrarPedidoSinCambios  (interna)
+//   Cobro de un pedido que se abrió para editar y no se modificó. Hace lo mismo que el Listado de Pedidos:
+//     entregar ahora (pedido LISTO)  -> cambiar_estado_pedido a ENTREGADO con el cobro
+//     pagó por adelantado            -> registrar_cobro_pedido (el pedido conserva su estado)
+//   El pedido no se reescribe. Si sale bien, limpia el POS e imprime el ticket según las preferencias del equipo.
 // -----------------------------------------------------------------------------
-async function traspasarPagoAlNuevo(origen, idNuevo) {
-  let data = null;
+async function cobrarPedidoSinCambios(entregar, cobro) {
+  const idPedido = pedidoEditandoId;
   let error = null;
   try {
-    ({ data, error } = await supabaseAdmin.rpc('traspasar_pago_pedido', {
-      p_id_origen: Number(origen.id),
-      p_id_destino: Number(idNuevo)
-    }));
+    ({ error } = entregar
+      ? await supabaseAdmin.rpc('cambiar_estado_pedido', {
+          p_id_pedido: Number(idPedido),
+          p_nuevo_estado: 'ENTREGADO',
+          p_id_medio: cobro.idMedio,
+          p_id_cuenta: cobro.idCuenta
+        })
+      : await supabaseAdmin.rpc('registrar_cobro_pedido', {
+          p_id_pedido: Number(idPedido),
+          p_id_medio: cobro.idMedio,
+          p_id_cuenta: cobro.idCuenta
+        }));
   } catch (fallo) {
     error = fallo;
   }
 
   if (error) {
-    mostrarAvisoConAccion({
-      mensaje: `El pedido #${idNuevo} se guardó, pero NO se pudo traspasar el pago del pedido anulado #${origen.id}: ${mensajeErrorFuncion(error, 'pedido')} `
-        + `Hacelo desde el Listado de Pedidos → Pendientes, con "Traspasar pago" en el #${origen.id}.`,
-      textoAccion: 'Entendido',
-      duracionMs: 0,
-      tipo: 'peligro'
-    });
-    return false;
+    if (esErrorDeConexion(error)) {
+      // La respuesta nunca llegó: el cobro PUDO registrarse. Se avisa que primero hay que mirar el listado.
+      mostrarAvisoConAccion({
+        mensaje: `No se pudo confirmar si el cobro del pedido #${idPedido} se registró (falló la conexión). Antes de volver a intentar, revisá en "Listado de Pedidos" si ya figura como cobrado.`,
+        textoAccion: 'Entendido',
+        duracionMs: 0,
+        tipo: 'peligro'
+      });
+      return;
+    }
+    mostrarNotificacion('Error al registrar el cobro: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
+    return;
   }
 
+  mostrarNotificacion(entregar
+    ? `Pedido #${idPedido} cobrado y entregado.`
+    : `Cobro registrado en el pedido #${idPedido}.`, 'success');
+
+  const inputRef = document.getElementById('input-ref-cliente');
+  if (inputRef) inputRef.value = '';
+  setPedidoEditandoId(null);
+  resetearPedido();
+
+  // Ticket según las preferencias de este equipo (la comanda ya salió cuando se tomó el pedido).
+  programarImpresion(idPedido, entregar ? 'ENTREGADO' : 'MANTENER', true, true, false);
+}
+
+// -----------------------------------------------------------------------------
+// avisarTraspaso  (interna)
+//   Opción B: avisa cuánto se traspasó del pedido anulado (origen) al pedido recién guardado. El traspaso lo hizo
+//   guardar_pedido (script 55) y devuelve el resultado en data.traspaso; esta función no llama a la base.
+// -----------------------------------------------------------------------------
+function avisarTraspaso(origen, idNuevo, traspaso) {
   const pesos = (n) => `$${Number(n || 0).toLocaleString('es-AR')}`;
-  let mensaje = `Pago traspasado: ${pesos(data?.traspasado)} del pedido #${origen.id} al #${idNuevo}.`;
-  if (Number(data?.a_devolver_origen) > 0) mensaje += ` Quedan ${pesos(data.a_devolver_origen)} a devolver en el #${origen.id}.`;
-  if (Number(data?.saldo_destino) > 0) mensaje += ` Al #${idNuevo} le faltan cobrar ${pesos(data.saldo_destino)}.`;
-  mostrarNotificacion(mensaje, Number(data?.a_devolver_origen) > 0 || Number(data?.saldo_destino) > 0 ? 'warning' : 'success');
-  return true;
+  let mensaje = `Pago traspasado: ${pesos(traspaso?.traspasado)} del pedido #${origen.id} al #${idNuevo}.`;
+  if (Number(traspaso?.a_devolver_origen) > 0) mensaje += ` Quedan ${pesos(traspaso.a_devolver_origen)} a devolver en el #${origen.id}.`;
+  if (Number(traspaso?.saldo_destino) > 0) mensaje += ` Al #${idNuevo} le faltan cobrar ${pesos(traspaso.saldo_destino)}.`;
+  mostrarNotificacion(mensaje, Number(traspaso?.a_devolver_origen) > 0 || Number(traspaso?.saldo_destino) > 0 ? 'warning' : 'success');
 }
 
 // -----------------------------------------------------------------------------
@@ -1246,11 +1332,11 @@ async function traspasarPagoAlNuevo(origen, idNuevo) {
 //     Cobrar y entregar (pedido editado)       -> solo el ticket (la comanda ya salió al prepararlo)
 //     Pago por adelantado (pedido nuevo)       -> comanda (si está activada) y ticket
 //     Pago por adelantado (pedido editado)     -> solo el ticket
-//     Editar sin cobrar                        -> nada
+//     Editar sin cobrar                        -> nada (si estaba LISTO y vuelve a preparación: comanda MODIFICADA)
 //   La impresión se difiere un instante (setTimeout) y NO se espera: el pedido ya está
 //   guardado y la pantalla ya se limpió, así que un problema de la impresora no afecta nada.
 // -----------------------------------------------------------------------------
-function programarImpresion(idPedido, estado, eraEdicion, huboCobro) {
+function programarImpresion(idPedido, estado, eraEdicion, huboCobro, modificada = false) {
   const pref = leerPreferenciasImpresion();
   let comanda = false;
   let ticket = false;
@@ -1264,13 +1350,15 @@ function programarImpresion(idPedido, estado, eraEdicion, huboCobro) {
   } else {
     // 'EN_PREPARACION' (nuevo) o 'MANTENER' (edición): la comanda sale solo al crear el pedido; el ticket, solo si se cobró.
     comanda = estado === 'EN_PREPARACION' && pref.comandaAlPreparar && !eraEdicion;
+    // Un pedido que estaba Listo y se modificó vuelve a la cocina: sale una comanda nueva marcada como MODIFICADA.
+    if (modificada && pref.comandaAlPreparar) comanda = true;
     ticket = huboCobro && pref.imprimirAlCobrar;
   }
   if (!comanda && !ticket) return;
 
   setTimeout(async () => {
     try {
-      const ok = await imprimirAutomatico(idPedido, { comanda, ticket });
+      const ok = await imprimirAutomatico(idPedido, { comanda, ticket, modificada });
       if (!ok) throw new Error('No se encontró el pedido para imprimir.');
     } catch (err) {
       console.error('Error al imprimir automáticamente:', err);

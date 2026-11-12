@@ -89,13 +89,13 @@ export async function elegirPedidoDestino({ idOrigen, aDevolver }) {
           <div class="modal-body">
             <p class="mb-2">Hay <strong>${esc(pesos(aDevolver))}</strong> pagados en el pedido anulado.
                Elegí el pedido <strong>nuevo</strong> que recibe ese pago:</p>
-            <input type="search" class="form-control form-control-sm mb-2" id="traspaso-buscar" placeholder="Buscar por número o nombre…" autocomplete="off">
+            <input type="search" class="form-control mb-2" style="font-size: 16px;" id="traspaso-buscar" placeholder="Buscar por número o nombre…" autocomplete="off">
             <div id="traspaso-lista" class="list-group" style="max-height: 280px; overflow-y: auto;"></div>
             <div id="traspaso-resumen" class="alert alert-info small mt-3 mb-0 d-none"></div>
           </div>
           <div class="modal-footer border-0 pt-0">
-            <button type="button" class="btn btn-light" data-dismiss="modal">Cancelar</button>
-            <button type="button" class="btn btn-primary font-weight-bold" id="traspaso-aceptar" disabled>
+            <button type="button" class="btn btn-light btn-lg px-4" data-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary btn-lg font-weight-bold px-4" id="traspaso-aceptar" disabled>
               <i class="fas fa-exchange-alt mr-1"></i> Traspasar pago
             </button>
           </div>
@@ -123,7 +123,7 @@ export async function elegirPedidoDestino({ idOrigen, aDevolver }) {
         return;
       }
       lista.innerHTML = visibles.map(p => `
-        <button type="button" class="list-group-item list-group-item-action py-2 ${elegido === p.id ? 'active' : ''}" data-id="${p.id}">
+        <button type="button" class="list-group-item list-group-item-action py-3 ${elegido === p.id ? 'active' : ''}" data-id="${p.id}">
           <div class="d-flex justify-content-between">
             <strong>#${p.id} · ${esc(p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final')}</strong>
             <span>${esc(pesos(p.importe_total))}</span>
@@ -202,22 +202,22 @@ export function elegirQueHacerConElPago({ idOrigen, aDevolver }) {
           <div class="modal-body">
             <p class="mb-3">El pedido #${esc(idOrigen)} tenía <strong>${esc(pesos(aDevolver))}</strong> pagados.</p>
             <div class="list-group">
-              <button type="button" class="list-group-item list-group-item-action" data-opcion="NUEVO">
+              <button type="button" class="list-group-item list-group-item-action py-3" data-opcion="NUEVO">
                 <strong><i class="fas fa-plus-circle mr-2 text-success"></i>Cargar un pedido nuevo con este pago</strong>
                 <div class="small text-muted">Abre el POS con los productos del pedido para cambiarlos. Al guardar, el pago pasa al nuevo.</div>
               </button>
-              <button type="button" class="list-group-item list-group-item-action" data-opcion="TRASPASAR">
+              <button type="button" class="list-group-item list-group-item-action py-3" data-opcion="TRASPASAR">
                 <strong><i class="fas fa-exchange-alt mr-2 text-primary"></i>Pasarlo a un pedido que ya cargué</strong>
                 <div class="small text-muted">Elegís el pedido de una lista.</div>
               </button>
-              <button type="button" class="list-group-item list-group-item-action" data-opcion="DEVOLVER">
+              <button type="button" class="list-group-item list-group-item-action py-3" data-opcion="DEVOLVER">
                 <strong><i class="fas fa-undo mr-2 text-danger"></i>Devolver la plata ahora</strong>
                 <div class="small text-muted">Por efectivo del cajón o desde una cuenta.</div>
               </button>
             </div>
           </div>
           <div class="modal-footer border-0 pt-0">
-            <button type="button" class="btn btn-light" data-opcion="DESPUES">Resolverlo después</button>
+            <button type="button" class="btn btn-light btn-lg px-4" data-opcion="DESPUES">Resolverlo después</button>
           </div>
         </div>
       </div>`;

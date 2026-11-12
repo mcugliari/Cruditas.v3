@@ -551,8 +551,8 @@
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-boxes mr-2 text-warning"></i>Gestión de Productos</h1></div>
-            <div class="col-sm-6 text-right">
-              <button class="btn btn-outline-warning font-weight-bold mr-2" id="btn-categorias-productos" title="Crear categorías y definir sus grupos"><i class="fas fa-tags mr-1"></i> Categorías</button>
+            <div class="col-sm-6 acciones-encabezado">
+              <button class="btn btn-outline-dark font-weight-bold" id="btn-categorias-productos" title="Crear categorías y definir sus grupos"><i class="fas fa-tags mr-1"></i> Categorías</button>
               <button class="btn btn-warning font-weight-bold" id="btn-nuevo-producto"><i class="fas fa-plus mr-1"></i> Nuevo Producto</button>
             </div>
           </div>
@@ -582,9 +582,9 @@
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
             <div class="col-sm-5"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-money-bill-wave mr-2 text-warning"></i>Gastos y Retiros</h1></div>
-            <div class="col-sm-7 text-right">
-              <button class="btn btn-outline-dark font-weight-bold mr-1" type="button" data-categorias="egreso"><i class="fas fa-folder-open mr-1"></i> Categorías</button>
-              <button class="btn btn-warning font-weight-bold mr-1" id="btn-nuevo-gasto"><i class="fas fa-plus mr-1"></i> Nuevo Gasto</button>
+            <div class="col-sm-7 acciones-encabezado">
+              <button class="btn btn-outline-dark font-weight-bold" type="button" data-categorias="egreso"><i class="fas fa-tags mr-1"></i> Categorías</button>
+              <button class="btn btn-warning font-weight-bold" id="btn-nuevo-gasto"><i class="fas fa-plus mr-1"></i> Nuevo Gasto</button>
               <button class="btn btn-dark font-weight-bold" id="btn-nuevo-retiro" data-rol-min="DUENO"><i class="fas fa-hand-holding-usd mr-1"></i> Nuevo Retiro</button>
             </div>
           </div>
@@ -715,7 +715,7 @@
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-shopping-basket mr-2 text-warning"></i>Compras</h1></div>
-            <div class="col-sm-6 text-right">
+            <div class="col-sm-6 acciones-encabezado">
               <button class="btn btn-warning font-weight-bold" id="btn-nueva-compra"><i class="fas fa-plus mr-1"></i> Nueva Compra</button>
             </div>
           </div>
@@ -931,7 +931,7 @@
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-truck mr-2 text-warning"></i>Proveedores</h1></div>
-            <div class="col-sm-6 text-right">
+            <div class="col-sm-6 acciones-encabezado">
               <button class="btn btn-warning font-weight-bold" id="btn-nuevo-proveedor"><i class="fas fa-plus mr-1"></i> Nuevo Proveedor</button>
             </div>
           </div>
@@ -961,7 +961,7 @@
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-user-shield mr-2 text-warning"></i>Usuarios</h1></div>
-            <div class="col-sm-6 text-right">
+            <div class="col-sm-6 acciones-encabezado">
               <button class="btn btn-outline-dark font-weight-bold" id="btn-actualizar-usuarios"><i class="fas fa-sync-alt mr-1"></i> Actualizar</button>
             </div>
           </div>
@@ -1043,8 +1043,8 @@
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-wallet mr-2 text-warning"></i>Cuentas y Saldos</h1></div>
-            <div class="col-sm-6 text-right">
-              <button class="btn btn-outline-dark font-weight-bold mr-2" id="btn-transferir" data-rol-min="DUENO"><i class="fas fa-exchange-alt mr-1"></i> Transferir</button>
+            <div class="col-sm-6 acciones-encabezado">
+              <button class="btn btn-outline-dark font-weight-bold" id="btn-transferir" data-rol-min="DUENO"><i class="fas fa-exchange-alt mr-1"></i> Transferir</button>
               <button class="btn btn-warning font-weight-bold" id="btn-nueva-cuenta" data-rol-min="DUENO"><i class="fas fa-plus mr-1"></i> Nueva Cuenta</button>
             </div>
           </div>
@@ -1112,8 +1112,8 @@
         <div class="container-fluid">
           <div class="row mb-2 align-items-center">
             <div class="col-sm-6"><h1 class="m-0 font-weight-bold text-dark"><i class="fas fa-boxes-stacked mr-2 text-warning"></i>Insumos</h1></div>
-            <div class="col-sm-6 text-right">
-              <button class="btn btn-outline-dark font-weight-bold mr-1" type="button" data-categorias="insumo"><i class="fas fa-folder-open mr-1"></i> Categorías</button>
+            <div class="col-sm-6 acciones-encabezado">
+              <button class="btn btn-outline-dark font-weight-bold" type="button" data-categorias="insumo"><i class="fas fa-tags mr-1"></i> Categorías</button>
               <button class="btn btn-warning font-weight-bold" id="btn-nuevo-insumo"><i class="fas fa-plus mr-1"></i> Nuevo Insumo</button>
             </div>
           </div>
@@ -2098,6 +2098,16 @@
                 <div class="cobro-total-importe" id="cobro-total"></div>
               </div>
               <span class="cobro-total-unidades" id="cobro-unidades"></span>
+            </div>
+
+            <!-- Monto a cobrar ahora: solo lo muestra el listado de pedidos (cobro.js). Arranca en el total; bajarlo = cobro parcial -->
+            <div class="d-none" id="cobro-grupo-monto">
+              <label for="cobro-monto" class="cobro-seccion-titulo d-block">Monto a cobrar ahora</label>
+              <div class="d-flex align-items-center">
+                <input type="number" class="form-control" id="cobro-monto" min="0.01" step="0.01" inputmode="decimal" style="font-size: 16px;">
+                <button type="button" class="btn btn-outline-secondary ml-2 text-nowrap" id="cobro-monto-todo">Todo</button>
+              </div>
+              <div class="cobro-monto-ayuda" id="cobro-monto-ayuda"></div>
             </div>
 
             <!-- ¿Se entrega ahora? Solo lo muestra el POS (cobro.js): "Pagó por adelantado" deja el pedido en preparación -->

@@ -32,7 +32,8 @@ export async function obtenerPedidoParaImprimir(idPedido) {
   return pedido;
 }
 
-export function imprimirComprobante(pedido, esComandaCocina = false) {
+// esModificada: comanda de un pedido que estaba Listo y se cambió: sale marcada para que la cocina lo rehaga.
+export function imprimirComprobante(pedido, esComandaCocina = false, esModificada = false) {
   if (!pedido) return;
 
   let ticketElem = document.getElementById('ticket-impresion');
@@ -58,9 +59,11 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
   }
   
   // Formatear hora de creación
+  // Siempre en hora de Argentina, aunque el equipo tenga mal la zona.
+  const opcionesHora = { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' };
   const horaPedido = pedido.created_at 
-    ? new Date(pedido.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    ? new Date(pedido.created_at).toLocaleTimeString('es-AR', opcionesHora)
+    : new Date().toLocaleTimeString('es-AR', opcionesHora);
 
   const items = pedido.TB_DPEDIDOS || [];
 
@@ -120,7 +123,7 @@ export function imprimirComprobante(pedido, esComandaCocina = false) {
     <div class="ticket-wrapper">
       <div class="encabezado">
         <h2>🍕 CRUDITAS 🥟</h2>
-        <p class="subtitulo">${esComandaCocina ? '*** COMANDA COCINA ***' : 'COMPROBANTE DE VENTA'}</p>
+        <p class="subtitulo">${esComandaCocina ? (esModificada ? '*** COMANDA MODIFICADA ***' : '*** COMANDA COCINA ***') : 'COMPROBANTE DE VENTA'}</p>
         <hr class="dashed">
         <p><strong>Pedido #${pedido.id}</strong> | ${horaPedido} hs</p>
         <p><strong>Cliente:</strong> ${esc(clienteNombre)}</p>
@@ -163,11 +166,11 @@ const esperar = (ms) => new Promise(resolver => setTimeout(resolver, ms));
 // Lee el pedido ya guardado y manda a imprimir la comanda y/o el ticket.
 // Si hay que imprimir los dos, va primero la comanda y después el ticket.
 // Devuelve true si imprimió, false si no encontró el pedido.
-export async function imprimirAutomatico(idPedido, { comanda = false, ticket = false } = {}) {
+export async function imprimirAutomatico(idPedido, { comanda = false, ticket = false, modificada = false } = {}) {
   const pedido = await obtenerPedidoParaImprimir(idPedido);
   if (!pedido) return false;
 
-  if (comanda) imprimirComprobante(pedido, true);
+  if (comanda) imprimirComprobante(pedido, true, modificada);
   if (comanda && ticket) await esperar(700);
   if (ticket) imprimirComprobante(pedido, false);
   return true;
