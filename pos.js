@@ -10,7 +10,7 @@ import {
   pedidoPagoOrigen, setPedidoPagoOrigen
 } from './state.js';
 
-import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion, formatearPesos } from './utils.js';
+import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion, confirmarEntregaConSaldo, formatearPesos } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
 import { leerPreferenciasImpresion } from './preferencias.js';
 import { imprimirAutomatico } from './impresion.js';
@@ -1052,9 +1052,10 @@ export async function vaciarCarrito() {
 //   docena y el TOTAL los calcula el servidor; lo que se ve en pantalla es solo una vista previa.
 //   estadoInicial: 'EN_PREPARACION' (pedido nuevo), 'ENTREGADO' (se entrega en el acto) o
 //   'MANTENER' (solo al editar: "Guardar cambios"; la base deja el pedido en el estado que tiene).
-//   cobro: null, o { idMedio, idCuenta } cuando viene de la ventana de cobro. Con cobro, la base registra UN pago
-//   por el total del pedido (script 49): con 'ENTREGADO' es cobrar y entregar; con 'EN_PREPARACION' o 'MANTENER'
-//   es un pago por adelantado (el pedido sigue su camino en cocina).
+//   cobro: null, o { idMedio, idCuenta, monto? } cuando viene de la ventana de cobro. Con cobro, la base registra UN pago
+//   (script 49): por el total del pedido, o por "monto" si viene (cobro parcial / seña, script 58; solo se manda si es menor
+//   al total). Con 'ENTREGADO' es cobrar y entregar; con 'EN_PREPARACION' o 'MANTENER' es un pago por adelantado (el pedido
+//   sigue su camino en cocina). Con un cobro parcial el pedido queda con saldo por cobrar.
 // -----------------------------------------------------------------------------
 // Mientras un pedido se está guardando, un segundo toque (doble clic) no hace nada: así no se
 // crea el pedido dos veces ni se imprime dos veces. "finally" libera el bloqueo siempre.
@@ -1166,11 +1167,11 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   const inputRef = document.getElementById('input-ref-cliente');
   const nombreReferencia = inputRef ? inputRef.value.trim() : '';
 
-  // La referencia solo se exige si el pedido NO se cobra y entrega en el momento.
-  // (El servidor repite esta regla; acá se avisa antes para no hacer el viaje.)
-  const seCobraYEntregaYa = estadoInicial === 'ENTREGADO' && Boolean(cobro);
-  if (idCliente === '1' && nombreReferencia === '' && !seCobraYEntregaYa) {
-    mostrarNotificacion('Indicá un nombre o referencia. Solo podés omitirlo si cobrás y entregás en el momento.', 'warning');
+  // La referencia solo se exige si el pedido NO se cobra por completo y entrega en el momento (un cobro parcial deja un
+  // saldo que tiene que tener dueño). (El servidor repite esta regla; acá se avisa antes para no hacer el viaje.)
+  const seCobraTodoYEntregaYa = estadoInicial === 'ENTREGADO' && Boolean(cobro) && !(Number(cobro.monto) > 0);
+  if (idCliente === '1' && nombreReferencia === '' && !seCobraTodoYEntregaYa) {
+    mostrarNotificacion('Indicá un nombre o referencia. Solo podés omitirlo si cobrás todo y entregás en el momento.', 'warning');
     if (inputRef) inputRef.focus();
     return; // Interrumpe el guardado
   }
@@ -1215,7 +1216,9 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
     p_id_medio: cobro ? cobro.idMedio : null,
     p_id_cuenta: cobro ? cobro.idCuenta : null,
     // Solo se manda en la opción B (así un pedido común no depende de la función nueva).
-    ...(origenPago ? { p_id_origen_pago: Number(origenPago.id) } : {})
+    ...(origenPago ? { p_id_origen_pago: Number(origenPago.id) } : {}),
+    // Solo se manda en un cobro parcial / seña (script 58): una venta común no depende de la función nueva.
+    ...(cobro && Number(cobro.monto) > 0 ? { p_monto: Number(cobro.monto) } : {})
   }));
   } catch (fallo) {
     error = fallo;   // una excepción de red cuenta como error de conexión
@@ -1239,9 +1242,13 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
     return;
   }
 
-  mostrarNotificacion(volvioAPreparacion
+  // Con un cobro parcial (seña) se aclara cuánto se cobró y cuánto falta (lo devuelve la base).
+  const saldoPendiente = cobro ? Number(data.saldo) : 0;
+  let textoOk = volvioAPreparacion
     ? `Pedido #${data.id_pedido} actualizado: vuelve a En Preparación para que la cocina lo rehaga.`
-    : `¡Pedido #${data.id_pedido} ${eraEdicion ? 'actualizado' : 'registrado'} con éxito!`, 'success');
+    : `¡Pedido #${data.id_pedido} ${eraEdicion ? 'actualizado' : 'registrado'} con éxito!`;
+  if (saldoPendiente > 0) textoOk += ` Cobrado ${formatearPesos(data.cobrado)}; falta cobrar ${formatearPesos(saldoPendiente)}.`;
+  mostrarNotificacion(textoOk, saldoPendiente > 0 ? 'warning' : 'success');
 
   // Opción B: el pago ya se traspasó dentro de guardar_pedido (misma transacción). Acá solo se avisa el resultado.
   const huboTraspaso = Boolean(origenPago);
@@ -1261,13 +1268,17 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
 //   Cobro de un pedido que se abrió para editar y no se modificó. Hace lo mismo que el Listado de Pedidos:
 //     entregar ahora (pedido LISTO)  -> cambiar_estado_pedido a ENTREGADO con el cobro
 //     pagó por adelantado            -> registrar_cobro_pedido (el pedido conserva su estado)
+//     cobro parcial (cobro.monto)    -> registrar_cobro_pedido con p_monto; si además se entrega, la entrega es un SEGUNDO paso
+//                                      (cambiar_estado_pedido sin cobro), igual que en el listado: el pedido queda con saldo.
 //   El pedido no se reescribe. Si sale bien, limpia el POS e imprime el ticket según las preferencias del equipo.
 // -----------------------------------------------------------------------------
 async function cobrarPedidoSinCambios(entregar, cobro) {
   const idPedido = pedidoEditandoId;
+  const esParcial = Number(cobro.monto) > 0;   // solo viene cuando se cobra menos que el total
   let error = null;
+  let errorEntrega = null;   // solo en cobro parcial + entregar: el cobro salió bien pero la entrega falló
   try {
-    ({ error } = entregar
+    ({ error } = (entregar && !esParcial)
       ? await supabaseAdmin.rpc('cambiar_estado_pedido', {
           p_id_pedido: Number(idPedido),
           p_nuevo_estado: 'ENTREGADO',
@@ -1277,10 +1288,23 @@ async function cobrarPedidoSinCambios(entregar, cobro) {
       : await supabaseAdmin.rpc('registrar_cobro_pedido', {
           p_id_pedido: Number(idPedido),
           p_id_medio: cobro.idMedio,
-          p_id_cuenta: cobro.idCuenta
+          p_id_cuenta: cobro.idCuenta,
+          ...(esParcial ? { p_monto: Number(cobro.monto) } : {})
         }));
   } catch (fallo) {
     error = fallo;
+  }
+
+  // Cobro parcial + entregar: segundo paso, la entrega sin cobrar el resto (el cobro ya quedó registrado).
+  if (!error && entregar && esParcial) {
+    try {
+      ({ error: errorEntrega } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
+        p_id_pedido: Number(idPedido),
+        p_nuevo_estado: 'ENTREGADO'
+      }));
+    } catch (fallo) {
+      errorEntrega = fallo;
+    }
   }
 
   if (error) {
@@ -1298,9 +1322,16 @@ async function cobrarPedidoSinCambios(entregar, cobro) {
     return;
   }
 
-  mostrarNotificacion(entregar
-    ? `Pedido #${idPedido} cobrado y entregado.`
-    : `Cobro registrado en el pedido #${idPedido}.`, 'success');
+  const entregado = entregar && !errorEntrega;
+  if (errorEntrega) {
+    mostrarNotificacion(`Se registró el cobro de ${formatearPesos(cobro.monto)} en el pedido #${idPedido}, pero no se pudo marcar como entregado: ${mensajeErrorFuncion(errorEntrega, 'pedido')} Entregalo desde el listado.`, 'warning');
+  } else if (esParcial) {
+    mostrarNotificacion(`Seña registrada en el pedido #${idPedido}: ${formatearPesos(cobro.monto)}. El resto queda por cobrar${entregado ? '. Pedido entregado.' : '.'}`, 'warning');
+  } else {
+    mostrarNotificacion(entregar
+      ? `Pedido #${idPedido} cobrado y entregado.`
+      : `Cobro registrado en el pedido #${idPedido}.`, 'success');
+  }
 
   const inputRef = document.getElementById('input-ref-cliente');
   if (inputRef) inputRef.value = '';
@@ -1308,7 +1339,7 @@ async function cobrarPedidoSinCambios(entregar, cobro) {
   resetearPedido();
 
   // Ticket según las preferencias de este equipo (la comanda ya salió cuando se tomó el pedido).
-  programarImpresion(idPedido, entregar ? 'ENTREGADO' : 'MANTENER', true, true, false);
+  programarImpresion(idPedido, entregado ? 'ENTREGADO' : 'MANTENER', true, true, false);
 }
 
 // -----------------------------------------------------------------------------
@@ -1383,21 +1414,41 @@ export async function iniciarCobroPOS() {
     return;
   }
 
+  // Un cobro parcial (seña) deja un saldo, y un saldo tiene que tener dueño: con Consumidor Final hace falta un nombre.
+  const sinNombre = () => document.getElementById('select-cliente-pedido')?.value === '1'
+    && (document.getElementById('input-ref-cliente')?.value || '').trim() === '';
+
   await abrirModalCobro({
     titulo: 'Cobrar',
     subtitulo: pedidoEditandoId
       ? `Pedido #${pedidoEditandoId}: completá los datos de pago.`
       : 'Completá los datos de pago del pedido.',
     permiteAnticipado: true,   // muestra "Entregar ahora" / "Pagó por adelantado"
+    permiteMontoParcial: true, // muestra "Monto a cobrar ahora" (seña): arranca en el total
+    ayudaParcial: sinNombre()
+      ? 'Para cobrar una seña hace falta un nombre: cerrá esta ventana, completalo y volvé a cobrar.'
+      : 'Queda como seña: el resto se cobra después.',
     total: totalCarritoActual,
     unidades: unidadesCarritoActual,
     // Callback: la ventana lo llama al confirmar. Devuelve true si se guardó (la ventana
-    // se cierra) o false si falló (queda abierta para corregir).
-    alConfirmar: async (idMedio, idCuenta, entregar) => {
+    // se cierra) o false si falló (queda abierta para corregir). "monto" es lo que se cobra ahora.
+    alConfirmar: async (idMedio, idCuenta, entregar, monto) => {
+      const esParcial = Math.round(Number(monto) * 100) < Math.round(Number(totalCarritoActual) * 100);
+      if (esParcial) {
+        if (sinNombre()) {
+          mostrarNotificacion('Para cobrar una seña indicá un nombre o referencia (cerrá esta ventana, completalo y volvé a cobrar).', 'warning');
+          return false;
+        }
+        // Entregar ahora con saldo pendiente: se pide confirmación antes de guardar nada.
+        if (entregar) {
+          const queda = (Math.round(Number(totalCarritoActual) * 100) - Math.round(Number(monto) * 100)) / 100;
+          if (!(await confirmarEntregaConSaldo(queda))) return false;
+        }
+      }
       // Entregar ahora -> ENTREGADO. Pagó por adelantado -> un pedido nuevo queda EN_PREPARACION y uno que se
-      // está editando conserva su estado (MANTENER). En los dos casos la base registra el pago.
+      // está editando conserva su estado (MANTENER). En los dos casos la base registra el pago (parcial si hay monto).
       const estado = entregar ? 'ENTREGADO' : (pedidoEditandoId ? 'MANTENER' : 'EN_PREPARACION');
-      await guardarPedido(estado, { idMedio, idCuenta });
+      await guardarPedido(estado, { idMedio, idCuenta, ...(esParcial ? { monto: Number(monto) } : {}) });
       // Si guardó bien, guardarPedido vació el carrito (resetearPedido). Si falló, el
       // carrito sigue lleno.
       return Object.keys(carrito).length === 0;

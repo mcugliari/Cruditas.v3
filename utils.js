@@ -260,7 +260,7 @@ const MENSAJES_FUNCIONES = {
   estado_invalido:      'El estado del pedido no es válido.',
   cliente_invalido:     'El cliente no existe.',
   lista_invalida:       'La lista de precios no existe.',
-  referencia_requerida: 'Indicá un nombre o referencia. Solo podés omitirlo si cobrás y entregás en el momento.',
+  referencia_requerida: 'Indicá un nombre o referencia. Solo podés omitirlo si cobrás todo y entregás en el momento.',
   producto_invalido:    'Algún producto no existe, no tiene precio en la lista elegida o la cantidad no es válida.',
   pedido_inexistente:   'El pedido no existe.',
   pedido_no_editable:   'Este pedido ya no se puede editar: solo se editan los pedidos en preparación o listos que todavía no tengan pagos.',
@@ -429,4 +429,23 @@ export function confirmarAccion({
 if (typeof document !== 'undefined') {
   if (document.body) obtenerContenedorAvisos();
   else document.addEventListener('DOMContentLoaded', obtenerContenedorAvisos);
+}
+
+
+// =============================================================================
+// confirmarEntregaConSaldo: pregunta antes de entregar un pedido que NO está pagado por completo
+// =============================================================================
+// La usan el POS ("Entregar ahora" con un cobro parcial) y el Listado de Pedidos ("Entregar sin cobrar" y
+// "Cobrar y entregar" con un cobro parcial), para que el aviso y el texto sean siempre los mismos.
+//   saldo -> lo que va a quedar sin cobrar después de entregar (número en pesos).
+// Devuelve una promesa: true si se confirma la entrega, false si se vuelve atrás.
+// =============================================================================
+export function confirmarEntregaConSaldo(saldo) {
+  const monto = formatearPesos(saldo);
+  return confirmarAccion({
+    titulo: 'Entregar con saldo pendiente',
+    mensaje: `Se entrega el pedido y quedan ${monto} sin cobrar.\nFigura como \"Debe ${monto}\" en Pendientes.\n\n¿Confirmás la entrega?`,
+    textoConfirmar: 'Entregar igual',
+    textoCancelar: 'Volver'
+  });
 }

@@ -1,6 +1,6 @@
 import { supabaseAdmin } from './config.js';
 import { carrito, setPedidoEditandoId, setPedidoEditandoEstado, setPedidoPagoOrigen, setCarrito } from './state.js';
-import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, confirmarAccion } from './utils.js';
+import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, confirmarAccion, confirmarEntregaConSaldo } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
 import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarModoEdicionPOS, guardarFotoPedidoEditando } from './pos.js';
 import { navegarA } from './main.js';
@@ -508,6 +508,20 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
 
   // (Cobrar ya no es un cambio de estado: tiene su propia acción, cobrarPedido.)
 
+  // Entregar un pedido que todavía no está pagado por completo: se pide confirmación, porque queda como "Debe $X" en
+  // Pendientes. Un pedido ya pagado por el total pasa directo. Si no se pudo consultar el saldo, decide la base.
+  if (nuevoEstado === 'ENTREGADO') {
+    try {
+      const id = Number(idPedido);
+      let saldo = (await traerSaldos([id]))[id]?.saldo;
+      if (saldo === undefined) {   // sin datos de saldo: se lo trata como sin pagos
+        const { data: ped } = await supabaseAdmin.from('TB_TPEDIDOS').select('importe_total').eq('id', id).single();
+        saldo = redondear(ped?.importe_total);
+      }
+      if (saldo > 0 && !(await confirmarEntregaConSaldo(saldo))) return;
+    } catch (e) { /* si no se pudo consultar, decide la base */ }
+  }
+
   // Anular: primero se pide el motivo (lista corta). Si la persona cierra la ventana, no se anula.
   let motivoAnulacion = null;
   if (nuevoEstado === 'ANULADO') {
@@ -708,6 +722,12 @@ export async function cobrarPedido(idPedido, entregar = false) {
     alConfirmar: async (idMedio, idCuenta, _entregar, monto) => {
       const pesos = (n) => `$${(Math.round(Number(n) * 100) / 100).toLocaleString('es-AR')}`;
       const esParcial = Math.round(Number(monto) * 100) < Math.round(Number(s.saldo) * 100);
+
+      // "Cobrar y entregar" con cobro parcial: el pedido se entrega y queda debiendo. Se pide confirmación; si se vuelve
+      // atrás, la ventana de cobro queda abierta (nada se guardó).
+      if (entregar && esParcial) {
+        if (!(await confirmarEntregaConSaldo(redondear(Number(s.saldo) - Number(monto))))) return false;
+      }
 
       if (entregar && !esParcial) {
         // Entregar y cobrar todo van en la MISMA llamada: se guardan juntos o no se guarda nada.

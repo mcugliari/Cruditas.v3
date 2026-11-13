@@ -579,13 +579,8 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* Etiqueta de categoría (solo en búsquedas): centrada y sin el margen negativo viejo */
 .pos-card-producto .pos-prod-cat { margin: 0; justify-content: center; }
 
-/* Botón "+" dorado, "-" claro */
-.pos-card-producto .pos-qty-pill .btn-pos-add { background: #e9b83f; color: #1b2a3d; }
-.pos-card-producto .pos-qty-pill .btn-pos-add:hover { background: #d9a526; color: #1b2a3d; }
+/* Botón "-": hover oscuro. El "+" dorado está en el bloque TARJETAS DEL CATÁLOGO (al final) */
 .pos-card-producto .pos-qty-pill .btn-pos-sq:not(.btn-pos-add):hover { background: #26364a; color: #fff; }
-
-/* Botones +6 / +12 */
-.pos-card-producto .pos-dozen-controls { margin-top: 2px; }
 
 /* ---------- 2. PANEL DERECHO OSCURO ---------- */
 .pos-order-card.pos-order-dark {
@@ -784,16 +779,14 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* ---------- 5. ETIQUETA "MÁS VENDIDO" (arriba a la izquierda de la foto; la "X" va a la derecha) ---------- */
 .pos-badge-top {
-  position: absolute; top: 8px; left: 8px; z-index: 2;
+  position: absolute; z-index: 2;
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 9px 3px 7px;
   border-radius: 999px;
-  background: #111827; color: #f5d27a;
-  font-size: .68rem; font-weight: 800; line-height: 1.3; letter-spacing: .01em;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+  color: #f5d27a;
+  line-height: 1.3; letter-spacing: .01em;
   pointer-events: none; /* no tapa los toques sobre la tarjeta */
 }
-.pos-badge-top > i { font-size: .72rem; color: #e9b83f; }
+.pos-badge-top > i { color: #e9b83f; }
 
 
 /* =============================================================================
@@ -803,7 +796,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
    Va al FINAL a propósito: con igual especificidad, gana la regla que aparece última.
    Los selectores con :is(#sec-...) quedan limitados a estas pantallas; para sumar otra
    pantalla se agrega su id a la lista. PARA REVERTIR: borrar desde este comentario
-   hasta el final del archivo.
+   hasta el comentario de la ETAPA 3.
    ============================================================================= */
 
 /* ---- Botones de acción de las tablas (clases nuevas, sirven en cualquier pantalla) ---- */
@@ -835,11 +828,6 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* ---- Título de la pantalla y botón "Nuevo ..." ---- */
 :is(#sec-deuda, #sec-proveedores, #sec-productos) .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
-:is(#sec-deuda, #sec-proveedores, #sec-productos) .content-header .btn-warning {
-  min-height: 42px; padding: 0 1.2rem; border: 0; border-radius: 999px;
-  background: var(--cruditas-brand); color: #1b2d47; font-weight: 700;
-}
-:is(#sec-deuda, #sec-proveedores, #sec-productos) .content-header .btn-warning:hover { background: #deab2e; color: #1b2d47; }
 
 /* ---- Tarjetas ---- */
 :is(#sec-deuda, #sec-proveedores, #sec-productos) .card {
@@ -899,7 +887,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* =============================================================================
    ESTILO DE GESTIÓN · ETAPA 3  (Gestión de Pedidos: tabla, botones y menú "Más")
    Misma línea que la etapa 1. PARA REVERTIR: borrar desde este comentario hasta el
-   final del archivo (los botones de la fila quedarían sin estilo hasta volver al
+   comentario de la ETAPA 3b (los botones de la fila quedarían sin estilo hasta volver al
    pedidos.js anterior).
    ============================================================================= */
 
@@ -966,7 +954,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* =============================================================================
    ESTILO DE GESTIÓN · ETAPA 3b  (Gestión de Pedidos: cuadros de colores, filtros y
    ventana "Detalle del pedido"). PARA REVERTIR: borrar desde este comentario hasta
-   el final del archivo.
+   el comentario de la ETAPA 4.
    ============================================================================= */
 
 /* ---- Cuadros de arriba (Total cobrado, etc.): colores suaves que repiten los de los
@@ -1026,15 +1014,10 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* =============================================================================
    ESTILO DE GESTIÓN · ETAPA 4  (Compras y su ventana de detalle)
-   PARA REVERTIR: borrar desde este comentario hasta el final del archivo
+   PARA REVERTIR: borrar desde este comentario hasta el comentario de la ETAPA 5
    (junto con volver al compras.js, main.js e index.html anteriores).
    ============================================================================= */
 #sec-compras .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
-#sec-compras .content-header .btn-warning {
-  min-height: 42px; padding: 0 1.2rem; border: 0; border-radius: 999px;
-  background: var(--cruditas-brand); color: #1b2d47; font-weight: 700;
-}
-#sec-compras .content-header .btn-warning:hover { background: #deab2e; color: #1b2d47; }
 #sec-compras .card {
   border: 1px solid #e7ecf2; border-top: 3px solid var(--cruditas-brand);
   border-radius: var(--cruditas-radius); overflow: hidden;
@@ -1072,15 +1055,10 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* =============================================================================
    ESTILO DE GESTIÓN · ETAPA 5  (Clientes, Gastos y retiros, Insumos, Listas de precios,
    Cuentas y saldos, Reporte de compras y Resumen de ventas, más sus ventanas)
-   PARA REVERTIR: borrar desde este comentario hasta el final del archivo (y volver a los
+   PARA REVERTIR: borrar desde este comentario hasta el comentario de la ETAPA 6 (y volver a los
    .js e index.html anteriores si se quieren los botones de antes).
    ============================================================================= */
 :is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
-:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .content-header .btn-warning {
-  min-height: 42px; padding: 0 1.2rem; border: 0; border-radius: 999px;
-  background: var(--cruditas-brand); color: #1b2d47; font-weight: 700;
-}
-:is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .content-header .btn-warning:hover { background: #deab2e; color: #1b2d47; }
 :is(#sec-clientes, #sec-egresos, #sec-insumos, #sec-listas, #sec-cuentas, #sec-reportes-compras, #sec-resumen-ventas) .card {
   border: 1px solid #e7ecf2; border-top: 3px solid var(--cruditas-brand);
   border-radius: var(--cruditas-radius); overflow: hidden;
@@ -1143,7 +1121,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* =============================================================================
    ESTILO · ETAPA 6  (pantalla "Impresión": tarjetas e interruptores grandes)
-   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   PARA REVERTIR: borrar desde este comentario hasta el comentario de la ETAPA 7.
    ============================================================================= */
 #sec-impresion .content-header h1 { color: var(--cruditas-ink) !important; font-size: 1.75rem; }
 #sec-impresion .card {
@@ -1166,7 +1144,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* =============================================================================
    ESTILO · ETAPA 7  (Listas de precios: aviso de precios sin guardar)
-   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   PARA REVERTIR: borrar desde este comentario hasta el comentario de la ETAPA 8.
    ============================================================================= */
 #sec-listas tr.fila-modificada { background-color: #fff8e3; }
 #sec-listas tr.fila-modificada td:first-child::after {
@@ -1178,7 +1156,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* =============================================================================
    ESTILO · ETAPA 8  (Historial de caja, Cierre de caja, ventana de cobro, ventana de
    confirmación, categorías y pantalla de ingreso)
-   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   PARA REVERTIR: borrar desde este comentario hasta el comentario de la ETAPA 8b.
    ============================================================================= */
 
 /* ---- Historial de cierres de caja ---- */
@@ -1256,7 +1234,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 
 /* =============================================================================
    ESTILO · ETAPA 8b  (Cierre de caja: ventana más ancha y "Movimiento por cuenta" que no se corta)
-   PARA REVERTIR: borrar desde este comentario hasta el final (y volver al caja.js anterior).
+   PARA REVERTIR: borrar desde este comentario hasta el comentario de la ETAPA 9 (y volver al caja.js anterior).
    ============================================================================= */
 @media (min-width: 576px) {
   #modalCierreCaja .modal-dialog, #modalDetalleCierre .modal-dialog { max-width: 680px; }
@@ -1286,7 +1264,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
    ESTILO · ETAPA 9  (POS: ocupa la pantalla, panel de pedido con los botones de cobro
    SIEMPRE a la vista, letra y botones más grandes para tablet y mostrador)
    Solo CSS: no cambia pos.js ni index.html.
-   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   PARA REVERTIR: borrar desde este comentario hasta el comentario del bloque TABLET.
    Todo va dentro de #sec-pedidos (la pantalla del POS), así no toca al resto del sistema.
    ============================================================================= */
 
@@ -1482,6 +1460,9 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
     padding: 8px 14px 8px 6px; min-height: 0; border-bottom: 1px solid #e8ebef;
   }
   #sec-pedidos .pos-main-card .pos-catalog-scroll { grid-column: 1 / -1; grid-row: 2; min-height: 0; }
+  /* Por posición (primer bloque del encabezado, que no es el buscador) y no solo por la clase: así tampoco depende de
+     que el index.html tenga la clase pos-main-titulo. */
+  #sec-pedidos .pos-main-card .pos-main-card-header .d-flex > :first-child:not(.input-group),
   #sec-pedidos .pos-main-card .pos-main-titulo { display: none; }
   #sec-pedidos .pos-main-card .pos-main-card-header .input-group { width: 240px !important; }
 }
@@ -1547,7 +1528,7 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
    ESTILO · ETAPA 10
    (a) POS en celular vertical: "Total a cobrar" y los botones de cobro quedan FIJOS abajo.
    (b) Columna Acciones alineada a la derecha en Productos, Deuda a Proveedores y Proveedores.
-   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   PARA REVERTIR: borrar desde este comentario hasta el comentario del bloque TARJETAS DEL CATÁLOGO.
    ============================================================================= */
 
 /* (a) Solo celulares en vertical (menos de 768 px). En tablet y PC no cambia nada. */
@@ -1898,7 +1879,8 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 }
 /* Principal (amarillo) */
 .acciones-encabezado .btn-warning { border: 0; background: var(--cruditas-brand); color: #1b2d47; }
-.acciones-encabezado .btn-warning:hover { background: #deab2e; color: #1b2d47; }
+.acciones-encabezado .btn-warning:hover,
+.acciones-encabezado .btn-warning:not(:disabled):not(.disabled):active { background: #deab2e; color: #1b2d47; }
 /* Secundario (contorno): "Categorías", "Transferir"... */
 .acciones-encabezado .btn-outline-dark { background: #fff; border: 1.5px solid #cfd6df; color: var(--cruditas-ink); }
 .acciones-encabezado .btn-outline-dark:hover { background: #f1f4f8; border-color: #b8c2cf; color: var(--cruditas-ink); }
