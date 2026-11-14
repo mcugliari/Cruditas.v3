@@ -99,7 +99,12 @@ export async function cargarSelectsPOS() {
   }
 
   const selectLis = document.getElementById('select-lista-pedido');
-  if (selectLis && listas) selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
+  if (selectLis && listas) {
+    selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
+    // Select2 (igual que Cliente) para que las dos listas se vean y se comporten igual en cualquier dispositivo. Son pocas
+    // opciones: se desactiva el buscador. Si Select2 no cargó, queda el select común y todo sigue funcionando.
+    if (typeof $.fn.select2 === 'function') $('#select-lista-pedido').select2({ width: '100%', minimumResultsForSearch: Infinity });
+  }
 
 
   await alCambiarCliente();
@@ -154,6 +159,9 @@ export async function alCambiarCliente() {
       // vacío (value ''); en ese caso elegimos la primera opción disponible.
       if (!selectLista.value) selectLista.selectedIndex = 0;
     }
+    // Select2 dibuja su propio cuadro: cambiar solo .value no actualiza lo que se ve. change.select2 le avisa SOLO a
+    // Select2 (no dispara el cambio de lista de main.js: abajo ya se llama a cargarPOS).
+    $('#select-lista-pedido').trigger('change.select2');
   }
   
   await cargarPOS();
@@ -990,7 +998,10 @@ async function deshacerVaciado() {
   }
 
   const selectLista = document.getElementById('select-lista-pedido');
-  if (selectLista && f.idLista) selectLista.value = f.idLista;
+  if (selectLista && f.idLista) {
+    selectLista.value = f.idLista;
+    $('#select-lista-pedido').trigger('change.select2');   // actualiza lo que muestra Select2 (ver alCambiarCliente)
+  }
   const inputRef = document.getElementById('input-ref-cliente');
   if (inputRef) inputRef.value = f.referencia;
 

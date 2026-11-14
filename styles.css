@@ -1467,34 +1467,62 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
   #sec-pedidos .pos-main-card .pos-main-card-header .input-group { width: 240px !important; }
 }
 
-/* (b) Tablet apaisada: cada ítem del carrito en UNA fila (nombre y precio a la izquierda, − n + , subtotal y tacho).
-   Pasa de ~100 px a ~52 px por ítem: en el mismo alto entran 4 ítems en vez de 2. Sin foto chica (el nombre gana lugar). */
+/* (b) Tablet apaisada: cada ítem del carrito en UNA sola fila, con todo a la vista:
+   miniatura | nombre y, debajo, categoría + precio unitario | − n + | subtotal | tacho.
+   El renglón mide ~50 px (los botones táctiles siguen en 40 px): entran la misma cantidad de ítems que sin miniatura.
+   Si falta ancho se recorta primero la CATEGORÍA y después el nombre; el precio y el subtotal nunca se recortan. */
 @media (min-width: 768px) and (max-width: 1499.98px) and (max-height: 820px) {
   #sec-pedidos .pos-cart-line {
-    grid-template-columns: minmax(0, 1fr) auto auto 38px;
-    grid-template-areas: "info qty total del";
-    align-items: center; column-gap: 8px; row-gap: 0; padding: 6px 2px;
+    grid-template-columns: 30px minmax(0, 1fr) auto minmax(84px, auto) 30px;   /* subtotal: ancho mínimo fijo (entra "$ 117.000"), así los − / + quedan alineados entre renglones */
+    grid-template-areas: "thumb info qty total del";
+    align-items: center; column-gap: 5px; row-gap: 0; padding: 5px 0;
   }
-  #sec-pedidos .pos-cart-thumb { display: none; }
-  /* El nombre completo (hasta 2 líneas) vale más que "Empanada $ 1.500 c/u", que ya se ve en la tarjeta del catálogo */
-  #sec-pedidos .pos-cart-sub { display: none; }
-  #sec-pedidos .pos-cart-name {
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
-    white-space: normal; overflow: hidden; font-size: 1rem; line-height: 1.12;
-  }
-  #sec-pedidos .pos-cart-qty,
-  #sec-pedidos .pos-cart-total { justify-self: auto; }
-  #sec-pedidos .pos-cart-total { min-width: 3.6em; }
-  #sec-pedidos .pos-cart-del { width: 38px; }
+  #sec-pedidos .pos-cart-thumb { width: 30px; height: 30px; border-radius: 6px; }
+  #sec-pedidos .pos-cart-thumb .pos-prod-ph { font-size: .9rem; }
+  #sec-pedidos .pos-cart-name { display: block; font-size: .95rem; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #sec-pedidos .pos-cart-sub { font-size: .74rem; line-height: 1.15; gap: 5px; }
+  #sec-pedidos .pos-cart-cat { flex: 0 1 auto; min-width: 0; }
+  #sec-pedidos .pos-cart-sub > span:last-child { flex: 0 0 auto; }
+  #sec-pedidos .pos-cart-qty { gap: 2px; justify-self: auto; }
+  #sec-pedidos .pos-cart-n { min-width: 28px; font-size: 1.1rem; }   /* entran 3 cifras (100 o más unidades) sin correr los botones */
+  #sec-pedidos .pos-cart-total { justify-self: auto; min-width: 0; font-size: .92rem; }
+  #sec-pedidos .pos-cart-del { width: 30px; }
 }
-/* Resumen: unidades a la izquierda y subtotal / descuento a la derecha (en una fila, no apilados).
+/* Con subgrid (Chrome 117+) todos los renglones comparten las MISMAS columnas: cada una mide lo que necesita el renglón más
+   ancho y los − / + quedan alineados aunque el subtotal tenga más o menos cifras, sin reservar espacio de más.
+   Sin subgrid queda el ancho mínimo fijo de arriba. */
+@supports (grid-template-columns: subgrid) {
+  @media (min-width: 768px) and (max-width: 1499.98px) and (max-height: 820px) {
+    #sec-pedidos .pos-cart-list { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto 30px; column-gap: 5px; }
+    #sec-pedidos .pos-cart-line { grid-template-columns: subgrid; grid-template-areas: none; grid-column: 1 / -1; }
+    #sec-pedidos .pos-cart-thumb { grid-area: auto; grid-column: 1; grid-row: 1; }
+    #sec-pedidos .pos-cart-info  { grid-area: auto; grid-column: 2; grid-row: 1; }
+    #sec-pedidos .pos-cart-qty   { grid-area: auto; grid-column: 3; grid-row: 1; }
+    #sec-pedidos .pos-cart-total { grid-area: auto; grid-column: 4; grid-row: 1; }
+    #sec-pedidos .pos-cart-del   { grid-area: auto; grid-column: 5; grid-row: 1; }
+    #sec-pedidos .pos-cart-qty { justify-self: stretch; display: flex; justify-content: space-between; }   /* − a la izquierda, + a la derecha, el número en el medio */
+    #sec-pedidos .pos-cart-n { min-width: 20px; }
+  }
+}
+/* Resumen: unidades a la izquierda y subtotal / descuento a la derecha, en una fila (no apilados). Nada se pisa nunca:
+   "Total de unidades" puede achicarse hasta lo mínimo que necesita (la etiqueta pasa a dos renglones, el número de 3 cifras
+   entra); si aun así falta lugar, cede el TEXTO del descuento (termina en "…") y nunca los importes.
    Desde 1200 px el panel tiene lugar; por debajo queda apilado como antes. */
 @media (min-width: 1200px) and (max-width: 1499.98px) and (max-height: 820px) {
-  #sec-pedidos .pos-totales { flex-wrap: nowrap; align-items: center; }
-  #sec-pedidos .pos-tot-unidades { flex: 0 0 auto; }
-  #sec-pedidos .pos-desglose { flex: 1 1 0; min-width: 0; }
-  #sec-pedidos .pos-desglose dt small { display: none; }     /* "(1 doc.)": se ve en el reporte y el ticket */
+  #sec-pedidos .pos-totales { flex-wrap: nowrap; align-items: center; gap: 8px; }
+  /* Unidades en una columna angosta: "Unidades" arriba y el número abajo (se oculta el "Total de " del texto). Así ocupa
+     ~50 px en vez de ~90 y el desglose gana lugar para mostrar el detalle "(76 doc.)" completo. */
+  #sec-pedidos .pos-tot-unidades { flex: 0 0 auto; flex-direction: column; align-items: flex-start; gap: 0; }
+  #sec-pedidos .pos-tot-unidades > span { line-height: 1.1; font-size: .8rem; text-transform: capitalize; }
+  #sec-pedidos .pos-tot-unidades .pos-lbl-largo { display: none; }
+  #sec-pedidos .pos-order-dark #cant-total-items { font-size: 1.35rem; line-height: 1.1; }
+  /* el desglose se achica solo cuando "unidades" ya llegó a su mínimo (con factor de achique 1 contra 100) */
+  #sec-pedidos .pos-desglose { flex: 0 1 auto; max-width: none; min-width: 0; }
+  #sec-pedidos .pos-desglose > div { gap: 8px; }
+  #sec-pedidos .pos-desglose dt { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .84rem; }
+  #sec-pedidos .pos-desglose dd { flex: 0 0 auto; }
 }
+
 
 /* Tablet de 710-760 px de alto útil: un poco menos de aire (la segunda fila de productos justo entra) */
 @media (min-width: 768px) and (max-height: 760px) {
@@ -1505,6 +1533,30 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 @media (min-width: 992px) and (max-height: 760px) {
   #sec-pedidos .pos-main-card .pos-category-tabs { padding-top: 6px; padding-bottom: 6px; }
   #sec-pedidos .pos-main-card .pos-main-card-header { padding-top: 6px; padding-bottom: 6px; }
+}
+
+/* Solapas de categorías sin cortarse en pantallas más chicas (≥ 992 px, una sola fila): el buscador se angosta con el ancho
+   y entre 992 y 1199 px las solapas pierden el ícono y un poco de relleno. Si hubiera más solapas de las que entran,
+   la fila se desplaza de costado (como siempre). */
+@media (min-width: 992px) {
+  #sec-pedidos .pos-main-card .pos-main-card-header .input-group { width: clamp(150px, 20vw, 240px) !important; }
+}
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  #sec-pedidos .pos-main-card .pos-main-card-header .input-group { width: clamp(130px, 16vw, 200px) !important; }
+  #sec-pedidos .pos-main-card .pos-category-tabs { gap: 6px; }
+  #sec-pedidos .pos-main-card .pos-category-tab { padding: 0 9px; gap: 5px; font-size: .92rem; }
+  #sec-pedidos .pos-main-card .pos-category-icon { display: none; }
+}
+
+/* Panel Pedido Actual en pantallas muy bajas: el carrito cede lugar antes que los botones, y si aun así no alcanza el
+   cuerpo se desplaza con los botones Solo Preparar / Cobrar fijos abajo (nunca quedan fuera de la vista). */
+@media (min-width: 768px) and (max-height: 640px) {
+  #sec-pedidos .pos-order-dark > .card-body { grid-template-rows: auto auto auto minmax(56px, 1fr) auto auto auto; }
+}
+@media (min-width: 768px) {
+  #sec-pedidos .pos-order-dark > .card-body > .pos-actions-container {
+    position: sticky; bottom: 0; z-index: 2; padding-top: 4px; background: #111827;
+  }
 }
 
 /* (c) Menú lateral superpuesto entre 992 y 1399 px (por debajo de 992 ya lo hace AdminLTE). Requiere
@@ -1522,6 +1574,39 @@ body, button, input, select, textarea, .select2-container, .select2-dropdown {
 /* Barra superior: nada se parte en dos líneas y en pantallas medianas se oculta el subtítulo */
 .nav-estado-caja, #nav-usuario-conectado { white-space: nowrap; }
 @media (max-width: 1199.98px) { .cruditas-header-sub { display: none; } }
+
+
+/* Menú lateral con desplazamiento propio: el encabezado (logo) queda fijo y la lista de opciones se desplaza sola cuando
+   no entra en la altura de la pantalla (antes las últimas opciones quedaban cortadas y sin forma de llegar). */
+.main-sidebar { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+.main-sidebar .brand-link { flex: 0 0 auto; }
+.main-sidebar .sidebar {
+  flex: 1 1 auto; min-height: 0; height: auto;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  padding-bottom: 16px; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .3) transparent;
+}
+.main-sidebar .sidebar::-webkit-scrollbar { width: 8px; }
+.main-sidebar .sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .28); border-radius: 8px; }
+.main-sidebar .sidebar::-webkit-scrollbar-track { background: transparent; }
+
+/* Listas desplegables del panel del pedido: Cliente y Lista de precios usan Select2, que dibuja su lista en el <body>
+   (fuera del panel): se ven iguales, oscuras como el panel y del ancho del campo. Cada una se reconoce por el id de su
+   lista de resultados (el id del <select> + "-results"). */
+.select2-dropdown:has(:is(#select2-select-cliente-pedido-results, #select2-select-lista-pedido-results)) {
+  background: #1f2937; border-color: #374151; color: #f3f4f6; border-radius: 0 0 8px 8px; overflow: hidden;
+}
+.select2-dropdown:has(:is(#select2-select-cliente-pedido-results, #select2-select-lista-pedido-results)) .select2-search--dropdown { background: #1f2937; padding: 6px; }
+.select2-dropdown:has(:is(#select2-select-cliente-pedido-results, #select2-select-lista-pedido-results)) .select2-search__field {
+  background: #111827; border: 1px solid #374151; border-radius: 6px; color: #f3f4f6; min-height: 38px;
+}
+.select2-dropdown:has(:is(#select2-select-cliente-pedido-results, #select2-select-lista-pedido-results)) .select2-results__option { color: #f3f4f6 !important; background: transparent; }
+.select2-dropdown:has(:is(#select2-select-cliente-pedido-results, #select2-select-lista-pedido-results)) .select2-results__option--selected { background: #2b3a52; }
+.select2-dropdown:has(:is(#select2-select-cliente-pedido-results, #select2-select-lista-pedido-results)) .select2-results__option--highlighted,
+.select2-dropdown:has(:is(#select2-select-cliente-pedido-results, #select2-select-lista-pedido-results)) .select2-results__option[aria-selected="true"].select2-results__option--highlighted {
+  background: #e9b83f; color: #111827 !important;
+}
+.select2-dropdown:has(:is(#select2-select-cliente-pedido-results, #select2-select-lista-pedido-results)) .select2-results__option--highlighted { color: #111827 !important; }
+#select-lista-pedido option { background: #1f2937; color: #f3f4f6; }
 
 
 /* =============================================================================

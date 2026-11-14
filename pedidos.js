@@ -806,7 +806,10 @@ async function volcarPedidoEnPOS(pedido) {
 
   // Lista de precios del pedido (la que se usó al crearlo, no la predeterminada).
   const selectLista = document.getElementById('select-lista-pedido');
-  if (selectLista && pedido.id_lista_precio) selectLista.value = pedido.id_lista_precio;
+  if (selectLista && pedido.id_lista_precio) {
+    selectLista.value = pedido.id_lista_precio;
+    $('#select-lista-pedido').trigger('change.select2');   // Select2 dibuja su propio cuadro (igual que Cliente, arriba)
+  }
 
   // Referencia: va DESPUÉS de alCambiarCliente porque esa función la limpia.
   const inputRef = document.getElementById('input-ref-cliente');

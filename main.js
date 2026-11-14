@@ -180,7 +180,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#select-cliente-pedido').on('change', alCambiarCliente);
   
   // SOLUCIÓN PUNTO 8: Al cambiar de lista manualmente, SOLO refrescamos los precios de la grilla (no todo el POS)
-  document.getElementById('select-lista-pedido')?.addEventListener('change', () => cargarPOS());
+  // La lista de precios usa Select2 (igual que Cliente), que solo dispara eventos de jQuery: un addEventListener nativo no
+  // se enteraría de la elección. Con jQuery .on('change') se entera tanto de Select2 como de un select común.
+  $('#select-lista-pedido').on('change', () => cargarPOS());
   // Ventana de cobro (cobro.js): elegir el medio con los botones y calcular el vuelto.
   document.getElementById('cobro-medios')?.addEventListener('click', elegirMedioCobro);
   document.getElementById('cobro-paga-con')?.addEventListener('input', actualizarVueltoCobro);
