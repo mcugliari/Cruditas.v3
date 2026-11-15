@@ -279,10 +279,41 @@ const MENSAJES_FUNCIONES = {
   cobro_excede_saldo:   'El cobro supera lo que falta pagar del pedido.',
   pagos_inmutables:     'Los pagos registrados no se pueden modificar ni borrar.',
   transicion_invalida:  'Ese cambio de estado no está permitido para este pedido. Recargá la lista: puede que ya haya cambiado.',
+  // Clave de operación (script 59): evita duplicar un pedido o un cobro si se reintenta tras un corte de conexión
+  clave_invalida:       'Falta la clave de la operación. Recargá la página e intentá de nuevo.',
+  clave_reutilizada:    'Cambiaste algo después de un envío que no se pudo confirmar. Revisá en "Listado de Pedidos" si ya se guardó antes de volver a intentar.',
   // Reportes de compras (script 28)
   rango_invalido:       'La fecha Desde no puede ser posterior a la fecha Hasta.',
   agrupacion_invalida:  'La forma de agrupar el reporte no es válida.'
 };
+
+// -----------------------------------------------------------------------------
+// esErrorDeConexion
+//   ¿El error es de CONEXIÓN (la respuesta nunca llegó) y no una respuesta de la base?
+//   Los errores que vienen de la base traen un código (P0001, 23505, PGRST...); los de red no.
+//   Distinguirlos importa: con un error de conexión NO se sabe si la operación se guardó.
+// -----------------------------------------------------------------------------
+export function esErrorDeConexion(error) {
+  if (!error) return false;
+  const codigo = String(error.code || '');
+  if (codigo && !/^(FETCH|ECONN|ETIMEDOUT|ENOTFOUND)/i.test(codigo)) return false;
+  return /failed to fetch|networkerror|network request failed|load failed|timeout|timed out|abort|fetch/i.test(String(error.message || error));
+}
+
+// -----------------------------------------------------------------------------
+// nuevaClaveOperacion
+//   Genera una clave única (uuid) para UNA operación que toca plata (script 59). Se manda a la base y, si hay que
+//   reintentar tras un corte de conexión, se manda la MISMA: así la base reconoce el reintento y no lo repite.
+//   crypto.randomUUID solo existe en páginas seguras (https o localhost); si no está, se arma con getRandomValues.
+// -----------------------------------------------------------------------------
+export function nuevaClaveOperacion() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') return globalThis.crypto.randomUUID();
+  const b = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;   // versión 4
+  b[8] = (b[8] & 0x3f) | 0x80;   // variante
+  const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 
 export function mensajeErrorFuncion(error, entidad = 'registro') {
   const texto = error?.message || '';

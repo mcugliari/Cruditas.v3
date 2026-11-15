@@ -10,7 +10,7 @@ import {
   pedidoPagoOrigen, setPedidoPagoOrigen
 } from './state.js';
 
-import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion, confirmarEntregaConSaldo, formatearPesos } from './utils.js';
+import { mostrarNotificacion, formatearFechaAR, obtenerFechaActualISO, mensajeErrorFuncion, esc, confirmarAccion, confirmarEntregaConSaldo, formatearPesos, esErrorDeConexion, nuevaClaveOperacion } from './utils.js';
 import { abrirModalCobro } from './cobro.js';
 import { leerPreferenciasImpresion } from './preferencias.js';
 import { imprimirAutomatico } from './impresion.js';
@@ -791,6 +791,7 @@ export function guardarFotoPedidoEditando() {
 }
 
 export async function resetearPedido() {
+  claveOperacion = null;   // pedido nuevo: la próxima operación usa otra clave
   descartarDeshacer();   // al empezar de cero (guardar, cancelar edición...) un "Deshacer" anterior ya no corresponde
   const inputRef = document.getElementById('input-ref-cliente');
   if (inputRef) inputRef.value = '';
@@ -1072,6 +1073,15 @@ export async function vaciarCarrito() {
 // crea el pedido dos veces ni se imprime dos veces. "finally" libera el bloqueo siempre.
 let guardandoPedido = false;
 
+// Clave de operación (script 59). Cada intento de guardar/cobrar lleva una clave; si se corta la conexión y la persona
+// reintenta, se manda la MISMA clave y la base reconoce el reintento (no duplica el pedido ni el cobro). Se renueva
+// cuando la base responde (bien o con un error) y al empezar de cero (resetearPedido).
+let claveOperacion = null;
+function claveActual() {
+  if (!claveOperacion) claveOperacion = nuevaClaveOperacion();
+  return claveOperacion;
+}
+
 export async function guardarPedido(estadoInicial, cobro = null) {
   if (guardandoPedido) return;
   guardandoPedido = true;
@@ -1120,18 +1130,7 @@ function marcarGuardando(activo, estadoInicial) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// esErrorDeConexion  (interna)
-//   ¿El error es de CONEXIÓN (la respuesta nunca llegó) y no una respuesta de la base?
-//   Los errores que vienen de la base traen un código (P0001, 23505, PGRST...); los de red no.
-//   Distinguirlos importa: con un error de conexión NO se sabe si el pedido se guardó.
-// -----------------------------------------------------------------------------
-function esErrorDeConexion(error) {
-  if (!error) return false;
-  const codigo = String(error.code || '');
-  if (codigo && !/^(FETCH|ECONN|ETIMEDOUT|ENOTFOUND)/i.test(codigo)) return false;
-  return /failed to fetch|networkerror|network request failed|load failed|timeout|timed out|abort|fetch/i.test(String(error.message || error));
-}
+// esErrorDeConexion y nuevaClaveOperacion viven en utils.js (también las usa pedidos.js).
 
 async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   // "Guardar cambios" (solo existe al editar): se manda 'MANTENER' y guardar_pedido (script 39)
@@ -1217,7 +1216,8 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
   let data = null;
   let error = null;
   try {
-    ({ data, error } = await supabaseAdmin.rpc('guardar_pedido', {
+    ({ data, error } = await supabaseAdmin.rpc('guardar_pedido_seguro', {
+    p_clave: claveActual(),   // script 59: un reintento tras un corte de conexión no duplica el pedido
     p_id_pedido: pedidoEditandoId || null,
     p_id_cliente: Number(idCliente),
     p_id_lista: Number(idLista),
@@ -1237,21 +1237,23 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
 
   if (error) {
     if (esErrorDeConexion(error)) {
-      // La respuesta nunca llegó: el pedido PUDO haberse guardado igual. Si se reintenta a ciegas
-      // se podría crear (y cobrar) dos veces, así que se avisa que primero hay que mirar el listado.
+      // La respuesta nunca llegó: el pedido PUDO haberse guardado igual. La clave de operación NO se renueva: si se vuelve
+      // a tocar el botón se manda la misma y la base devuelve el pedido ya guardado en vez de crear otro (script 59).
       // El aviso queda fijo hasta que se toca "Entendido". El pedido en pantalla NO se borra.
       descartarDeshacer();
       mostrarAvisoConAccion({
-        mensaje: 'No se pudo confirmar si el pedido se guardó (falló la conexión). Antes de volver a intentar, revisá en "Listado de Pedidos" si ya aparece.',
+        mensaje: 'No se pudo confirmar si el pedido se guardó (falló la conexión). Podés volver a tocar el botón: si ya se había guardado, no se duplica.',
         textoAccion: 'Entendido',
         duracionMs: 0,
         tipo: 'peligro'
       });
       return;
     }
+    claveOperacion = null;   // la base respondió con un error: el próximo intento es una operación nueva
     mostrarNotificacion('Error al guardar el pedido: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
     return;
   }
+  claveOperacion = null;   // la base respondió bien: esta operación terminó
 
   // Con un cobro parcial (seña) se aclara cuánto se cobró y cuánto falta (lo devuelve la base).
   const saldoPendiente = cobro ? Number(data.saldo) : 0;
@@ -1259,6 +1261,7 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
     ? `Pedido #${data.id_pedido} actualizado: vuelve a En Preparación para que la cocina lo rehaga.`
     : `¡Pedido #${data.id_pedido} ${eraEdicion ? 'actualizado' : 'registrado'} con éxito!`;
   if (saldoPendiente > 0) textoOk += ` Cobrado ${formatearPesos(data.cobrado)}; falta cobrar ${formatearPesos(saldoPendiente)}.`;
+  if (data.repetido) textoOk = 'Se había cortado la conexión, pero el pedido ya estaba guardado: no se duplicó. ' + textoOk;
   mostrarNotificacion(textoOk, saldoPendiente > 0 ? 'warning' : 'success');
 
   // Opción B: el pago ya se traspasó dentro de guardar_pedido (misma transacción). Acá solo se avisa el resultado.
@@ -1287,16 +1290,19 @@ async function cobrarPedidoSinCambios(entregar, cobro) {
   const idPedido = pedidoEditandoId;
   const esParcial = Number(cobro.monto) > 0;   // solo viene cuando se cobra menos que el total
   let error = null;
+  let datosCobro = null;   // respuesta de registrar_cobro_pedido_seguro (trae "repetido" si era un reintento)
+  const conClave = !(entregar && !esParcial);   // cobrar y entregar todo va por cambiar_estado_pedido: ahí la base ya rechaza el reintento
   let errorEntrega = null;   // solo en cobro parcial + entregar: el cobro salió bien pero la entrega falló
   try {
-    ({ error } = (entregar && !esParcial)
+    ({ data: datosCobro, error } = (entregar && !esParcial)
       ? await supabaseAdmin.rpc('cambiar_estado_pedido', {
           p_id_pedido: Number(idPedido),
           p_nuevo_estado: 'ENTREGADO',
           p_id_medio: cobro.idMedio,
           p_id_cuenta: cobro.idCuenta
         })
-      : await supabaseAdmin.rpc('registrar_cobro_pedido', {
+      : await supabaseAdmin.rpc('registrar_cobro_pedido_seguro', {
+          p_clave: claveActual(),   // script 59: un reintento no cobra dos veces
           p_id_pedido: Number(idPedido),
           p_id_medio: cobro.idMedio,
           p_id_cuenta: cobro.idCuenta,
@@ -1322,18 +1328,23 @@ async function cobrarPedidoSinCambios(entregar, cobro) {
     if (esErrorDeConexion(error)) {
       // La respuesta nunca llegó: el cobro PUDO registrarse. Se avisa que primero hay que mirar el listado.
       mostrarAvisoConAccion({
-        mensaje: `No se pudo confirmar si el cobro del pedido #${idPedido} se registró (falló la conexión). Antes de volver a intentar, revisá en "Listado de Pedidos" si ya figura como cobrado.`,
+        mensaje: conClave
+          ? `No se pudo confirmar si el cobro del pedido #${idPedido} se registró (falló la conexión). Podés volver a tocar el botón: si ya se había registrado, no se cobra dos veces.`
+          : `No se pudo confirmar si el cobro del pedido #${idPedido} se registró (falló la conexión). Antes de volver a intentar, revisá en "Listado de Pedidos" si ya figura como cobrado.`,
         textoAccion: 'Entendido',
         duracionMs: 0,
         tipo: 'peligro'
       });
       return;
     }
+    claveOperacion = null;   // la base respondió con un error: el próximo intento es una operación nueva
     mostrarNotificacion('Error al registrar el cobro: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
     return;
   }
+  claveOperacion = null;   // la base respondió bien: esta operación terminó
 
   const entregado = entregar && !errorEntrega;
+  if (datosCobro?.repetido) mostrarNotificacion(`Se había cortado la conexión, pero el cobro del pedido #${idPedido} ya estaba registrado: no se cobró dos veces.`, 'info');
   if (errorEntrega) {
     mostrarNotificacion(`Se registró el cobro de ${formatearPesos(cobro.monto)} en el pedido #${idPedido}, pero no se pudo marcar como entregado: ${mensajeErrorFuncion(errorEntrega, 'pedido')} Entregalo desde el listado.`, 'warning');
   } else if (esParcial) {

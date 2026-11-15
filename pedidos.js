@@ -1,6 +1,7 @@
 import { supabaseAdmin } from './config.js';
 import { carrito, setPedidoEditandoId, setPedidoEditandoEstado, setPedidoPagoOrigen, setCarrito } from './state.js';
-import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, confirmarAccion, confirmarEntregaConSaldo } from './utils.js';
+import { mostrarNotificacion, obtenerFechaActualISO, mensajeErrorFuncion, confirmarAccion, confirmarEntregaConSaldo, esErrorDeConexion, nuevaClaveOperacion } from './utils.js';
+import { mostrarAvisoConAccion } from './avisoAccion.js';   // aviso fijo cuando se corta la conexión y no se sabe si el cobro quedó registrado
 import { abrirModalCobro } from './cobro.js';
 import { cargarPOS, renderizarGrillaPOS, alCambiarCliente, esperarPOSListo, actualizarModoEdicionPOS, guardarFotoPedidoEditando } from './pos.js';
 import { navegarA } from './main.js';
@@ -709,6 +710,10 @@ export async function cobrarPedido(idPedido, entregar = false) {
 
   const cliente = pedido.nombre_referencia || pedido.TB_BCLIENTES?.nombre || 'Consumidor Final';
 
+  // Clave de operación (script 59): vale para esta ventana de cobro. Si se corta la conexión y se vuelve a tocar "Confirmar",
+  // se manda la MISMA clave y la base no cobra dos veces. Se renueva cuando la base responde (bien o con un error).
+  let claveCobro = null;
+
   await abrirModalCobro({
     titulo: entregar ? 'Cobrar y Entregar' : (pedido.estado === 'ENTREGADO' ? 'Registrar cobro' : 'Cobrar pedido'),
     subtitulo: `Pedido #${pedido.id} · ${cliente}`,
@@ -731,13 +736,29 @@ export async function cobrarPedido(idPedido, entregar = false) {
 
       if (entregar && !esParcial) {
         // Entregar y cobrar todo van en la MISMA llamada: se guardan juntos o no se guarda nada.
-        const { error: errorCobro } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
-          p_id_pedido: Number(pedido.id),
-          p_nuevo_estado: 'ENTREGADO',
-          p_id_medio: idMedio,
-          p_id_cuenta: idCuenta
-        });
+        let errorCobro = null;
+        try {
+          ({ error: errorCobro } = await supabaseAdmin.rpc('cambiar_estado_pedido', {
+            p_id_pedido: Number(pedido.id),
+            p_nuevo_estado: 'ENTREGADO',
+            p_id_medio: idMedio,
+            p_id_cuenta: idCuenta
+          }));
+        } catch (fallo) {
+          errorCobro = fallo;   // una excepción de red cuenta como error de conexión
+        }
         if (errorCobro) {
+          if (esErrorDeConexion(errorCobro)) {
+            // La respuesta nunca llegó: el cobro PUDO registrarse. Si se reintenta y ya estaba, la base lo rechaza (no se
+            // cobra dos veces), pero conviene mirar el listado primero.
+            mostrarAvisoConAccion({
+              mensaje: `No se pudo confirmar si el cobro del pedido #${pedido.id} se registró (falló la conexión). Antes de volver a intentar, revisá en "Listado de Pedidos" si ya figura como cobrado.`,
+              textoAccion: 'Entendido',
+              duracionMs: 0,
+              tipo: 'peligro'
+            });
+            return false;
+          }
           // Por ejemplo, si la caja de hoy ya está cerrada.
           mostrarNotificacion(mensajeErrorFuncion(errorCobro, 'pedido'), 'danger');
           return false;
@@ -748,15 +769,39 @@ export async function cobrarPedido(idPedido, entregar = false) {
       }
 
       // Cobro (completo o parcial) sin entregar. Con monto parcial se manda p_monto; sin él, la base cobra el saldo.
-      const { error: errorCobro } = await supabaseAdmin.rpc('registrar_cobro_pedido', {
-        p_id_pedido: Number(pedido.id),
-        p_id_medio: idMedio,
-        p_id_cuenta: idCuenta,
-        ...(esParcial ? { p_monto: Number(monto) } : {})
-      });
+      if (!claveCobro) claveCobro = nuevaClaveOperacion();
+      let datosCobro = null;
+      let errorCobro = null;
+      try {
+        ({ data: datosCobro, error: errorCobro } = await supabaseAdmin.rpc('registrar_cobro_pedido_seguro', {
+          p_clave: claveCobro,
+          p_id_pedido: Number(pedido.id),
+          p_id_medio: idMedio,
+          p_id_cuenta: idCuenta,
+          ...(esParcial ? { p_monto: Number(monto) } : {})
+        }));
+      } catch (fallo) {
+        errorCobro = fallo;   // una excepción de red cuenta como error de conexión
+      }
       if (errorCobro) {
+        if (esErrorDeConexion(errorCobro)) {
+          // La respuesta nunca llegó: el cobro PUDO registrarse. La clave NO se renueva: si se vuelve a tocar "Confirmar" se
+          // manda la misma y la base devuelve el cobro ya registrado en vez de cobrar de nuevo (script 59).
+          mostrarAvisoConAccion({
+            mensaje: `No se pudo confirmar si el cobro del pedido #${pedido.id} se registró (falló la conexión). Podés volver a tocar el botón: si ya se había registrado, no se cobra dos veces.`,
+            textoAccion: 'Entendido',
+            duracionMs: 0,
+            tipo: 'peligro'
+          });
+          return false;
+        }
+        claveCobro = null;   // la base respondió con un error: el próximo intento es una operación nueva
         mostrarNotificacion(mensajeErrorFuncion(errorCobro, 'pedido'), 'danger');
         return false;
+      }
+      claveCobro = null;   // la base respondió bien: esta operación terminó
+      if (datosCobro?.repetido) {
+        mostrarNotificacion('Se había cortado la conexión, pero el cobro ya estaba registrado: no se cobró dos veces.', 'info');
       }
 
       // "Cobrar y entregar" con cobro parcial: son DOS pasos (cobro y después entrega sin cobrar el resto). Si la entrega
