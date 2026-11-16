@@ -15,7 +15,7 @@ import { abrirModalCobro } from './cobro.js';
 import { leerPreferenciasImpresion } from './preferencias.js';
 import { imprimirAutomatico } from './impresion.js';
 import { mostrarAvisoConAccion, cerrarAvisoAccion } from './avisoAccion.js';
-import { buscarPrecio, calcularDescuentoDocena, resumirPedido } from './precios.js';
+import { buscarPrecio, calcularDescuentoDocena, listaTienePrecios, resumirPedido } from './precios.js';
 
 // calcularSubtotalItem se mudó a precios.js; se vuelve a exportar acá por si algún archivo lo importaba desde pos.js.
 export { calcularSubtotalItem } from './precios.js';
@@ -192,6 +192,7 @@ export async function cargarPOS() {
   setCacheCategorias(categorias || []);
   setCacheProductos(productos || []);
   setCachePrecios(precios || []);
+  idListaCargada = idLista;   // (F2) de qué lista son los precios que quedaron en el caché
 
   renderizarGrillaPOS();
   if (veniaConError) mostrarNotificacion('Catálogo actualizado.');
@@ -209,6 +210,7 @@ export async function cargarPOS() {
 //   cargarPOS lo borra apenas una carga sale bien.
 // -----------------------------------------------------------------------------
 let errorCargaPOS = null;          // texto del error actual (null = sin error)
+let idListaCargada = null;         // lista de precios del último catálogo cargado BIEN (null = todavía ninguno)
 let selectsCargados = false;       // ¿alguna vez se cargaron bien clientes y listas?
 let reintentandoCarga = false;
 
@@ -221,6 +223,7 @@ function mostrarErrorCargaPOS(texto) {
 function pintarErrorCargaPOS() {
   const contenedor = document.getElementById('contenedor-menu-productos');
   if (!contenedor) return;
+  pintarAvisoListaSinPrecios();   // (F2) cartel de "lista sin precios"; se redibuja junto con el de error de carga
   const viejo = document.getElementById('pos-error-carga');
   if (viejo) viejo.remove();
   if (!errorCargaPOS) return;
@@ -235,6 +238,56 @@ function pintarErrorCargaPOS() {
     <button type="button" class="pos-error-carga-btn">Reintentar</button>`;
   cartel.querySelector('button').addEventListener('click', reintentarCargaPOS);
   contenedor.insertAdjacentElement('afterbegin', cartel);
+}
+
+// -----------------------------------------------------------------------------
+// Lista de precios SIN precios (F2)
+//   Si la lista elegida se cargó bien pero no tiene ninguna fila de precios, el POS no deja armar el pedido:
+//   cartel fijo arriba del catálogo y los "+" no agregan nada. Sin botón Reintentar: se arregla eligiendo otra lista
+//   o cargándole precios a esa (Dueño). (El servidor ya rechazaba el pedido; esto avisa ANTES de armarlo.)
+//   Solo vale si la lista cargada es la elegida: si el catálogo no se pudo actualizar, el cartel de error de carga
+//   ya cuenta lo que pasa.
+// -----------------------------------------------------------------------------
+function listaElegidaPOS() {
+  const sel = document.getElementById('select-lista-pedido');
+  return { id: Number(sel?.value || 0), nombre: (sel?.options?.[sel.selectedIndex]?.text || '').trim() };
+}
+
+function listaSinPreciosPOS() {
+  const { id } = listaElegidaPOS();
+  if (idListaCargada === null || !id || idListaCargada !== id) return false;
+  return !listaTienePrecios(cachePrecios, id);
+}
+
+function textoListaSinPrecios() {
+  const { nombre } = listaElegidaPOS();
+  return `La lista${nombre ? ` "${nombre}"` : ''} no tiene precios cargados. Elegí otra lista.`;
+}
+
+function pintarAvisoListaSinPrecios() {
+  const contenedor = document.getElementById('contenedor-menu-productos');
+  if (!contenedor) return;
+  const viejo = document.getElementById('pos-aviso-lista');
+  if (viejo) viejo.remove();
+  if (!listaSinPreciosPOS()) return;
+
+  const cartel = document.createElement('div');
+  cartel.id = 'pos-aviso-lista';
+  cartel.className = 'pos-error-carga';
+  cartel.setAttribute('role', 'alert');
+  cartel.innerHTML = `
+    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+    <span class="pos-error-carga-texto">${esc(textoListaSinPrecios())}</span>`;
+  contenedor.insertAdjacentElement('afterbegin', cartel);
+}
+
+// Motivo por el que NO se puede agregar un producto al pedido ('' = se puede).
+function motivoSinPrecio(idProducto) {
+  const p = (Array.isArray(cacheProductos) ? cacheProductos : []).find(x => Number(x.id) === Number(idProducto));
+  if (!p) return '';
+  if (listaSinPreciosPOS()) return textoListaSinPrecios();
+  const precios = obtenerPrecioProducto(p.id, p.id_categoria || p.idCategoria);
+  return precios.unidad > 0 ? '' : `"${p.nombre}" no tiene precio en la lista elegida.`;
 }
 
 async function reintentarCargaPOS() {
@@ -510,7 +563,8 @@ export function renderizarGrillaPOS() {
 // -----------------------------------------------------------------------------
 export function obtenerPrecioProducto(idProd, idCat, idLista = null) {
   const idL = idLista ? Number(idLista) : Number(document.getElementById('select-lista-pedido')?.value || 0);
-  return buscarPrecio(cachePrecios, idProd, idCat, idL);
+  // sinRespaldo: si la lista elegida no tiene filas, da 0 (no se usan los precios de otra lista).
+  return buscarPrecio(cachePrecios, idProd, idCat, idL, { sinRespaldo: true });
 }
 
 // -----------------------------------------------------------------------------
@@ -572,6 +626,11 @@ export function alterarCantidad(idProducto, delta) {
   if (guardandoPedido) return;   // mientras se guarda, el pedido no se puede modificar (se perdería el cambio)
   // La papelera de la tarjeta manda un delta enorme negativo: es "quitar el producto", y eso se puede deshacer.
   if (delta <= -1000) { eliminarItemCarrito(idProducto); return; }
+  // Agregar un producto sin precio en la lista elegida (o con la lista entera sin precios) no se permite: saldría en $0.
+  if (delta > 0) {
+    const motivo = motivoSinPrecio(idProducto);
+    if (motivo) { mostrarNotificacion(motivo, 'warning'); return; }
+  }
   // Si recién se vació el pedido y la persona empieza otro, el "Deshacer" de la vaciada ya no corresponde.
   if (pendienteDeshacer && pendienteDeshacer.tipo === 'vaciar') descartarDeshacer();
   const actual = carrito[idProducto] || 0;
@@ -1184,6 +1243,12 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
     mostrarNotificacion('Indicá un nombre o referencia. Solo podés omitirlo si cobrás todo y entregás en el momento.', 'warning');
     if (inputRef) inputRef.focus();
     return; // Interrumpe el guardado
+  }
+
+  // Lista elegida sin ningún precio cargado: se frena antes de revisar producto por producto.
+  if (listaSinPreciosPOS()) {
+    mostrarNotificacion(textoListaSinPrecios(), 'warning');
+    return;
   }
 
   // Productos y cantidades. Si alguno no tiene precio en la lista elegida, se avisa cuál

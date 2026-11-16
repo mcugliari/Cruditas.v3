@@ -31,11 +31,15 @@
 //     listaPrecios -> filas de TB_DLISTA_PRECIOS (id_lista_precio, id_categoria, id_producto,
 //                     precio_unidad, precio_docena)
 //     idLista      -> lista a usar; vacío/0 = sin filtrar por lista
+//     opciones     -> { sinRespaldo }: con true, si la lista elegida NO tiene ninguna fila devuelve 0 y 0
+//                     en lugar de usar los precios de otra lista. Lo usa el POS (F2): nunca debe mostrar ni
+//                     cobrar con los precios de una lista distinta a la elegida. Por defecto es false
+//                     (comportamiento de siempre, que usa cliente.js).
 //   Orden de búsqueda: primero el precio propio del producto, después el de su categoría.
 //   Sin precio de docena (0/null) la docena vale 12 unidades (o sea: sin ahorro).
 //   Sin ningún precio devuelve { unidad: 0, docena: 0 }.
 // -----------------------------------------------------------------------------
-export function buscarPrecio(listaPrecios, idProducto, idCategoria, idLista = null) {
+export function buscarPrecio(listaPrecios, idProducto, idCategoria, idLista = null, { sinRespaldo = false } = {}) {
   if (!listaPrecios || listaPrecios.length === 0) return { unidad: 0, docena: 0 };
 
   const idP = Number(idProducto);
@@ -43,6 +47,8 @@ export function buscarPrecio(listaPrecios, idProducto, idCategoria, idLista = nu
   const idL = idLista ? Number(idLista) : 0;
 
   const preciosFiltrados = listaPrecios.filter(p => !idL || Number(p.id_lista_precio || p.id_lista) === idL);
+  // Lista elegida sin ninguna fila: en modo estricto no se "presta" el precio de otra lista.
+  if (sinRespaldo && idL && preciosFiltrados.length === 0) return { unidad: 0, docena: 0 };
   const listaABuscar = preciosFiltrados.length > 0 ? preciosFiltrados : listaPrecios;
 
   const pProd = listaABuscar.find(p => p.id_producto !== null && Number(p.id_producto) === idP);
@@ -60,6 +66,20 @@ export function buscarPrecio(listaPrecios, idProducto, idCategoria, idLista = nu
   }
 
   return { unidad: 0, docena: 0 };
+}
+
+
+// -----------------------------------------------------------------------------
+// listaTienePrecios
+//   ¿Hay al menos una fila de precios para esa lista? Sirve para avisar (y no dejar cargar el pedido)
+//   cuando se elige una lista que todavía no tiene precios cargados.
+//   Sin lista elegida (vacío/0) alcanza con que haya alguna fila.
+// -----------------------------------------------------------------------------
+export function listaTienePrecios(listaPrecios, idLista) {
+  if (!Array.isArray(listaPrecios) || listaPrecios.length === 0) return false;
+  const idL = idLista ? Number(idLista) : 0;
+  if (!idL) return true;
+  return listaPrecios.some(p => Number(p.id_lista_precio || p.id_lista) === idL);
 }
 
 

@@ -28,29 +28,29 @@
     /* ---------- Cabecera ---------- */
     .header-app {
       background: linear-gradient(180deg, #141414 0%, #262626 100%);
-      padding: 22px 16px 28px;
+      padding: 12px 16px 14px;
       text-align: center;
-      border-radius: 0 0 28px 28px;
+      border-radius: 0 0 24px 24px;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
     }
     .header-marca { display: inline-flex; align-items: center; gap: 10px; }
     .header-nombre {
       margin: 0;
-      font-size: 2rem;
+      font-size: 1.75rem;
       font-weight: 800;
       letter-spacing: 1px;
       line-height: 1;
       color: var(--amarillo);
       text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
     }
-    .header-icono { font-size: 1.6rem; line-height: 1; }
+    .header-icono { font-size: 1.4rem; line-height: 1; }
     .header-sub {
       position: relative;
       display: inline-block;
-      margin-top: 10px;
-      padding-bottom: 6px;
+      margin-top: 4px;
+      padding-bottom: 5px;
       font-family: 'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
-      font-size: 1.45rem;
+      font-size: 1.25rem;
       color: #f8f9fa;
     }
     /* Trazo amarillo bajo el subtítulo */
@@ -139,7 +139,7 @@
       align-items: center;
       justify-content: center;
     }
-    .prod-foto img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+    .prod-foto img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
     .prod-info { flex: 1 1 auto; min-width: 0; }
     /* Etiqueta chica con la categoría (Simple / Especial / Premium), solo en grupos con varias */
     .prod-cat {
@@ -152,24 +152,24 @@
       color: #8a6d00;
     }
     .prod-nombre { font-size: 1.1rem; font-weight: 800; line-height: 1.2; color: var(--tinta); }
-    .prod-precio { margin-top: 3px; font-size: 1.05rem; font-weight: 800; color: var(--ambar); }
-    .prod-unidad { font-size: 0.8rem; font-weight: 600; color: #9ca3af; }
+    .prod-precio { margin-top: 3px; font-size: 1.3rem; font-weight: 800; line-height: 1.15; color: #111; }
+    .prod-unidad { font-size: 0.82rem; font-weight: 700; color: #6b7280; }
     .prod-docena {
       display: inline-block;
       margin-top: 4px;
-      padding: 1px 9px;
+      padding: 2px 10px;
       border-radius: 999px;
-      background: #f1f3f5;
-      color: #6b7280;
-      font-size: 0.72rem;
-      font-weight: 700;
+      background: #fff3cd;
+      color: #6b4f00;
+      font-size: 0.78rem;
+      font-weight: 800;
     }
 
     /* ---------- Controles de cantidad ---------- */
     .qty { display: flex; align-items: center; flex-shrink: 0; }
     .qty-btn {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       padding: 0;
       border-radius: 50%;
       border: 2px solid;
@@ -234,9 +234,10 @@
       gap: 10px;
       background: var(--amarillo);
       color: #111;
-      font-size: 1rem;
+      font-size: 0.92rem;
       font-weight: 800;
-      letter-spacing: 0.4px;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
       box-shadow: 0 3px 0 var(--amarillo-oscuro);
       touch-action: manipulation;
     }
@@ -247,12 +248,13 @@
     /* Pantallas angostas: foto y botones más chicos para que el nombre tenga lugar */
     @media (max-width: 400px) {
       .prod-card { gap: 10px; padding: 12px 10px 12px 12px; }
-      .prod-foto { width: 52px; height: 52px; font-size: 1.25rem; }
-      .qty-btn { width: 36px; height: 36px; }
+      .prod-foto { width: 56px; height: 56px; font-size: 1.25rem; }
+      .qty-btn { width: 44px; height: 44px; }
       .qty-num { min-width: 30px; }
     }
     @media (max-width: 340px) {
       .prod-foto { display: none; }
+      .qty-btn { width: 40px; height: 40px; }
     }
     /* Pantallas muy angostas: se sacan los íconos de la barra para que entre todo */
     @media (max-width: 360px) {
@@ -271,7 +273,40 @@
       flex: 1 1 auto;
       min-height: 0;
     }
-    .aviso-verificacion { background: #fff8e1; border-radius: 10px; padding: 10px 12px; font-size: 0.85rem; color: #6b5b00; }
+    .nota-docena { margin: 0 2px 12px; padding: 8px 12px; border-radius: 10px; background: #fff3cd; color: #6b4f00; font-size: 0.84rem; font-weight: 700; }
+
+    /* ---------- Indicador de progreso (en la cabecera) ---------- */
+    .pasos { display: flex; align-items: center; justify-content: center; gap: 8px; list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.74rem; font-weight: 700; color: #9ca3af; }
+    .paso { display: flex; align-items: center; gap: 6px; }
+    .paso-n { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #6b7280; display: inline-flex; align-items: center; justify-content: center; font-size: 0.68rem; }
+    .paso.activo { color: #fff; }
+    .paso.activo .paso-n { background: var(--amarillo); border-color: var(--amarillo); color: #111; }
+    .paso-sep { width: 28px; height: 2px; border-radius: 2px; background: #4b5563; }
+
+    /* ---------- Modal: resumen, total, formulario y pie ---------- */
+    .paso-modal { display: block; font-size: 0.78rem; font-weight: 700; color: rgba(0, 0, 0, 0.62); }
+    .fila-calculo { display: flex; justify-content: space-between; padding: 4px 8px; font-size: 0.92rem; color: #4b5563; }
+    .fila-desc { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #e8f6ec; color: #146c2e; border-radius: 10px; padding: 8px 10px; margin: 4px 0 10px; font-weight: 800; }
+    .fila-desc small { font-size: 0.76rem; opacity: 0.85; }
+    .total-franja { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #141414; color: #fff; border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; }
+    .total-franja .monto { color: var(--amarillo); font-size: 1.7rem; font-weight: 800; line-height: 1; }
+    #modalConfirmarCliente .form-control { font-size: 16px; min-height: 46px; } /* 16px evita el zoom automático de iOS */
+    #modalConfirmarCliente textarea.form-control { min-height: 0; }
+    .modalidad-fila { display: flex; align-items: center; gap: 10px; background: #fff6dd; border: 1px solid #f0dc9a; border-radius: 8px; padding: 0 12px; }
+    .modalidad-fila i { color: #8a6d00; }
+    .modalidad-fila .form-control { border: 0; background: transparent; font-weight: 800; padding-left: 0; }
+    .tel-aviso { font-size: 0.82rem; color: #7a5200; background: #fff8e1; border-radius: 8px; padding: 6px 10px; margin-top: 6px; }
+    .tel-aviso .btn { margin-top: 4px; font-weight: 800; }
+    #modalConfirmarCliente .modal-footer { flex-direction: column; align-items: stretch; padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); }
+    #modalConfirmarCliente .modal-footer > * { margin: 0; }
+    .nota-recepcion { font-size: 0.8rem; color: #6b7280; text-align: center; margin-bottom: 8px !important; }
+    #btn-finalizar-pedido { min-height: 52px; font-size: 1.05rem; }
+    /* Celular: el modal ocupa toda la pantalla, así el teclado no lo mueve ni tapa el botón */
+    @media (max-width: 575.98px) {
+      #modalConfirmarCliente .modal-dialog { margin: 0; max-width: 100%; height: 100%; min-height: 0; }
+      @supports (height: 100dvh) { #modalConfirmarCliente .modal-dialog { height: 100dvh; } }
+      #modalConfirmarCliente .modal-content { height: 100%; max-height: 100%; border-radius: 0; border: 0; }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -284,6 +319,11 @@
       <span class="header-icono" aria-hidden="true">🥟</span>
     </div>
     <div class="header-sub">Menú de Autogestión</div>
+    <ol class="pasos" aria-label="Progreso del pedido">
+      <li class="paso activo" aria-current="step"><span class="paso-n">1</span>Productos</li>
+      <li class="paso-sep" aria-hidden="true"></li>
+      <li class="paso"><span class="paso-n">2</span>Confirmar</li>
+    </ol>
   </header>
 
   <!-- Menú: lo dibuja cliente.js (categorías desplegables con sus productos) -->
@@ -302,8 +342,7 @@
         </div>
       </div>
       <button type="button" class="btn-enviar" id="btn-confirmar-pedido" disabled>
-        <i class="fas fa-paper-plane" aria-hidden="true"></i>
-        <span>ENVIAR PEDIDO</span>
+        <span>REVISAR PEDIDO</span>
         <i class="fas fa-arrow-right" aria-hidden="true"></i>
       </button>
     </div>
@@ -317,7 +356,10 @@
         <!-- Paso 1: revisar el pedido y completar los datos -->
         <div id="cliente-paso-datos">
           <div class="modal-header bg-warning">
-            <h5 class="modal-title font-weight-bold" id="titulo-modal-cliente">Confirmá tu pedido</h5>
+            <div>
+              <h5 class="modal-title font-weight-bold" id="titulo-modal-cliente">Confirmá tu pedido</h5>
+              <span class="paso-modal">Paso 2 de 2</span>
+            </div>
             <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">&times;</button>
           </div>
           <div class="modal-body">
@@ -326,32 +368,38 @@
 
             <div class="form-group">
               <label class="font-weight-bold small" for="cliente-nombre">Tu Nombre / Referencia *</label>
-              <input type="text" class="form-control" id="cliente-nombre" placeholder="Ej: Juan Pérez" autocomplete="name" required>
+              <input type="text" class="form-control" id="cliente-nombre" placeholder="Ej: Juan Pérez" autocomplete="name" autocapitalize="words" enterkeyhint="next" required>
             </div>
             <div class="form-group">
               <label class="font-weight-bold small" for="cliente-telefono">Teléfono / WhatsApp *</label>
-              <input type="tel" inputmode="tel" class="form-control" id="cliente-telefono" placeholder="Ej: 1122334455" autocomplete="tel" required>
-              <small class="form-text text-muted">Con característica, <strong>sin 0 ni 15</strong>. Es el número por el que te avisamos cuando tu pedido esté listo.</small>
+              <input type="tel" inputmode="tel" class="form-control" id="cliente-telefono" placeholder="Ej: 1122334455" autocomplete="tel-national" enterkeyhint="next" required>
+              <small class="form-text text-muted">Ingresá tu número con característica, <strong>sin 0 ni 15</strong>. Es el número por el que te avisamos cuando tu pedido esté listo.</small>
+              <div class="tel-aviso d-none" id="cliente-tel-aviso" role="status" aria-live="polite"></div>
             </div>
             <div class="form-group">
               <label class="font-weight-bold small" for="cliente-modalidad">Modalidad</label>
-              <input type="text" class="form-control bg-light" id="cliente-modalidad" value="Retiro por el local" readonly>
+              <div class="modalidad-fila">
+                <i class="fas fa-store" aria-hidden="true"></i>
+                <input type="text" class="form-control" id="cliente-modalidad" value="Retiro por el local" readonly>
+              </div>
             </div>
             <div class="form-group">
               <label class="font-weight-bold small" for="cliente-observaciones">Observaciones / Aclaraciones</label>
               <textarea class="form-control" id="cliente-observaciones" rows="2" placeholder="Ej: Retiro a las 18:00 hs, pago en efectivo"></textarea>
             </div>
 
-            <p class="aviso-verificacion mb-2">
-              <i class="fas fa-circle-info mr-1" aria-hidden="true"></i>
-              Al confirmar, tu pedido llega al local y lo verificamos antes de empezar a prepararlo.
-            </p>
             <!-- Errores y avisos (reemplaza a los alert del navegador) -->
             <div class="alert alert-danger py-2 small mb-0 d-none" id="cliente-error" role="alert"></div>
           </div>
           <div class="modal-footer">
+            <p class="nota-recepcion">
+              <i class="fas fa-circle-info mr-1" aria-hidden="true"></i>CRUDITAS recibe tu pedido y el local lo valida antes de prepararlo.
+            </p>
             <button type="button" class="btn btn-success btn-block font-weight-bold" id="btn-finalizar-pedido">
               CONFIRMAR PEDIDO
+            </button>
+            <button type="button" class="btn btn-link btn-block text-secondary font-weight-bold mt-1" data-dismiss="modal">
+              <i class="fas fa-arrow-left mr-1" aria-hidden="true"></i>Seguir editando
             </button>
           </div>
         </div>

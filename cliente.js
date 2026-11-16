@@ -220,7 +220,10 @@ function renderizarMenuPorCategorias() {
     grupos.get(clave).ids.add(Number(cat.id));
   });
 
-  let html = '';
+  // Aviso de la promo por docena (solo si hay productos docenables).
+  let html = cacheProductos.some(p => p.m_permite_docena)
+    ? '<p class="nota-docena"><i class="fas fa-tags mr-1" aria-hidden="true"></i>Docena: mezclá sabores de empanadas y canastitas y llevás el precio de docena.</p>'
+    : '';
   let indice = 0;
   grupoDeProducto = {};
 
@@ -272,18 +275,22 @@ function renderizarMenuPorCategorias() {
       // Jerarquía: nombre (protagonista) > precio por unidad > precio por docena (discreto)
       let htmlDocena = '';
       if (p.m_permite_docena && precios.docena) {
-        htmlDocena = `<span class="prod-docena">${formatoPesos(precios.docena)} doc.</span>`;
+        htmlDocena = `<span class="prod-docena">Docena: ${formatoPesos(precios.docena)}</span>`;
       }
+
+      // Foto propia del producto (columna imagen_url, como en el POS). Si no viene o no carga, queda la foto del grupo / el ícono.
+      const urlFoto = urlImagenSegura(p.imagen_url);
 
       html += `
             <div class="prod-card ${cant > 0 ? 'en-carrito' : ''}" data-prod="${p.id}">
-              <div class="prod-foto" ${claveFoto ? `data-foto="${claveFoto}"` : ''} aria-hidden="true">
+              <div class="prod-foto" ${(claveFoto && !urlFoto) ? `data-foto="${claveFoto}"` : ''} aria-hidden="true">
                 <i class="fas ${icono}"></i>
+                ${urlFoto ? `<img src="${esc(urlFoto)}" alt="" width="64" height="64" loading="lazy" decoding="async" onerror="this.remove()">` : ''}
               </div>
               <div class="prod-info">
                 ${htmlEtiqueta}
                 <div class="prod-nombre">${esc(p.nombre)}</div>
-                <div class="prod-precio">${formatoPesos(precios.unidad)} <span class="prod-unidad">/ u</span></div>
+                <div class="prod-precio">${formatoPesos(precios.unidad)} <span class="prod-unidad">/ unidad</span></div>
                 ${htmlDocena}
               </div>
               <div class="qty">
@@ -546,22 +553,24 @@ function renderizarResumenEnModalCliente() {
     `;
   });
 
+  html += `</ul>`;
+
+  // Subtotal y descuento (solo si hay descuento por docena). Son valores ya calculados en precios.js.
   if (resumen.descuentoTotal > 0) {
+    const docs = resumen.docenasCompletas;
     html += `
-      <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-light text-danger border-bottom">
-        <div>
-          <strong class="d-block text-danger"><i class="fas fa-tag mr-1"></i> Descuento por Docena</strong>
-          <small class="text-muted">${resumen.docenasCompletas} doc. promocional(es)</small>
-        </div>
-        <span class="font-weight-bold">-${formatoPesos(resumen.descuentoTotal)}</span>
-      </li>
-    `;
+      <div class="fila-calculo"><span>Subtotal</span><span>${formatoPesos(resumen.subtotalSinDescuento)}</span></div>
+      <div class="fila-desc">
+        <span><i class="fas fa-tag mr-1" aria-hidden="true"></i> Descuento por docena
+          <small class="d-block">${docs === 1 ? '1 docena promocional' : docs + ' docenas promocionales'}</small></span>
+        <span>-${formatoPesos(resumen.descuentoTotal)}</span>
+      </div>`;
   }
 
-  html += `</ul>
-    <div class="d-flex justify-content-between align-items-center p-2 mb-3 bg-white rounded border">
-      <span class="font-weight-bold">TOTAL DEL PEDIDO:</span>
-      <span class="h5 font-weight-bold text-success mb-0">${formatoPesos(resumen.totalFinal)}</span>
+  html += `
+    <div class="total-franja">
+      <span class="font-weight-bold">TOTAL DEL PEDIDO</span>
+      <span class="monto">${formatoPesos(resumen.totalFinal)}</span>
     </div>
   `;
 
@@ -590,7 +599,7 @@ function mostrarPasoExito(idPedido, total, nombre, telefono) {
     <div class="modal-body text-center py-4">
       <div class="mb-2" style="font-size: 3.2rem; color: #198754;"><i class="fas fa-circle-check" aria-hidden="true"></i></div>
       <h4 class="font-weight-bold text-dark mb-1">¡Pedido recibido!</h4>
-      <p class="text-muted mb-3">Pedido <strong>#${esc(idPedido)}</strong> · Estamos verificando tu pedido antes de empezar a prepararlo.</p>
+      <p class="text-muted mb-3">Pedido <strong>#${esc(idPedido)}</strong> · ¡Listo! Ya recibimos tu pedido. Podés cerrar esta ventana.</p>
       <p class="lead mb-2">Total del pedido: <strong class="text-success">${formatoPesos(total)}</strong></p>
       <div class="alert alert-light border my-3">
         <small class="text-secondary d-block">Cliente: <strong>${esc(nombre)}</strong></small>
@@ -680,4 +689,70 @@ async function enviarPedidoASupabase() {
     enviando = false;
     ponerBotonConfirmar(false);
   }
+}
+
+// -----------------------------------------------------------------------------
+// Mejoras del formulario (solo presentación; no cambian lo que se envía ni las validaciones)
+// -----------------------------------------------------------------------------
+
+// Revisa el teléfono y devuelve { mensaje, sugerido } o null si está bien. "sugerido" solo se ofrece
+// cuando la corrección es inequívoca (sacar +54, el 0 o el 15); nunca se aplica solo.
+function analizarTelefono(valor) {
+  const crudo = String(valor || '').trim();
+  if (!crudo) return null;
+  if (/[^\d\s\-().+]/.test(crudo)) return { mensaje: 'Usá solo números.', sugerido: '' };
+
+  let d = crudo.replace(/\D/g, '');
+  const original = d;
+  if (d.startsWith('549') && d.length >= 12) d = d.slice(3);
+  else if (d.startsWith('54')) d = d.slice(2);
+  if (d.startsWith('0')) d = d.slice(1);
+  if (d.length === 12 && d.startsWith('11') && d.slice(2, 4) === '15') d = '11' + d.slice(4);
+  else if (d.length === 12 && !d.startsWith('11') && d.slice(3, 5) === '15') d = d.slice(0, 3) + d.slice(5);
+
+  const cambio = d !== original;
+  if (d.length === 10) {
+    return cambio ? { mensaje: 'Sin +54, 0 ni 15 sería:', sugerido: d } : null;
+  }
+  return { mensaje: 'Tiene que tener 10 dígitos: característica + número (ej: 1122334455).', sugerido: '' };
+}
+
+function iniciarMejorasFormulario() {
+  const inputTel = document.getElementById('cliente-telefono');
+  const aviso = document.getElementById('cliente-tel-aviso');
+
+  function mostrarAvisoTelefono() {
+    if (!inputTel || !aviso) return;
+    const r = analizarTelefono(inputTel.value);
+    aviso.textContent = '';
+    aviso.classList.toggle('d-none', !r);
+    if (!r) return;
+    aviso.append(r.mensaje + ' ');
+    if (r.sugerido) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-sm btn-warning';
+      b.textContent = 'Usar ' + r.sugerido;
+      b.addEventListener('click', () => { inputTel.value = r.sugerido; mostrarAvisoTelefono(); });
+      aviso.appendChild(b);
+    }
+  }
+
+  inputTel?.addEventListener('blur', mostrarAvisoTelefono);
+  inputTel?.addEventListener('input', () => { if (!aviso?.classList.contains('d-none')) mostrarAvisoTelefono(); });
+  $('#modalConfirmarCliente').on('show.bs.modal', () => aviso?.classList.add('d-none'));
+
+  // Con el teclado abierto, el campo enfocado se mantiene a la vista.
+  ['cliente-nombre', 'cliente-telefono', 'cliente-observaciones'].forEach(id => {
+    const el = document.getElementById(id);
+    el?.addEventListener('focus', () => setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300));
+  });
+}
+
+document.addEventListener('DOMContentLoaded', iniciarMejorasFormulario);
+
+// Igual que en el POS: solo se aceptan direcciones http(s); cualquier otra cosa se trata como "sin foto".
+function urlImagenSegura(url) {
+  const u = String(url || '').trim();
+  return /^https?:\/\//i.test(u) ? u : '';
 }

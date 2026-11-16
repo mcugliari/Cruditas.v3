@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './config.js';
-import { mostrarNotificacion, confirmarAccion, esc } from './utils.js';
+import { mostrarNotificacion, confirmarAccion, esc, mensajeErrorFuncion } from './utils.js';
 
 // -----------------------------------------------------------------------------
 // Categorías de sistema (interna)
@@ -62,16 +62,185 @@ function iniciarMarcaCambios() {
   });
 }
 
+// -----------------------------------------------------------------------------
+// cargarListas (interna)
+//   Trae las listas de la base y llena el desplegable "Lista a editar". Si se indica idASeleccionar,
+//   deja elegida esa lista. Devuelve true si pudo cargarlas.
+// -----------------------------------------------------------------------------
+async function cargarListas(idASeleccionar = null) {
+  const select = document.getElementById('select-lista-activa');
+  const { data: listas, error } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*').order('id', { ascending: true });
+  if (error || !listas || listas.length === 0) return false;
+  select.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
+  if (idASeleccionar) select.value = String(idASeleccionar);
+  return true;
+}
+
 export async function inicializarModuloListas() {
+  conectarBotonesListas();   // los botones "Nueva lista" y "Renombrar" (se conectan una sola vez)
+
   const select = document.getElementById('select-lista-activa');
   if (select.children.length > 1 && select.value !== '') return;
 
-  const { data: listas, error } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*').order('id', { ascending: true });
-  if (!error && listas && listas.length > 0) {
-    select.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
-    cargarMatrizPrecios();
+  if (await cargarListas()) cargarMatrizPrecios();
+}
+
+
+// =============================================================================
+// NUEVA LISTA y RENOMBRAR (solo Dueño: lo exige la base en crear_lista_precios y renombrar_lista_precios, script 61)
+// =============================================================================
+// La ventana se crea sola por código la primera vez (no hace falta tocar index.html para eso).
+// Una misma ventana sirve para los dos casos: al crear muestra "Copiar los precios de" (por defecto, la lista
+// que se está viendo, para que la lista nueva nazca lista para usar); al renombrar solo pide el nombre.
+const ID_MODAL_LISTA = 'modal-lista-precios';
+let modoModalLista = 'crear';   // 'crear' | 'renombrar'
+let guardandoLista = false;
+
+function conectarBotonesListas() {
+  const btnNueva = document.getElementById('btn-nueva-lista');
+  const btnRenombrar = document.getElementById('btn-renombrar-lista');
+  if (btnNueva && !btnNueva.dataset.conectado) {
+    btnNueva.dataset.conectado = '1';
+    btnNueva.addEventListener('click', () => abrirModalLista('crear'));
+  }
+  if (btnRenombrar && !btnRenombrar.dataset.conectado) {
+    btnRenombrar.dataset.conectado = '1';
+    btnRenombrar.addEventListener('click', () => abrirModalLista('renombrar'));
   }
 }
+
+function asegurarModalLista() {
+  if (document.getElementById(ID_MODAL_LISTA)) return;
+  const modal = document.createElement('div');
+  modal.className = 'modal fade';
+  modal.id = ID_MODAL_LISTA;
+  modal.tabIndex = -1;
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML = `
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title font-weight-bold"><i class="fas fa-tags mr-2"></i><span id="lista-modal-titulo">Nueva lista</span></h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+        </div>
+        <form id="form-lista-precios" novalidate>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="lista-nombre-input">Nombre de la lista *</label>
+              <input type="text" class="form-control" id="lista-nombre-input" maxlength="60" autocomplete="off" placeholder="Ej.: Mayorista">
+            </div>
+            <div class="form-group mb-0" id="lista-grupo-copiar">
+              <label for="lista-copiar-de">Copiar los precios de</label>
+              <select class="form-control" id="lista-copiar-de"></select>
+              <small class="form-text text-muted">Así la lista nueva ya tiene precios y después cambiás solo lo que difiera. Si la dejás vacía, el POS no te deja usarla hasta que le cargues precios.</small>
+            </div>
+            <p class="text-danger small mt-2 mb-0 d-none" id="lista-modal-error"></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-warning font-weight-bold" id="btn-lista-guardar">Crear lista</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('form-lista-precios').addEventListener('submit', guardarModalLista);
+  // Al abrirse, el cursor queda en el nombre (en la tablet se abre el teclado directo).
+  $('#' + ID_MODAL_LISTA).on('shown.bs.modal', () => {
+    const input = document.getElementById('lista-nombre-input');
+    input.focus();
+    input.select();
+  });
+}
+
+function mostrarErrorModalLista(texto) {
+  const p = document.getElementById('lista-modal-error');
+  p.textContent = texto || '';
+  p.classList.toggle('d-none', !texto);
+}
+
+async function abrirModalLista(modo) {
+  const select = document.getElementById('select-lista-activa');
+  const idActual = select.value;
+  if (!idActual) {
+    mostrarNotificacion('Esperá a que carguen las listas.', 'warning');
+    return;
+  }
+  asegurarModalLista();
+  modoModalLista = modo;
+  mostrarErrorModalLista('');
+
+  const nombreActual = select.options[select.selectedIndex]?.textContent || '';
+  const crear = modo === 'crear';
+
+  document.getElementById('lista-modal-titulo').textContent = crear ? 'Nueva lista de precios' : 'Renombrar lista';
+  document.getElementById('btn-lista-guardar').textContent = crear ? 'Crear lista' : 'Guardar nombre';
+  document.getElementById('lista-nombre-input').value = crear ? '' : nombreActual;
+  document.getElementById('lista-grupo-copiar').classList.toggle('d-none', !crear);
+
+  if (crear) {
+    // Por defecto copia la lista que se está viendo; la primera opción permite dejarla vacía.
+    document.getElementById('lista-copiar-de').innerHTML =
+      '<option value="">No copiar (lista vacía)</option>' +
+      Array.from(select.options).map(o =>
+        `<option value="${esc(o.value)}"${o.value === idActual ? ' selected' : ''}>${esc(o.textContent)}</option>`).join('');
+  }
+
+  $('#' + ID_MODAL_LISTA).modal('show');
+}
+
+async function guardarModalLista(e) {
+  e.preventDefault();
+  if (guardandoLista) return;   // un doble toque no manda dos veces
+
+  const nombre = document.getElementById('lista-nombre-input').value.trim().replace(/\s+/g, ' ');
+  if (!nombre) { mostrarErrorModalLista('Escribí un nombre para la lista.'); return; }
+  if (nombre.length > 60) { mostrarErrorModalLista('El nombre puede tener hasta 60 caracteres.'); return; }
+  mostrarErrorModalLista('');
+
+  const select = document.getElementById('select-lista-activa');
+  const boton = document.getElementById('btn-lista-guardar');
+  guardandoLista = true;
+  boton.disabled = true;
+  try {
+    if (modoModalLista === 'crear') {
+      const copiarDe = document.getElementById('lista-copiar-de').value;
+      const nombreOrigen = copiarDe
+        ? (document.getElementById('lista-copiar-de').selectedOptions[0]?.textContent || '')
+        : '';
+      const { data: idNueva, error } = await supabaseAdmin.rpc('crear_lista_precios', {
+        p_nombre: nombre,
+        p_copiar_de: copiarDe ? Number(copiarDe) : null
+      });
+      if (error) { mostrarErrorModalLista(mensajeErrorFuncion(error, 'lista')); return; }
+
+      $('#' + ID_MODAL_LISTA).modal('hide');
+      mostrarNotificacion(copiarDe
+        ? `Lista "${nombre}" creada con los precios de "${nombreOrigen}".`
+        : `Lista "${nombre}" creada sin precios: cargalos en esta pantalla antes de usarla en el POS.`);
+      await cargarListas(idNueva);
+      cargarMatrizPrecios();   // pasa a mostrar la lista nueva (si hay precios sin guardar, pregunta antes)
+    } else {
+      const idLista = select.value;
+      const { data: nombreGuardado, error } = await supabaseAdmin.rpc('renombrar_lista_precios', {
+        p_id: Number(idLista),
+        p_nombre: nombre
+      });
+      if (error) { mostrarErrorModalLista(mensajeErrorFuncion(error, 'lista')); return; }
+
+      $('#' + ID_MODAL_LISTA).modal('hide');
+      mostrarNotificacion(`Lista renombrada: "${nombreGuardado || nombre}".`);
+      // Solo se actualiza el nombre en el desplegable: NO se recarga la tabla de precios, así no se pierde
+      // lo que se haya tocado sin guardar.
+      await cargarListas(idLista);
+    }
+  } finally {
+    guardandoLista = false;
+    boton.disabled = false;
+  }
+}
+
 
 export async function cargarMatrizPrecios() {
   const selectLista = document.getElementById('select-lista-activa');
