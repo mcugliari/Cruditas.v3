@@ -599,7 +599,7 @@ function mostrarPasoExito(idPedido, total, nombre, telefono) {
     <div class="modal-body text-center py-4">
       <div class="mb-2" style="font-size: 3.2rem; color: #198754;"><i class="fas fa-circle-check" aria-hidden="true"></i></div>
       <h4 class="font-weight-bold text-dark mb-1">¡Pedido recibido!</h4>
-      <p class="text-muted mb-3">Pedido <strong>#${esc(idPedido)}</strong> · ¡Gracias por elegir CRUDITAS! Ya recibimos tu pedido. Te avisaremos cuando esté confirmado.</p>
+      <p class="text-muted mb-3">Pedido <strong>#${esc(idPedido)}</strong> · ¡Listo! Ya recibimos tu pedido. Podés cerrar esta ventana.</p>
       <p class="lead mb-2">Total del pedido: <strong class="text-success">${formatoPesos(total)}</strong></p>
       <div class="alert alert-light border my-3">
         <small class="text-secondary d-block">Cliente: <strong>${esc(nombre)}</strong></small>

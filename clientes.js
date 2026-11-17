@@ -99,13 +99,20 @@ export async function inicializarCrudClienteLista() {
 
 async function cargarSelectsAsociacion() {
   const { data: clientes } = await supabaseAdmin.from('TB_BCLIENTES').select('id, nombre').order('nombre');
-  const { data: listas } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('id, nombre');
+  const { data: listas } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('id, nombre, activa');
 
   const selectCli = document.getElementById('asoc-select-cliente');
   const selectLis = document.getElementById('asoc-select-lista');
 
   if (selectCli && clientes) selectCli.innerHTML = clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
-  if (selectLis && listas) selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
+  // Las listas deshabilitadas (script 61) no se pueden elegir para una asignación nueva; si una asignación existente
+  // usa una, al editarla se muestra igual (el valor se pone por código).
+  if (selectLis && listas) {
+    selectLis.innerHTML = listas.map(l => {
+      const apagada = l.activa === false;
+      return `<option value="${l.id}"${apagada ? ' disabled' : ''}>${esc(l.nombre)}${apagada ? ' (deshabilitada)' : ''}</option>`;
+    }).join('');
+  }
 }
 
 export async function listarAsociacionesClienteLista() {
@@ -114,7 +121,7 @@ export async function listarAsociacionesClienteLista() {
 
   const { data, error } = await supabaseAdmin
     .from('TB_ACLIENTE_LISTA_PRECIOS')
-    .select('id, id_cliente, id_lista_precio, m_predeterminada, TB_BCLIENTES(nombre), TB_TLISTA_PRECIOS(nombre)')
+    .select('id, id_cliente, id_lista_precio, m_predeterminada, TB_BCLIENTES(nombre), TB_TLISTA_PRECIOS(nombre, activa)')
     .order('id_cliente');
 
   if (error) return;
@@ -122,7 +129,7 @@ export async function listarAsociacionesClienteLista() {
     tbody.innerHTML = data.map(item => `
     <tr>
       <td class="font-weight-bold">${esc(item.TB_BCLIENTES?.nombre || 'N/A')}</td>
-      <td>${esc(item.TB_TLISTA_PRECIOS?.nombre || 'N/A')}</td>
+      <td>${esc(item.TB_TLISTA_PRECIOS?.nombre || 'N/A')}${item.TB_TLISTA_PRECIOS?.activa === false ? ' <span class="badge badge-warning ml-1">Deshabilitada</span>' : ''}</td>
       <td class="text-center">
         ${item.m_predeterminada ? '<span class="badge badge-success px-2 py-1">Sí</span>' : '<span class="badge badge-secondary px-2 py-1">No</span>'}
       </td>

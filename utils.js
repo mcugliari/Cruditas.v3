@@ -208,6 +208,7 @@ const MENSAJES_FUNCIONES = {
   lista_nombre_invalido:   'El nombre de la lista no es válido: tiene que tener entre 1 y 60 caracteres.',
   lista_nombre_repetido:   'Ya existe una lista con ese nombre. Elegí otro.',
   lista_inexistente:       'Esa lista ya no existe. Actualizá la pantalla.',
+  lista_base_no_deshabilitable:'La lista base (la que usa el formulario web) no se puede deshabilitar.',
   lista_origen_inexistente:'La lista de la que querías copiar los precios ya no existe. Actualizá la pantalla.',
   propio_rol:           'No podés cambiar tu propio rol. Pedile a otro Dueño que lo haga.',
   fecha_invalida:       'La fecha no es válida (no puede ser futura ni anterior a la compra).',

@@ -64,7 +64,9 @@ export function inicializarPOS() {
   // llama a cargarPOS(). Por eso no hace falta llamarlo de nuevo acá.
   // Se guarda la promesa en el momento de arrancar (antes de cualquier espera).
   asegurarRegionAnuncios();   // región invisible para lectores de pantalla (ver "ANUNCIOS PARA LECTORES DE PANTALLA")
-  promesaInicioPOS = cargarSelectsPOS();
+  conectarCambiosBorrador();   // (B2) los cambios de cliente, lista y referencia también actualizan el borrador local
+  // (B2) Una vez que los selects y el catálogo están cargados, se intenta recuperar el pedido que quedó a medias.
+  promesaInicioPOS = cargarSelectsPOS().then(() => recuperarBorradorPedido());
   return promesaInicioPOS;
 }
 
@@ -100,7 +102,12 @@ export async function cargarSelectsPOS() {
 
   const selectLis = document.getElementById('select-lista-pedido');
   if (selectLis && listas) {
-    selectLis.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
+    // Las listas deshabilitadas (script 61) salen en gris y no se pueden elegir a mano; si un pedido ya cargado usa una,
+    // se abre igual (el valor se pone por código). data-nombre guarda el nombre sin la marca.
+    selectLis.innerHTML = listas.map(l => {
+      const apagada = l.activa === false;
+      return `<option value="${l.id}" data-nombre="${esc(l.nombre)}"${apagada ? ' disabled' : ''}>${esc(l.nombre)}${apagada ? ' (deshabilitada)' : ''}</option>`;
+    }).join('');
     // Select2 (igual que Cliente) para que las dos listas se vean y se comporten igual en cualquier dispositivo. Son pocas
     // opciones: se desactiva el buscador. Si Select2 no cargó, queda el select común y todo sigue funcionando.
     if (typeof $.fn.select2 === 'function') $('#select-lista-pedido').select2({ width: '100%', minimumResultsForSearch: Infinity });
@@ -148,7 +155,15 @@ export async function alCambiarCliente() {
     // con precios equivocados, así que se deja la lista que está elegida y se avisa.
     mostrarNotificacion('No se pudo verificar la lista de precios del cliente. Revisá la lista elegida antes de cobrar.', 'warning');
   } else if (selectLista) {
-    if (data && data.id_lista_precio) {
+    const opcionCliente = data && data.id_lista_precio
+      ? selectLista.querySelector(`option[value="${Number(data.id_lista_precio)}"]`)
+      : null;
+    if (opcionCliente && opcionCliente.disabled) {
+      // La lista de este cliente está deshabilitada: se usa la lista base y se avisa (no se cobra con otra lista en silencio).
+      selectLista.value = '1';
+      if (!selectLista.value) selectLista.selectedIndex = 0;
+      mostrarNotificacion(`La lista "${opcionCliente.dataset.nombre || ''}" de este cliente está deshabilitada: se usa la lista base.`, 'warning');
+    } else if (data && data.id_lista_precio) {
       // El cliente tiene lista predeterminada: la usamos.
       selectLista.value = data.id_lista_precio;
     } else {
@@ -165,6 +180,7 @@ export async function alCambiarCliente() {
   }
   
   await cargarPOS();
+  guardarBorrador();   // (B2) cliente y lista elegidos
 }
 
 export async function cargarPOS() {
@@ -824,6 +840,7 @@ export function actualizarResumenCarrito() {
   unidadesCarritoActual = totalItems;
   actualizarContadoresSolapas();
   anunciarCambioCarrito(totalItems, montoTotalFinal);
+  guardarBorrador();   // (B2) el carrito cambió: se actualiza el borrador local
 }
 
 // -----------------------------------------------------------------------------
@@ -850,7 +867,7 @@ export function guardarFotoPedidoEditando() {
 }
 
 export async function resetearPedido() {
-  claveOperacion = null;   // pedido nuevo: la próxima operación usa otra clave
+  soltarClaveOperacion();   // pedido nuevo: la próxima operación usa otra clave
   descartarDeshacer();   // al empezar de cero (guardar, cancelar edición...) un "Deshacer" anterior ya no corresponde
   const inputRef = document.getElementById('input-ref-cliente');
   if (inputRef) inputRef.value = '';
@@ -869,6 +886,7 @@ export async function resetearPedido() {
   setPedidoPagoOrigen(null);    // y se corta el vínculo con el pago de un pedido anulado (opción B)
   actualizarModoEdicionPOS();   // vuelve el título, los colores y los botones de un pedido nuevo
   setCarrito({});
+  guardarBorrador(true);   // (B2) pedido en blanco: el borrador de esta persona se borra ya mismo
 
   // 3. Recargar la grilla de precios del POS
   await cargarPOS();        
@@ -1137,8 +1155,188 @@ let guardandoPedido = false;
 // cuando la base responde (bien o con un error) y al empezar de cero (resetearPedido).
 let claveOperacion = null;
 function claveActual() {
-  if (!claveOperacion) claveOperacion = nuevaClaveOperacion();
+  if (!claveOperacion) {
+    claveOperacion = nuevaClaveOperacion();
+    guardarBorrador(true);   // (B2) la clave se guarda ANTES de mandar la operación: si se corta la conexión y se recarga la página, se reusa
+  }
   return claveOperacion;
+}
+
+// Suelta la clave (la operación terminó, o la base respondió con un error) y lo refleja en el borrador.
+function soltarClaveOperacion() {
+  claveOperacion = null;
+  guardarBorrador();
+}
+
+// =============================================================================
+// BORRADOR LOCAL DEL PEDIDO EN CURSO (B2)
+// =============================================================================
+// Problema que resuelve: la clave de operación (script 59) y el carrito viven en memoria. Si se corta la conexión en medio de
+// un guardado y después se recarga la página, se perdía todo: el carrito y la clave, y el reintento ya no era "el mismo envío".
+//
+// Qué se guarda (en el navegador de ESTE equipo, localStorage; no toca la base): carrito, cliente, lista, referencia, la clave
+// de operación pendiente y, si corresponde, "pedido nuevo con el pago del #N" (opción B).
+// Qué NO se guarda: un pedido que se está EDITANDO (ya existe en la base).
+// Cuándo se guarda: unos instantes después de cada cambio (la clave, al instante). Solo si hay algo para recuperar.
+// Cuándo se borra: al guardar bien, al vaciar, al cancelar una edición, al empezar a editar otro pedido y a las 12 horas.
+// Es de UNA persona: si en el equipo entra otro usuario, no se recupera ni se pisa su borrador mientras no arme uno propio.
+// Si el navegador no permite localStorage, el POS sigue como siempre, sin recuperación.
+// =============================================================================
+const CLAVE_BORRADOR = 'cruditas_borrador_pedido';
+const VIGENCIA_BORRADOR_MS = 12 * 60 * 60 * 1000;   // 12 horas
+const RETARDO_BORRADOR_MS = 400;                    // espera antes de escribir, para no guardar en cada tecla
+let usuarioBorrador = null;        // id de quien tiene la sesión abierta (null = todavía no se sabe)
+let borradorActivo = false;        // false hasta terminar el intento de recuperación: antes no se escribe nada
+let borradorIntentado = false;     // la recuperación se intenta UNA vez por carga de página
+let temporizadorBorrador = null;
+let cambiosBorradorConectados = false;
+
+function leerBorrador() {
+  try {
+    const texto = localStorage.getItem(CLAVE_BORRADOR);
+    if (!texto) return null;
+    const b = JSON.parse(texto);
+    return b && b.v === 1 ? b : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function borrarBorradorPropio() {
+  try {
+    const b = leerBorrador();
+    // Solo se borra el que es de esta persona (o uno ilegible): el de otro usuario no se toca.
+    if (!b || b.usuario === usuarioBorrador) localStorage.removeItem(CLAVE_BORRADOR);
+  } catch (e) { /* sin localStorage: nada que borrar */ }
+}
+
+// ahora = true escribe en el momento; si no, espera RETARDO_BORRADOR_MS (varios cambios seguidos = una sola escritura).
+function guardarBorrador(ahora = false) {
+  if (!borradorActivo) return;
+  clearTimeout(temporizadorBorrador);
+  if (!ahora) {
+    temporizadorBorrador = setTimeout(() => guardarBorrador(true), RETARDO_BORRADOR_MS);
+    return;
+  }
+  if (!usuarioBorrador) return;   // sin saber de quién es, no se guarda
+  try {
+    if (pedidoEditandoId) { borrarBorradorPropio(); return; }   // un pedido en edición no se guarda
+
+    const items = {};
+    Object.entries(carrito).forEach(([id, cant]) => {
+      const n = Number(cant) || 0;
+      if (n > 0 && Number(id) !== 999) items[id] = n;
+    });
+    const referencia = (document.getElementById('input-ref-cliente')?.value || '').trim();
+    if (Object.keys(items).length === 0 && !referencia && !claveOperacion) { borrarBorradorPropio(); return; }
+
+    localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
+      v: 1,
+      usuario: usuarioBorrador,
+      guardado: Date.now(),
+      carrito: items,
+      cliente: String(document.getElementById('select-cliente-pedido')?.value || ''),
+      lista: String(document.getElementById('select-lista-pedido')?.value || ''),
+      referencia,
+      clave: claveOperacion || null,
+      pagoOrigen: pedidoPagoOrigen || null
+    }));
+  } catch (e) { /* sin localStorage (o lleno): el POS sigue igual, sin recuperación */ }
+}
+
+// Cambios de cliente, lista y referencia (el carrito ya avisa desde actualizarResumenCarrito). Se conecta una sola vez.
+function conectarCambiosBorrador() {
+  if (cambiosBorradorConectados) return;
+  cambiosBorradorConectados = true;
+  document.getElementById('input-ref-cliente')?.addEventListener('input', () => guardarBorrador());
+  $('#select-cliente-pedido, #select-lista-pedido').on('change', () => guardarBorrador());
+}
+
+// Se llama al arrancar el POS (ver inicializarPOS), con los selects y el catálogo ya cargados.
+async function recuperarBorradorPedido() {
+  if (borradorIntentado) return;
+  borradorIntentado = true;
+  try {
+    try {
+      const { data } = await supabaseAdmin.auth.getSession();
+      usuarioBorrador = data?.session?.user?.id || null;
+    } catch (e) {
+      usuarioBorrador = null;
+    }
+    if (!usuarioBorrador) return;
+
+    // Sin catálogo no se puede validar el borrador: se deja guardado y se reintenta en la próxima carga.
+    if (!Array.isArray(cacheProductos) || cacheProductos.length === 0) { borradorIntentado = false; return; }
+
+    const b = leerBorrador();
+    if (!b || b.usuario !== usuarioBorrador) return;   // no hay, o es de otra persona (no se toca)
+    if (!b.guardado || Date.now() - b.guardado > VIGENCIA_BORRADOR_MS || b.guardado > Date.now() + 5 * 60 * 1000) {
+      localStorage.removeItem(CLAVE_BORRADOR);   // vencido (o con fecha imposible)
+      return;
+    }
+    // Solo se recupera sobre un pedido nuevo y vacío.
+    if (pedidoEditandoId || Object.keys(carrito).length > 0) return;
+
+    // Los productos que ya no están en el catálogo se sacan.
+    const items = {};
+    let quitados = 0;
+    Object.entries(b.carrito || {}).forEach(([id, cant]) => {
+      const n = Math.floor(Number(cant) || 0);
+      if (n <= 0) return;
+      if (cacheProductos.some(p => Number(p.id) === Number(id))) items[id] = n; else quitados++;
+    });
+    if (Object.keys(items).length === 0) { localStorage.removeItem(CLAVE_BORRADOR); return; }
+
+    // Cliente (alCambiarCliente también deja puesta la lista del cliente y los rótulos de la referencia).
+    const selectCli = document.getElementById('select-cliente-pedido');
+    if (b.cliente && selectCli && selectCli.value !== b.cliente && selectCli.querySelector(`option[value="${CSS.escape(b.cliente)}"]`)) {
+      $('#select-cliente-pedido').val(b.cliente).trigger('change.select2');
+      await alCambiarCliente();
+    }
+    // Lista elegida en ese momento (puede ser distinta de la del cliente).
+    const selectLis = document.getElementById('select-lista-pedido');
+    if (b.lista && selectLis && selectLis.value !== b.lista && selectLis.querySelector(`option[value="${CSS.escape(b.lista)}"]`)) {
+      selectLis.value = b.lista;
+      $('#select-lista-pedido').trigger('change.select2');
+      await cargarPOS();
+    }
+    const inputRef = document.getElementById('input-ref-cliente');
+    if (inputRef) inputRef.value = String(b.referencia || '').slice(0, 100);
+
+    if (b.pagoOrigen && Number(b.pagoOrigen.id) > 0) {
+      setPedidoPagoOrigen(b.pagoOrigen);
+      actualizarModoEdicionPOS();
+    }
+    if (typeof b.clave === 'string' && /^[0-9a-f-]{36}$/i.test(b.clave)) claveOperacion = b.clave;
+
+    setCarrito(items);
+    renderizarGrillaPOS();
+    actualizarResumenCarrito();
+
+    const { unidades } = resumenCarrito();
+    if (quitados > 0) {
+      mostrarNotificacion(`${quitados === 1 ? 'Un producto del pedido recuperado ya no está' : quitados + ' productos del pedido recuperado ya no están'} en el catálogo: se sacó.`, 'warning');
+    }
+    mostrarAvisoConAccion({
+      mensaje: `Recuperamos el pedido que estabas armando (${unidades} ${unidades === 1 ? 'unidad' : 'unidades'}).` +
+               (claveOperacion ? ' Había un envío sin confirmar: podés volver a tocar el botón, si ya se había guardado no se duplica.' : ''),
+      textoAccion: 'Descartar',
+      duracionMs: 20000,
+      tipo: 'borrador',
+      alAccionar: descartarBorradorRecuperado
+    });
+  } catch (e) {
+    console.error('No se pudo recuperar el borrador del pedido:', e);
+  } finally {
+    // Haya o no borrador, desde acá los cambios del pedido se guardan.
+    if (borradorIntentado) borradorActivo = true;
+  }
+}
+
+async function descartarBorradorRecuperado() {
+  if (guardandoPedido) return;
+  await resetearPedido();   // deja el pedido en blanco, suelta la clave y borra el borrador
+  mostrarNotificacion('Se descartó el pedido recuperado.', 'info');
 }
 
 export async function guardarPedido(estadoInicial, cobro = null) {
@@ -1314,11 +1512,11 @@ async function guardarPedidoSinBloqueo(estadoInicial, cobro = null) {
       });
       return;
     }
-    claveOperacion = null;   // la base respondió con un error: el próximo intento es una operación nueva
+    soltarClaveOperacion();   // la base respondió con un error: el próximo intento es una operación nueva
     mostrarNotificacion('Error al guardar el pedido: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
     return;
   }
-  claveOperacion = null;   // la base respondió bien: esta operación terminó
+  soltarClaveOperacion();   // la base respondió bien: esta operación terminó
 
   // Con un cobro parcial (seña) se aclara cuánto se cobró y cuánto falta (lo devuelve la base).
   const saldoPendiente = cobro ? Number(data.saldo) : 0;
@@ -1402,11 +1600,11 @@ async function cobrarPedidoSinCambios(entregar, cobro) {
       });
       return;
     }
-    claveOperacion = null;   // la base respondió con un error: el próximo intento es una operación nueva
+    soltarClaveOperacion();   // la base respondió con un error: el próximo intento es una operación nueva
     mostrarNotificacion('Error al registrar el cobro: ' + mensajeErrorFuncion(error, 'pedido'), 'danger');
     return;
   }
-  claveOperacion = null;   // la base respondió bien: esta operación terminó
+  soltarClaveOperacion();   // la base respondió bien: esta operación terminó
 
   const entregado = entregar && !errorEntrega;
   if (datosCobro?.repetido) mostrarNotificacion(`Se había cortado la conexión, pero el cobro del pedido #${idPedido} ya estaba registrado: no se cobró dos veces.`, 'info');

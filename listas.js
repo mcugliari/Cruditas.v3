@@ -71,10 +71,19 @@ async function cargarListas(idASeleccionar = null) {
   const select = document.getElementById('select-lista-activa');
   const { data: listas, error } = await supabaseAdmin.from('TB_TLISTA_PRECIOS').select('*').order('id', { ascending: true });
   if (error || !listas || listas.length === 0) return false;
-  select.innerHTML = listas.map(l => `<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
+  // Las deshabilitadas siguen en la lista (para poder volver a habilitarlas) y se marcan. data-nombre guarda el nombre
+  // limpio (sin la marca) para precargarlo al renombrar y para copiar precios; data-activa, el estado.
+  select.innerHTML = listas.map(l => {
+    const activa = l.activa !== false;   // sin la columna (script 61 sin instalar) se considera activa
+    return `<option value="${l.id}" data-nombre="${esc(l.nombre)}" data-activa="${activa}">${esc(l.nombre)}${activa ? '' : ' · deshabilitada'}</option>`;
+  }).join('');
   if (idASeleccionar) select.value = String(idASeleccionar);
+  actualizarBotonEstadoLista();
   return true;
 }
+
+// Nombre "limpio" de una opción del desplegable (sin la marca "· deshabilitada").
+const nombreDeOpcion = (o) => o?.dataset?.nombre ?? o?.textContent ?? '';
 
 export async function inicializarModuloListas() {
   conectarBotonesListas();   // los botones "Nueva lista" y "Renombrar" (se conectan una sola vez)
@@ -99,6 +108,17 @@ let guardandoLista = false;
 function conectarBotonesListas() {
   const btnNueva = document.getElementById('btn-nueva-lista');
   const btnRenombrar = document.getElementById('btn-renombrar-lista');
+  const btnEstado = document.getElementById('btn-estado-lista');
+  const selectLista = document.getElementById('select-lista-activa');
+  if (btnEstado && !btnEstado.dataset.conectado) {
+    btnEstado.dataset.conectado = '1';
+    btnEstado.addEventListener('click', cambiarEstadoListaElegida);
+  }
+  // Al cambiar de lista, el botón pasa a decir Deshabilitar o Habilitar según corresponda.
+  if (selectLista && !selectLista.dataset.conectadoEstado) {
+    selectLista.dataset.conectadoEstado = '1';
+    selectLista.addEventListener('change', actualizarBotonEstadoLista);
+  }
   if (btnNueva && !btnNueva.dataset.conectado) {
     btnNueva.dataset.conectado = '1';
     btnNueva.addEventListener('click', () => abrirModalLista('crear'));
@@ -171,7 +191,7 @@ async function abrirModalLista(modo) {
   modoModalLista = modo;
   mostrarErrorModalLista('');
 
-  const nombreActual = select.options[select.selectedIndex]?.textContent || '';
+  const nombreActual = nombreDeOpcion(select.options[select.selectedIndex]);
   const crear = modo === 'crear';
 
   document.getElementById('lista-modal-titulo').textContent = crear ? 'Nueva lista de precios' : 'Renombrar lista';
@@ -184,11 +204,81 @@ async function abrirModalLista(modo) {
     document.getElementById('lista-copiar-de').innerHTML =
       '<option value="">No copiar (lista vacía)</option>' +
       Array.from(select.options).map(o =>
-        `<option value="${esc(o.value)}"${o.value === idActual ? ' selected' : ''}>${esc(o.textContent)}</option>`).join('');
+        `<option value="${esc(o.value)}"${o.value === idActual ? ' selected' : ''}>${esc(nombreDeOpcion(o))}</option>`).join('');
   }
 
   $('#' + ID_MODAL_LISTA).modal('show');
 }
+
+// -----------------------------------------------------------------------------
+// Deshabilitar / habilitar la lista elegida (script 61: cambiar_estado_lista_precios, solo Dueño)
+//   No borra nada: la lista, sus precios, los pedidos y las asignaciones de clientes se conservan. Deshabilitada, el POS
+//   y la asignación de clientes dejan de ofrecerla. La lista 1 (base, la usa el formulario web) no se puede deshabilitar.
+// -----------------------------------------------------------------------------
+function actualizarBotonEstadoLista() {
+  const boton = document.getElementById('btn-estado-lista');
+  const select = document.getElementById('select-lista-activa');
+  if (!boton || !select) return;
+  const opcion = select.options[select.selectedIndex];
+  const hayLista = !!(opcion && opcion.value);
+  const activa = !opcion || opcion.dataset.activa !== 'false';
+  const esBase = hayLista && opcion.value === '1';
+
+  document.getElementById('btn-estado-lista-texto').textContent = activa ? 'Deshabilitar' : 'Habilitar';
+  document.getElementById('btn-estado-lista-icono').className = activa ? 'fas fa-ban mr-1' : 'fas fa-check mr-1';
+  boton.classList.toggle('btn-outline-secondary', activa);
+  boton.classList.toggle('btn-success', !activa);
+  boton.disabled = !hayLista || (esBase && activa);
+  boton.title = esBase
+    ? 'La lista base no se puede deshabilitar: la usa el formulario web.'
+    : (activa ? 'Deja de ofrecer esta lista en el POS y en la asignación de clientes' : 'Vuelve a ofrecer esta lista');
+}
+
+async function cambiarEstadoListaElegida() {
+  const select = document.getElementById('select-lista-activa');
+  const opcion = select.options[select.selectedIndex];
+  if (!opcion || !opcion.value) return;
+  const idLista = opcion.value;
+  const nombre = nombreDeOpcion(opcion);
+  const habilitar = opcion.dataset.activa === 'false';
+
+  if (!habilitar) {
+    const ok = await confirmarAccion({
+      titulo: 'Deshabilitar lista',
+      mensaje: `¿Deshabilitar la lista "${nombre}"?\n\nNo se va a poder elegir en el POS ni asignar a clientes. ` +
+               'Los clientes que la tengan como predeterminada van a usar la lista base en el POS. ' +
+               'Los precios y los pedidos ya hechos se conservan, y la podés volver a habilitar cuando quieras.',
+      textoConfirmar: 'Sí, deshabilitar',
+      peligro: true
+    });
+    if (!ok) return;
+  }
+
+  const boton = document.getElementById('btn-estado-lista');
+  boton.disabled = true;
+  const { data: clientes, error } = await supabaseAdmin.rpc('cambiar_estado_lista_precios', {
+    p_id: Number(idLista),
+    p_activa: habilitar
+  });
+  if (error) {
+    mostrarNotificacion(mensajeErrorFuncion(error, 'lista'), 'danger');
+    actualizarBotonEstadoLista();
+    return;
+  }
+
+  if (habilitar) {
+    mostrarNotificacion(`Lista "${nombre}" habilitada.`);
+  } else {
+    const n = Number(clientes) || 0;
+    mostrarNotificacion(
+      `Lista "${nombre}" deshabilitada.` +
+      (n > 0 ? ` ${n === 1 ? '1 cliente la tenía' : n + ' clientes la tenían'} como predeterminada: en el POS usarán la lista base.` : '')
+    );
+  }
+  // Solo se actualiza el desplegable: no se recarga la tabla de precios (no se pierde lo tocado sin guardar).
+  await cargarListas(idLista);
+}
+
 
 async function guardarModalLista(e) {
   e.preventDefault();
@@ -207,7 +297,7 @@ async function guardarModalLista(e) {
     if (modoModalLista === 'crear') {
       const copiarDe = document.getElementById('lista-copiar-de').value;
       const nombreOrigen = copiarDe
-        ? (document.getElementById('lista-copiar-de').selectedOptions[0]?.textContent || '')
+        ? (document.getElementById('lista-copiar-de').selectedOptions[0]?.textContent || '')   // ya viene sin la marca
         : '';
       const { data: idNueva, error } = await supabaseAdmin.rpc('crear_lista_precios', {
         p_nombre: nombre,
