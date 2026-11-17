@@ -6,6 +6,7 @@ let cacheProductos = [];
 let cachePrecios = [];
 let carrito = {}; // { id_producto: cantidad }
 let grupoDeProducto = {}; // { id_producto: id del bloque (g0, g1...) } (se arma al dibujar el menú)
+let productosDeGrupo = {}; // { id del bloque: [ids de producto en el orden del menú] } (para el resumen de lo elegido)
 let enviando = false; // true mientras se está enviando el pedido (evita envíos duplicados)
 
 // Categorías desplegables: false = arranca abierta solo la primera; true = arrancan todas abiertas.
@@ -24,6 +25,14 @@ const FOTOS_GRUPO = {
 // No está escrito acá: se lee de la base (función whatsapp_negocio, script 40) y se cambia con un UPDATE.
 // Solo dígitos, formato internacional (549 + característica + número). Si está vacío, el botón no se muestra.
 let whatsappNegocio = '';
+
+// Datos fijos del local que se muestran al confirmar el pedido (bajo "Retiro por el local").
+// Dejá '' lo que no quieras mostrar: si los tres están vacíos, no aparece nada.
+const INFO_LOCAL = {
+  direccion: 'Catriel 4806 - La Tablada',   // ej.: 'Av. Siempre Viva 123, Springfield'
+  horario: 'Lun a Sáb de 17 a 20 hs',     // ej.: 'Lun a Sáb de 10 a 21 hs'
+  pago: 'Efectivo o transferencia al retirar'         // ej.: 'Efectivo o transferencia al retirar'
+};
 
 // Token opcional del link (?t=...). Lo genera el bot desde el servidor.
 // Cliente consumidor final, lista de precios y medio de pago se fijan en la base.
@@ -226,6 +235,7 @@ function renderizarMenuPorCategorias() {
     : '';
   let indice = 0;
   grupoDeProducto = {};
+  productosDeGrupo = {};
 
   grupos.forEach(grupo => {
     // Productos de TODAS las categorías del grupo, en el orden del catálogo (sin el producto 999).
@@ -238,6 +248,23 @@ function renderizarMenuPorCategorias() {
     const abierta = ABRIR_TODAS_LAS_CATEGORIAS || indice === 0;
     indice++;
 
+    // Precio de cada producto tal como se muestra (la docena solo cuenta si el producto la permite).
+    // Si TODOS los productos del grupo tienen el mismo precio, se muestra una sola vez en el encabezado
+    // y las tarjetas quedan sin precio (menos repetición). Si alguno difiere, cada tarjeta muestra el suyo.
+    const preciosGrupo = {};
+    prodsGrupo.forEach(p => {
+      const pr = obtenerPrecioProductoCliente(p.id, p.id_categoria || p.idCategoria);
+      preciosGrupo[p.id] = { unidad: pr.unidad || 0, docena: (p.m_permite_docena && pr.docena) ? pr.docena : 0 };
+    });
+    const clavesPrecio = new Set(prodsGrupo.map(p => `${preciosGrupo[p.id].unidad}|${preciosGrupo[p.id].docena}`));
+    const precioDelGrupo = preciosGrupo[prodsGrupo[0].id];
+    // Precio único solo si es mayor a 0 (con un precio faltante, mejor que cada tarjeta lo muestre).
+    const precioUnico = clavesPrecio.size === 1 && precioDelGrupo.unidad > 0;
+    const htmlPrecioGrupo = precioUnico
+      ? `<span class="cat-precio">${formatoPesos(precioDelGrupo.unidad)} c/u${precioDelGrupo.docena ? ` · Docena ${formatoPesos(precioDelGrupo.docena)}` : ''}</span>`
+      : '';
+    productosDeGrupo[idDom] = prodsGrupo.map(p => p.id);
+
     const icono = iconoCategoria(grupo.titulo);
     const claveFoto = claveFotoGrupo(grupo.titulo);
     // Si el grupo reúne varias categorías (ej. Pizzas: Simple, Especial, Premium), cada tarjeta
@@ -249,7 +276,13 @@ function renderizarMenuPorCategorias() {
         <button type="button" class="cat-header ${abierta ? '' : 'collapsed'}"
                 data-toggle="collapse" data-target="#cat-${idDom}"
                 aria-expanded="${abierta ? 'true' : 'false'}" aria-controls="cat-${idDom}">
-          <span class="cat-titulo"><i class="fas ${icono}" aria-hidden="true"></i>${esc(grupo.titulo)}</span>
+          <span class="cat-titulo"><i class="fas ${icono}" aria-hidden="true"></i>
+            <span class="cat-textos">
+              <span class="cat-nombre">${esc(grupo.titulo)}</span>
+              ${htmlPrecioGrupo}
+              <span class="cat-seleccion" id="sel-${idDom}"></span>
+            </span>
+          </span>
           <span class="cat-der">
             <span class="cat-badge d-none" id="badge-${idDom}"></span>
             <i class="fas fa-chevron-down cat-chevron" aria-hidden="true"></i>
@@ -278,6 +311,11 @@ function renderizarMenuPorCategorias() {
         htmlDocena = `<span class="prod-docena">Docena: ${formatoPesos(precios.docena)}</span>`;
       }
 
+      // Precio en la tarjeta: solo si el grupo NO tiene un precio único (en ese caso va en el encabezado).
+      const htmlPrecio = precioUnico ? '' : `
+                <div class="prod-precio">${formatoPesos(precios.unidad)} <span class="prod-unidad">c/u</span></div>
+                ${htmlDocena}`;
+
       // Foto propia del producto (columna imagen_url, como en el POS). Si no viene o no carga, queda la foto del grupo / el ícono.
       const urlFoto = urlImagenSegura(p.imagen_url);
 
@@ -290,8 +328,7 @@ function renderizarMenuPorCategorias() {
               <div class="prod-info">
                 ${htmlEtiqueta}
                 <div class="prod-nombre">${esc(p.nombre)}</div>
-                <div class="prod-precio">${formatoPesos(precios.unidad)} <span class="prod-unidad">/ unidad</span></div>
-                ${htmlDocena}
+                ${htmlPrecio}
               </div>
               <div class="qty">
                 <button type="button" class="qty-btn qty-menos" data-accion="restar" data-id="${p.id}"
@@ -377,6 +414,20 @@ function actualizarBadgeGrupo(idDom) {
 
   badge.textContent = `${unidades} u.`;
   badge.classList.toggle('d-none', unidades === 0);
+
+  // Resumen de lo elegido ("Carne ×3, Pollo ×3"): se ve en el encabezado solo cuando la categoría está plegada.
+  const cabecera = badge.closest('.cat-header');
+  const resumen = document.getElementById(`sel-${idDom}`);
+  if (cabecera && resumen) {
+    const partes = (productosDeGrupo[idDom] || [])
+      .filter(id => (carrito[id] || 0) > 0)
+      .map(id => {
+        const p = cacheProductos.find(x => Number(x.id) === Number(id));
+        return `${p ? p.nombre : ''} ×${carrito[id]}`;
+      });
+    resumen.textContent = partes.join(', ');
+    cabecera.classList.toggle('con-seleccion', partes.length > 0);
+  }
 }
 
 // (El descuento por docena y los totales del pedido viven en precios.js: es el MISMO código que usa el POS, con
@@ -495,9 +546,23 @@ function mostrarPasoDatos() {
   document.getElementById('cliente-paso-exito')?.classList.add('d-none');
 }
 
+// Dibuja dirección, horario y forma de pago bajo "Retiro por el local" (solo los que tengan texto).
+function pintarInfoRetiro() {
+  const el = document.getElementById('retiro-detalle');
+  if (!el) return;
+  const filas = [
+    ['fa-location-dot', INFO_LOCAL.direccion],
+    ['fa-clock', INFO_LOCAL.horario],
+    ['fa-wallet', INFO_LOCAL.pago]
+  ].filter(([, texto]) => String(texto || '').trim());
+  el.innerHTML = filas.map(([icono, texto]) => `<div><i class="fas ${icono}" aria-hidden="true"></i>${esc(texto)}</div>`).join('');
+  el.classList.toggle('d-none', filas.length === 0);
+}
+
 function prepararModalConfirmacion() {
   mostrarPasoDatos();
   ocultarErrorModal();
+  pintarInfoRetiro();
 
   // Datos que pueden venir en el link del bot (?tel=...&nombre=...). Solo se completan
   // si el campo está vacío, para no pisar lo que la persona ya escribió.
@@ -599,7 +664,7 @@ function mostrarPasoExito(idPedido, total, nombre, telefono) {
     <div class="modal-body text-center py-4">
       <div class="mb-2" style="font-size: 3.2rem; color: #198754;"><i class="fas fa-circle-check" aria-hidden="true"></i></div>
       <h4 class="font-weight-bold text-dark mb-1">¡Pedido recibido!</h4>
-      <p class="text-muted mb-3">Pedido <strong>#${esc(idPedido)}</strong> · ¡Listo! Ya recibimos tu pedido. Podés cerrar esta ventana.</p>
+      <p class="text-muted mb-3">Pedido <strong>#${esc(idPedido)}</strong> · ¡Gracias por elegir CRUDITAS! Ya recibimos tu pedido. Te avisaremos cuando esté confirmado.</p>
       <p class="lead mb-2">Total del pedido: <strong class="text-success">${formatoPesos(total)}</strong></p>
       <div class="alert alert-light border my-3">
         <small class="text-secondary d-block">Cliente: <strong>${esc(nombre)}</strong></small>
@@ -623,6 +688,8 @@ async function enviarPedidoASupabase() {
   // Si ya hay un envío en curso, se ignora el toque (evita pedidos duplicados).
   if (enviando) return;
 
+  revisarTelefonoEnCampo(); // corrige +54 / 0 / 15 aunque la persona no haya salido del campo
+
   const inputNombre = document.getElementById('cliente-nombre');
   const inputTelefono = document.getElementById('cliente-telefono');
   const inputObservaciones = document.getElementById('cliente-observaciones');
@@ -634,7 +701,7 @@ async function enviarPedidoASupabase() {
   ocultarErrorModal();
 
   if (!nombre) {
-    mostrarErrorModal('Escribí tu nombre o una referencia.', inputNombre);
+    mostrarErrorModal('Escribí tu nombre.', inputNombre);
     return;
   }
   if (!telefono) {
@@ -717,29 +784,30 @@ function analizarTelefono(valor) {
   return { mensaje: 'Tiene que tener 10 dígitos: característica + número (ej: 1122334455).', sugerido: '' };
 }
 
+// Revisa el teléfono del campo. Si la corrección es inequívoca (sacar +54, el 0 o el 15) la APLICA y lo avisa en una
+// línea; si el número no puede quedar bien, solo muestra qué falta. Se usa al salir del campo y al confirmar.
+function revisarTelefonoEnCampo() {
+  const inputTel = document.getElementById('cliente-telefono');
+  const aviso = document.getElementById('cliente-tel-aviso');
+  if (!inputTel || !aviso) return;
+  const r = analizarTelefono(inputTel.value);
+  aviso.textContent = '';
+  aviso.classList.toggle('d-none', !r);
+  if (!r) return;
+  if (r.sugerido) {
+    inputTel.value = r.sugerido;
+    aviso.textContent = `Lo dejamos como ${r.sugerido} (sin +54, 0 ni 15).`;
+  } else {
+    aviso.textContent = r.mensaje;
+  }
+}
+
 function iniciarMejorasFormulario() {
   const inputTel = document.getElementById('cliente-telefono');
   const aviso = document.getElementById('cliente-tel-aviso');
 
-  function mostrarAvisoTelefono() {
-    if (!inputTel || !aviso) return;
-    const r = analizarTelefono(inputTel.value);
-    aviso.textContent = '';
-    aviso.classList.toggle('d-none', !r);
-    if (!r) return;
-    aviso.append(r.mensaje + ' ');
-    if (r.sugerido) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'btn btn-sm btn-warning';
-      b.textContent = 'Usar ' + r.sugerido;
-      b.addEventListener('click', () => { inputTel.value = r.sugerido; mostrarAvisoTelefono(); });
-      aviso.appendChild(b);
-    }
-  }
-
-  inputTel?.addEventListener('blur', mostrarAvisoTelefono);
-  inputTel?.addEventListener('input', () => { if (!aviso?.classList.contains('d-none')) mostrarAvisoTelefono(); });
+  inputTel?.addEventListener('blur', revisarTelefonoEnCampo);
+  inputTel?.addEventListener('input', () => aviso?.classList.add('d-none'));
   $('#modalConfirmarCliente').on('show.bs.modal', () => aviso?.classList.add('d-none'));
 
   // Con el teclado abierto, el campo enfocado se mantiene a la vista.

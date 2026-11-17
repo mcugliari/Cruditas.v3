@@ -22,7 +22,7 @@
       background-color: #f4f5f7;
       color: var(--tinta);
       font-family: 'Nunito', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      padding-bottom: 120px; /* lugar para la barra fija de abajo */
+      padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px)); /* lugar para la barra fija de abajo */
     }
 
     /* ---------- Cabecera ---------- */
@@ -33,7 +33,7 @@
       border-radius: 0 0 24px 24px;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
     }
-    .header-marca { display: inline-flex; align-items: center; gap: 10px; }
+    .header-marca { display: flex; justify-content: center; align-items: center; gap: 10px; }
     .header-nombre {
       margin: 0;
       font-size: 1.75rem;
@@ -46,8 +46,8 @@
     .header-icono { font-size: 1.4rem; line-height: 1; }
     .header-sub {
       position: relative;
-      display: inline-block;
-      margin-top: 4px;
+      display: table;      /* en su propia línea y centrado, aunque el texto sea corto */
+      margin: 4px auto 0;
       padding-bottom: 5px;
       font-family: 'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
       font-size: 1.25rem;
@@ -86,11 +86,21 @@
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.14);
       cursor: pointer;
     }
-    .cat-titulo { display: flex; align-items: center; }
+    .cat-titulo { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
+    /* Texto del encabezado: nombre arriba y, debajo, el precio de la categoría (o lo elegido si está plegada) */
+    .cat-textos { display: flex; flex-direction: column; min-width: 0; }
+    .cat-precio, .cat-seleccion {
+      font-size: 0.78rem; font-weight: 700; line-height: 1.25; margin-top: 1px;
+      text-transform: none; letter-spacing: 0; color: #ffd966;
+    }
+    .cat-seleccion { display: none; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Plegada y con productos elegidos: se muestra lo elegido en lugar del precio */
+    .cat-header.collapsed.con-seleccion .cat-seleccion { display: block; }
+    .cat-header.collapsed.con-seleccion .cat-precio { display: none; }
     .cat-titulo i { margin-right: 10px; color: var(--amarillo); font-size: 1.05rem; }
     .cat-header:focus { outline: none; }
     .cat-header:focus-visible { box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.6); }
-    .cat-der { display: flex; align-items: center; gap: 10px; }
+    .cat-der { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; margin-left: 10px; }
     /* Globito con las unidades elegidas en la categoría (se ve aunque esté cerrada) */
     .cat-badge {
       background: #fff;
@@ -151,9 +161,9 @@
       text-transform: uppercase;
       color: #8a6d00;
     }
-    .prod-nombre { font-size: 1.1rem; font-weight: 800; line-height: 1.2; color: var(--tinta); }
-    .prod-precio { margin-top: 3px; font-size: 1.3rem; font-weight: 800; line-height: 1.15; color: #111; }
-    .prod-unidad { font-size: 0.82rem; font-weight: 700; color: #6b7280; }
+    .prod-nombre { font-size: 1.2rem; font-weight: 800; line-height: 1.2; color: var(--tinta); }
+    .prod-precio { margin-top: 2px; font-size: 0.95rem; font-weight: 700; line-height: 1.15; color: #4b5563; }
+    .prod-unidad { font-size: 0.8rem; font-weight: 700; color: #6b7280; }
     .prod-docena {
       display: inline-block;
       margin-top: 4px;
@@ -292,20 +302,21 @@
     .total-franja .monto { color: var(--amarillo); font-size: 1.7rem; font-weight: 800; line-height: 1; }
     #modalConfirmarCliente .form-control { font-size: 16px; min-height: 46px; } /* 16px evita el zoom automático de iOS */
     #modalConfirmarCliente textarea.form-control { min-height: 0; }
-    .modalidad-fila { display: flex; align-items: center; gap: 10px; background: #fff6dd; border: 1px solid #f0dc9a; border-radius: 8px; padding: 0 12px; }
-    .modalidad-fila i { color: #8a6d00; }
-    .modalidad-fila .form-control { border: 0; background: transparent; font-weight: 800; padding-left: 0; }
+    .retiro-info { display: flex; align-items: flex-start; gap: 10px; background: #fff6dd; border-radius: 10px; padding: 10px 12px; margin-bottom: 1rem; color: #6b4f00; font-size: 0.92rem; }
+    .retiro-info > i { margin-top: 3px; color: #8a6d00; }
+    .retiro-detalle { margin-top: 2px; font-size: 0.84rem; font-weight: 600; color: #7a5a00; }
+    .retiro-detalle i { width: 1.1em; margin-right: 4px; text-align: center; }
     .tel-aviso { font-size: 0.82rem; color: #7a5200; background: #fff8e1; border-radius: 8px; padding: 6px 10px; margin-top: 6px; }
-    .tel-aviso .btn { margin-top: 4px; font-weight: 800; }
     #modalConfirmarCliente .modal-footer { flex-direction: column; align-items: stretch; padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); }
     #modalConfirmarCliente .modal-footer > * { margin: 0; }
     .nota-recepcion { font-size: 0.8rem; color: #6b7280; text-align: center; margin-bottom: 8px !important; }
     #btn-finalizar-pedido { min-height: 52px; font-size: 1.05rem; }
     /* Celular: el modal ocupa toda la pantalla, así el teclado no lo mueve ni tapa el botón */
     @media (max-width: 575.98px) {
-      #modalConfirmarCliente .modal-dialog { margin: 0; max-width: 100%; height: 100%; min-height: 0; }
+      #modalConfirmarCliente .modal-dialog { margin: 0; max-width: 100%; height: 100%; min-height: 0; max-height: none; } /* max-height: Bootstrap lo deja en 100% - 1rem y dejaba una franja abajo */
       @supports (height: 100dvh) { #modalConfirmarCliente .modal-dialog { height: 100dvh; } }
       #modalConfirmarCliente .modal-content { height: 100%; max-height: 100%; border-radius: 0; border: 0; }
+      #modalConfirmarCliente .modal-header { border-radius: 0; }
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -318,7 +329,7 @@
       <h1 class="header-nombre">CRUDITAS</h1>
       <span class="header-icono" aria-hidden="true">🥟</span>
     </div>
-    <div class="header-sub">Menú de Autogestión</div>
+    <div class="header-sub">Armá tu pedido</div>
     <ol class="pasos" aria-label="Progreso del pedido">
       <li class="paso activo" aria-current="step"><span class="paso-n">1</span>Productos</li>
       <li class="paso-sep" aria-hidden="true"></li>
@@ -367,20 +378,22 @@
             <div id="resumen-pedido-modal-cliente"></div>
 
             <div class="form-group">
-              <label class="font-weight-bold small" for="cliente-nombre">Tu Nombre / Referencia *</label>
+              <label class="font-weight-bold small" for="cliente-nombre">Tu nombre *</label>
               <input type="text" class="form-control" id="cliente-nombre" placeholder="Ej: Juan Pérez" autocomplete="name" autocapitalize="words" enterkeyhint="next" required>
             </div>
             <div class="form-group">
               <label class="font-weight-bold small" for="cliente-telefono">Teléfono / WhatsApp *</label>
               <input type="tel" inputmode="tel" class="form-control" id="cliente-telefono" placeholder="Ej: 1122334455" autocomplete="tel-national" enterkeyhint="next" required>
-              <small class="form-text text-muted">Ingresá tu número con característica, <strong>sin 0 ni 15</strong>. Es el número por el que te avisamos cuando tu pedido esté listo.</small>
+              <small class="form-text text-muted">Con característica, <strong>sin 0 ni 15</strong>. Te avisamos a este número cuando tu pedido esté listo.</small>
               <div class="tel-aviso d-none" id="cliente-tel-aviso" role="status" aria-live="polite"></div>
             </div>
-            <div class="form-group">
-              <label class="font-weight-bold small" for="cliente-modalidad">Modalidad</label>
-              <div class="modalidad-fila">
-                <i class="fas fa-store" aria-hidden="true"></i>
-                <input type="text" class="form-control" id="cliente-modalidad" value="Retiro por el local" readonly>
+            <!-- Informativo (no se completa): la única modalidad es retirar. Dirección, horario y forma de pago los
+                 completa cliente.js desde INFO_LOCAL; si están vacíos, no se muestran. -->
+            <div class="retiro-info">
+              <i class="fas fa-store" aria-hidden="true"></i>
+              <div>
+                <strong>Retiro por el local</strong>
+                <div class="retiro-detalle d-none" id="retiro-detalle"></div>
               </div>
             </div>
             <div class="form-group">
