@@ -40,6 +40,25 @@ function telefonoDeNombre(texto) {
   return m ? m[1].trim() : '';
 }
 
+// Minúsculas y sin tildes, para buscar sin que importen.
+const normalizarTexto = (t) => String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// ¿El pedido coincide con lo que se escribió en el buscador? Se busca por:
+//   - solo números: número de pedido (empieza con eso) o teléfono (si son 3 o más dígitos, en cualquier parte);
+//     se ignoran espacios, guiones, paréntesis y "+" ("11 3646-2693" encuentra 1136462693);
+//   - letras: el nombre (todas las palabras tienen que estar), sin importar mayúsculas ni tildes.
+function coincideBusqueda(p, texto) {
+  const q = normalizarTexto(texto).replace(/#/g, '').trim();
+  if (!q) return true;
+  const soloDigitos = q.replace(/[\s\-.()+]/g, '');
+  const nombre = normalizarTexto(`${nombreSinTelefono(p.nombre_referencia)} ${p.TB_BCLIENTES?.nombre || ''}`);
+  if (/^\d+$/.test(soloDigitos)) {
+    const tel = String(p.telefono || telefonoDeNombre(p.nombre_referencia)).replace(/\D/g, '');
+    return String(p.id).startsWith(soloDigitos) || (soloDigitos.length >= 3 && tel.includes(soloDigitos));
+  }
+  return q.split(/\s+/).every(palabra => nombre.includes(palabra));
+}
+
 // Texto del mensaje de "pedido listo". Se puede cambiar libremente.
 // Si el pedido ya está pago NO se pide plata: se avisa que está pago. Si falta cobrar, se pide solo el saldo.
 function mensajePedidoListo(nombre, idPedido, saldo) {
@@ -113,6 +132,7 @@ export function cambiarModoPedidos(modo) {
   document.getElementById('kpis-historial')?.classList.toggle('d-none', esPend);
   document.getElementById('resumen-pendientes')?.classList.toggle('d-none', !esPend);
   document.getElementById('btn-actualizar-pendientes')?.classList.toggle('d-none', !esPend);
+  document.getElementById('buscador-pendientes')?.classList.toggle('d-none', !esPend);
   if (!esPend) document.getElementById('btn-marcar-vistos')?.classList.add('d-none');
 
   return cargarTablaPedidos();
@@ -161,12 +181,7 @@ export async function cargarTablaPedidos() {
 
   let pedidosFiltrados = pedidos || [];
   if (inputBuscar && inputBuscar.value.trim() !== '') {
-    const busqueda = inputBuscar.value.trim().toLowerCase();
-    pedidosFiltrados = pedidosFiltrados.filter(p => {
-      const cliNombre = p.TB_BCLIENTES?.nombre?.toLowerCase() || '';
-      const idStr = String(p.id);
-      return cliNombre.includes(busqueda) || idStr.includes(busqueda);
-    });
+    pedidosFiltrados = pedidosFiltrados.filter(p => coincideBusqueda(p, inputBuscar.value));
   }
 
   // Saldos de lo que se está mostrando (una sola consulta).
@@ -420,10 +435,10 @@ function filaPedidoHtml(p, s, opciones = {}) {
 // Cada grupo es una tarea distinta: preparar, entregar, cobrar o devolver. "Entregados, falta cobrar" y "A devolver" van
 // separados porque piden acciones opuestas. A devolver junta los anulados con plata y los entregados pagados de más.
 const GRUPOS_PENDIENTES = [
-  { clave: 'EN_PREPARACION', titulo: 'En preparación', icono: 'fa-hourglass-half' },
-  { clave: 'LISTO', titulo: 'Listos para entregar', icono: 'fa-bell' },
-  { clave: 'POR_COBRAR', titulo: 'Entregados, falta cobrar', icono: 'fa-dollar-sign' },
-  { clave: 'A_DEVOLVER', titulo: 'A devolver', icono: 'fa-undo' }
+  { clave: 'EN_PREPARACION', titulo: 'En preparación', chip: 'En preparación', icono: 'fa-hourglass-half' },
+  { clave: 'LISTO', titulo: 'Listos para entregar', chip: 'Listos', icono: 'fa-bell' },
+  { clave: 'POR_COBRAR', titulo: 'Entregados, falta cobrar', chip: 'Falta cobrar', icono: 'fa-dollar-sign' },
+  { clave: 'A_DEVOLVER', titulo: 'A devolver', chip: 'A devolver', icono: 'fa-undo' }
 ];
 
 // A qué grupo va un pedido pendiente (s = su saldo, de saldoDe).
@@ -461,6 +476,30 @@ function alternarGrupoPendientes(clave) {
   const boton = tbody.querySelector(`.grupo-toggle[data-grupo="${clave}"]`);
   boton?.setAttribute('aria-expanded', String(!plegado));
   boton?.closest('tr')?.classList.toggle('plegado', plegado);
+}
+
+// Atajo de los chips: abre el grupo (si estaba plegado) y baja hasta su encabezado.
+function irAGrupoPendientes(clave) {
+  if (gruposPlegados.has(clave)) alternarGrupoPendientes(clave);
+  document.querySelector(`.grupo-toggle[data-grupo="${clave}"]`)?.closest('tr')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Chips de arriba: uno por grupo que tenga pedidos, con la cantidad y, en "falta cobrar" y "a devolver", el monto.
+function htmlChipsPendientes(porGrupo, saldos) {
+  return GRUPOS_PENDIENTES
+    .filter(g => (porGrupo[g.clave] || []).length > 0)
+    .map(g => {
+      const lista = porGrupo[g.clave];
+      const suma = (f) => lista.reduce((acc, p) => acc + f(saldoDe(saldos, p)), 0);
+      let monto = '';
+      if (g.clave === 'POR_COBRAR') monto = pesos(suma(s => s.saldo));
+      if (g.clave === 'A_DEVOLVER') monto = pesos(suma(s => s.aDevolver));
+      return `<button type="button" class="chip-grupo g-${g.clave}" data-grupo="${g.clave}" title="Ir a: ${g.titulo}">`
+        + `<i class="fas ${g.icono}" aria-hidden="true"></i><span>${g.chip}</span><b class="chip-cant">${lista.length}</b>`
+        + (monto ? `<span class="chip-monto">${monto}</span>` : '')
+        + `</button>`;
+    })
+    .join('');
 }
 
 // Encabezado del grupo + sus filas (y un espacio antes, salvo el primero). Plegado, el encabezado sigue mostrando la
@@ -538,45 +577,46 @@ async function cargarPendientes() {
     return;
   }
 
-  const pedidos = data;
-  const porEstado = (estado) => pedidos.filter(p => p.estado === estado);
-  const cantPrep = porEstado('EN_PREPARACION').length;
-  const cantListos = porEstado('LISTO').length;
-  const entregados = porEstado('ENTREGADO');
-  const impagos = entregados.filter(p => saldoDe(saldos, p).saldo > 0);
-  // A devolver: cualquier pedido (anulado o entregado) con plata para devolver.
-  const aDevolver = pedidos.filter(p => saldoDe(saldos, p).aDevolver > 0);
-  const porCobrar = impagos.reduce((acc, p) => acc + saldoDe(saldos, p).saldo, 0);
-  const montoDevolver = aDevolver.reduce((acc, p) => acc + saldoDe(saldos, p).aDevolver, 0);
-
-  const resumen = document.getElementById('resumen-pendientes');
-  if (resumen) {
-    resumen.textContent = pedidos.length === 0
-      ? ''
-      : `${cantPrep} en preparación · ${cantListos} listo${cantListos !== 1 ? 's' : ''} para entregar · `
-        + `${impagos.length} entregado${impagos.length !== 1 ? 's' : ''} sin cobrar`
-        + (impagos.length > 0 ? ` (${pesos(porCobrar)} por cobrar)` : '')
-        + (aDevolver.length > 0 ? ` · ${aDevolver.length} a devolver (${pesos(montoDevolver)})` : '');
-  }
-
-  const sinVer = pedidos.filter(esPedidoNuevoSinVer).length;
+  datosPendientes = { pedidos: data, saldos };
+  const sinVer = data.filter(esPedidoNuevoSinVer).length;
   document.getElementById('btn-marcar-vistos')?.classList.toggle('d-none', sinVer === 0);
+  dibujarPendientes();
+}
 
-  const tbody = document.getElementById('tabla-pedidos-body');
-  if (!tbody) return;
+// Dibuja chips y grupos con lo ya cargado, aplicando el buscador (sin consultar la base).
+let datosPendientes = { pedidos: [], saldos: {} };
+function dibujarPendientes() {
+  const { pedidos: todos, saldos } = datosPendientes;
+  const texto = (document.getElementById('buscar-pendientes')?.value || '').trim();
+  document.getElementById('btn-limpiar-busqueda')?.classList.toggle('d-none', texto === '');
+  const pedidos = texto ? todos.filter(p => coincideBusqueda(p, texto)) : todos;
 
-  if (pedidos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-check-circle text-success mr-1"></i> No hay pedidos pendientes. Todo al día.</td></tr>`;
-    return;
-  }
-
-  const hoy = obtenerFechaActualISO();
   const porGrupo = {};
   pedidos.forEach(p => {
     const clave = claveGrupoPendiente(p, saldoDe(saldos, p));
     if (!porGrupo[clave]) porGrupo[clave] = [];
     porGrupo[clave].push(p);   // se conserva el orden: el más antiguo primero
   });
+
+  const resumen = document.getElementById('resumen-pendientes');
+  if (resumen) {
+    resumen.innerHTML = htmlChipsPendientes(porGrupo, saldos)
+      + (texto && todos.length > 0 ? `<span class="resumen-filtro">Mostrando ${pedidos.length} de ${todos.length}</span>` : '');
+  }
+
+  const tbody = document.getElementById('tabla-pedidos-body');
+  if (!tbody) return;
+
+  if (todos.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-check-circle text-success mr-1"></i> No hay pedidos pendientes. Todo al día.</td></tr>`;
+    return;
+  }
+  if (pedidos.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-search mr-1"></i> Ningún pedido pendiente coincide con «${esc(texto)}».</td></tr>`;
+    return;
+  }
+
+  const hoy = obtenerFechaActualISO();
   tbody.innerHTML = GRUPOS_PENDIENTES
     .filter(g => (porGrupo[g.clave] || []).length > 0)
     .map((g, i) => htmlGrupoPendientes(g, porGrupo[g.clave], saldos, hoy, i === 0))
@@ -1175,6 +1215,23 @@ export async function verDetallePedido(idPedido) {
 // =========================================================================
 // ESCUCHADOR DE EVENTOS DE IMPRESIÓN DIRECTA EN LA TABLA
 // =========================================================================
+// Chips de arriba: llevan al grupo.
+document.getElementById('resumen-pendientes')?.addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip-grupo');
+  if (chip) irAGrupoPendientes(chip.dataset.grupo);
+});
+
+// Buscador de Pendientes: filtra lo que ya está cargado. Escape o la cruz lo borran.
+const inputBuscarPendientes = document.getElementById('buscar-pendientes');
+inputBuscarPendientes?.addEventListener('input', () => { if (modoPedidos === 'PENDIENTES') dibujarPendientes(); });
+inputBuscarPendientes?.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && inputBuscarPendientes.value !== '') { inputBuscarPendientes.value = ''; dibujarPendientes(); }
+});
+document.getElementById('btn-limpiar-busqueda')?.addEventListener('click', () => {
+  if (inputBuscarPendientes) { inputBuscarPendientes.value = ''; inputBuscarPendientes.focus(); }
+  dibujarPendientes();
+});
+
 document.getElementById('tabla-pedidos-body')?.addEventListener('click', async (e) => {
   // Plegar / abrir un grupo de Pendientes.
   const btnGrupo = e.target.closest('.grupo-toggle');

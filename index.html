@@ -352,8 +352,15 @@
         </div>
         <button type="button" class="btn btn-sm btn-outline-info mb-2 mr-2" id="btn-actualizar-pendientes"><i class="fas fa-sync-alt mr-1"></i> Actualizar</button>
         <button type="button" class="btn btn-sm btn-outline-danger mb-2 d-none" id="btn-marcar-vistos"><i class="fas fa-eye mr-1"></i> Marcar pedidos web como vistos</button>
+        <!-- Buscador de Pendientes (solo en esa vista): por número, nombre o teléfono -->
+        <div class="buscador-pendientes ml-auto mb-2" id="buscador-pendientes">
+          <i class="fas fa-search" aria-hidden="true"></i>
+          <input type="text" id="buscar-pendientes" placeholder="Pedido, nombre o teléfono" autocomplete="off" enterkeyhint="search" aria-label="Buscar entre los pedidos pendientes">
+          <button type="button" id="btn-limpiar-busqueda" class="d-none" aria-label="Borrar búsqueda" title="Borrar búsqueda">&times;</button>
+        </div>
       </div>
-      <div id="resumen-pendientes" class="mb-3 font-weight-bold text-muted"></div>
+      <!-- Chips de resumen de Pendientes: uno por grupo; tocar uno lleva al grupo (los arma pedidos.js) -->
+      <div id="resumen-pendientes" class="resumen-pendientes mb-3" aria-label="Resumen de pedidos pendientes"></div>
 
       <div class="card card-outline card-info shadow-sm mb-3 d-none" id="filtros-historial">
         <div class="card-body p-3">
@@ -376,8 +383,8 @@
               </select>
             </div>
             <div class="col-md-4">
-              <label class="small font-weight-bold">Buscar Cliente / ID:</label>
-              <input type="text" class="form-control form-control-sm" id="filtro-buscar-pedido" placeholder="Nombre cliente...">
+              <label class="small font-weight-bold">Buscar Cliente / Tel / ID:</label>
+              <input type="text" class="form-control form-control-sm" id="filtro-buscar-pedido" placeholder="Nombre, teléfono o número...">
             </div>
             <div class="col-md-2 d-flex align-items-end">
               <button class="btn btn-sm btn-info btn-block font-weight-bold" id="btn-actualizar-pedidos">

@@ -74,10 +74,10 @@ tr.fila-pedido-nuevo > td { background-color: #fff3cd; }
    borde a la izquierda de todas sus filas. Los colores repiten los de las etiquetas de la app
    (cian = en preparación, azul = listo, ámbar = debe, rojo = devolver).
    Entre grupos hay un espacio. El encabezado es un botón: plega y abre el grupo (pedidos.js). */
-tr.g-EN_PREPARACION { --g-acento: #2aa7bd; --g-fondo: #e3f4f8; --g-texto: #0d5c6b; }
-tr.g-LISTO          { --g-acento: #3b7fd4; --g-fondo: #e5eefc; --g-texto: #1c4f94; }
-tr.g-POR_COBRAR     { --g-acento: #e9b83f; --g-fondo: #fff3d1; --g-texto: #7a5200; }
-tr.g-A_DEVOLVER     { --g-acento: #d64545; --g-fondo: #fde8e8; --g-texto: #9b1c1c; }
+.g-EN_PREPARACION { --g-acento: #2aa7bd; --g-fondo: #e3f4f8; --g-texto: #0d5c6b; }
+.g-LISTO          { --g-acento: #3b7fd4; --g-fondo: #e5eefc; --g-texto: #1c4f94; }
+.g-POR_COBRAR     { --g-acento: #e9b83f; --g-fondo: #fff3d1; --g-texto: #7a5200; }
+.g-A_DEVOLVER     { --g-acento: #d64545; --g-fondo: #fde8e8; --g-texto: #9b1c1c; }
 
 #sec-pedidos-dia .table tr.fila-grupo-estado > td {
   padding: 0; border-top: 0; border-left: 6px solid var(--g-acento); background: var(--g-fondo);
@@ -104,6 +104,30 @@ tr.g-A_DEVOLVER     { --g-acento: #d64545; --g-fondo: #fde8e8; --g-texto: #9b1c1
 .grupo-alertas { display: none; gap: .4rem; }
 .plegado .grupo-alertas { display: inline-flex; }
 .grupo-subtotal { margin-left: auto; font-size: .95rem; font-weight: 800; }
+
+/* ---- Chips de resumen y buscador de Pendientes -------------------------------------------------
+   Los chips usan los mismos colores de cada grupo (variables --g-*). Tocar un chip baja al grupo. */
+.resumen-pendientes { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.chip-grupo {
+  display: inline-flex; align-items: center; gap: .5rem; min-height: 40px; padding: .3rem .95rem;
+  border: 1.5px solid var(--g-acento); border-radius: 999px; background: var(--g-fondo); color: var(--g-texto);
+  font-family: inherit; font-size: .95rem; font-weight: 700; line-height: 1; cursor: pointer;
+}
+.chip-grupo:hover { box-shadow: 0 1px 5px rgba(26, 42, 63, .18); }
+.chip-grupo:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: 2px; }
+.chip-grupo .chip-cant { font-size: 1.1rem; font-weight: 800; }
+.chip-grupo .chip-monto { padding-left: .55rem; border-left: 1.5px solid var(--g-acento); font-weight: 800; }
+.resumen-filtro { margin-left: auto; font-size: .88rem; font-weight: 600; color: #6b7280; }
+
+.buscador-pendientes {
+  display: flex; align-items: center; gap: .5rem; min-width: 270px; height: 38px; padding: 0 .75rem;
+  background: #fff; border: 1.5px solid #cfd6df; border-radius: 999px; color: #6b7280;
+}
+.buscador-pendientes:focus-within { border-color: var(--cruditas-brand, #e9b83f); box-shadow: 0 0 0 3px rgba(233, 184, 63, .35); }
+.buscador-pendientes input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: .95rem; color: #26364a; }
+.buscador-pendientes button { border: 0; background: transparent; padding: 0 .2rem; font-size: 1.4rem; line-height: 1; color: #6b7280; cursor: pointer; }
+/* Al ir a un grupo con un chip, que la barra de arriba no tape el encabezado */
+tr.fila-grupo-estado { scroll-margin-top: 76px; }
 
 /* ---- Tabla en modo Pendientes (menos columnas) --------------------------------------------------
    pedidos.js pone la clase tabla-pendientes: se ocultan Fecha y Medio de pago (la hora va debajo del
@@ -170,3 +194,98 @@ tr.g-A_DEVOLVER     { --g-acento: #d64545; --g-fondo: #fde8e8; --g-texto: #9b1c1
   font-weight: 700;
   color: #fff;
 }
+
+/* =============================================================================
+   REFINAMIENTO VISUAL · Gestión de Pedidos  (menos colores, mejor jerarquía)
+   Todo está acotado a #sec-pedidos-dia: no cambia el POS ni otras pantallas, aunque las reglas
+   .btn-accion-* y los colores de styles.css sean globales. Paleta propia de esta pantalla (--ped-*).
+   Idea: un solo color fuerte (el azul oscuro de la barra) para separar los grupos; el color semántico
+   queda en íconos, etiquetas de contorno y botones de acción. Solo CSS: no toca pedidos.js ni index.html.
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   ============================================================================= */
+#sec-pedidos-dia {
+  --ped-navy: #1d304b;
+  --ped-amber: #f4b936;
+  --ped-green: #198754;
+  --ped-green-text: #146c43;
+  --ped-red-text: #b42318;
+  --ped-line: #e4e7ec;
+  --ped-muted: #6b7280;
+  --ped-gray-text: #495057;
+  --ped-amber-soft: #fff5d9;
+  --ped-amber-line: #f1dc9b;
+  --ped-amber-text: #7a5200;
+}
+
+/* Cada grupo: color de la línea lateral (--g-acento) y de su ícono sobre claro (--g-icono) y sobre la barra oscura */
+#sec-pedidos-dia .g-EN_PREPARACION { --g-acento: #9aaec4; --g-icono: #5b7089; --g-icono-osc: #a9bbd0; }
+#sec-pedidos-dia .g-LISTO          { --g-acento: #3b7fd4; --g-icono: #3b7fd4; --g-icono-osc: #7fb0f0; }
+#sec-pedidos-dia .g-POR_COBRAR     { --g-acento: #b9c0ca; --g-icono: #b7791f; --g-icono-osc: #f4b936; }
+#sec-pedidos-dia .g-A_DEVOLVER     { --g-acento: #dc3545; --g-icono: #dc3545; --g-icono-osc: #ff8a94; }
+
+/* ---- Chips de resumen: blancos y discretos; el color solo en el ícono ------------------------------ */
+#sec-pedidos-dia .chip-grupo { background: #fff; border: 1px solid var(--ped-line); color: var(--ped-navy); font-weight: 600; box-shadow: none; }
+#sec-pedidos-dia .chip-grupo > i { color: var(--g-icono); }
+#sec-pedidos-dia .chip-grupo:hover { background: #f8f9fb; border-color: #cfd6df; box-shadow: none; }
+#sec-pedidos-dia .chip-grupo .chip-cant { color: var(--ped-navy); font-weight: 700; }
+#sec-pedidos-dia .chip-grupo .chip-monto { border-left: 1px solid var(--ped-line); color: var(--ped-gray-text); font-weight: 700; }
+
+/* ---- Encabezado de grupo: barra azul oscura baja, igual para los cuatro ---------------------------- */
+#sec-pedidos-dia .table tr.fila-grupo-estado > td { background: var(--ped-navy); border-left: 4px solid var(--g-acento); }
+#sec-pedidos-dia .table tr.fila-en-grupo > td:first-child { border-left-width: 4px; }
+#sec-pedidos-dia .grupo-toggle { min-height: 42px; padding: .4rem 1rem; color: #fff; font-size: .98rem; font-weight: 700; }
+#sec-pedidos-dia .grupo-toggle:hover { background: rgba(255, 255, 255, .06); }
+#sec-pedidos-dia .grupo-toggle:focus-visible { outline: 3px solid rgba(244, 185, 54, .85); outline-offset: -3px; }
+#sec-pedidos-dia .grupo-toggle > i.fas:not(.grupo-chevron) { color: var(--g-icono-osc); }
+#sec-pedidos-dia .grupo-toggle .grupo-chevron { color: rgba(255, 255, 255, .7); }
+#sec-pedidos-dia .grupo-cant { background: rgba(255, 255, 255, .16); color: #fff; box-shadow: none; }
+#sec-pedidos-dia .grupo-subtotal { color: #ffe9b0; }
+
+/* ---- Filas: lo importante primero (número, cliente, importe) y lo secundario en gris --------------- */
+#sec-pedidos-dia .table tbody td:first-child,
+#sec-pedidos-dia .table tbody td.text-right { color: var(--ped-navy); }
+#sec-pedidos-dia .table tbody td:nth-child(3) .font-weight-bold { color: var(--ped-navy); }
+#sec-pedidos-dia .pedido-hora { color: var(--ped-muted); font-weight: 600; }
+#sec-pedidos-dia .cliente-tel { color: var(--ped-muted); }
+/* Pedido de otro día: ámbar oscuro (antes rojo); sigue avisando sin gritar */
+#sec-pedidos-dia .fecha-atrasada,
+#sec-pedidos-dia .pedido-hora.fecha-atrasada { color: var(--ped-amber-text); font-weight: 700; }
+/* Pedido web nuevo: fondo amarillo muy tenue en lugar de toda la fila resaltada */
+#sec-pedidos-dia .table tr.fila-pedido-nuevo > td { background-color: #fffbec; }
+/* Al pasar el mouse: gris azulado muy suave (no el ámbar de antes) */
+#sec-pedidos-dia .table-hover tbody tr:not(.fila-grupo-estado):not(.fila-grupo-espacio):hover { background-color: rgba(29, 48, 75, .04) !important; }
+
+/* ---- Etiquetas: de contorno y discretas ------------------------------------------------------------- */
+#sec-pedidos-dia .table .badge { border: 1px solid transparent; font-weight: 600; }
+/* Canal (WEB): neutro */
+#sec-pedidos-dia .table .badge-dark { background: #e9ecef; color: var(--ped-gray-text); border-color: #e9ecef; }
+/* NUEVO: amarillo suave */
+#sec-pedidos-dia .table .badge-danger.ml-1 { background: var(--ped-amber-soft); color: var(--ped-amber-text); border-color: var(--ped-amber-line); }
+/* Observaciones del pedido */
+#sec-pedidos-dia .table .badge-warning.text-dark { background: var(--ped-amber-soft); color: var(--ped-amber-text) !important; border-color: var(--ped-amber-line) !important; }
+/* Estado de pago */
+#sec-pedidos-dia .table .badge-success { background: #fff; color: var(--ped-green-text); border-color: #a8d5bc; }
+#sec-pedidos-dia .table .badge-warning:not(.text-dark) { background: #fff; color: var(--ped-amber-text) !important; border-color: #e3c068 !important; }
+#sec-pedidos-dia .table .badge-danger:not(.ml-1) { background: #fff; color: var(--ped-red-text); border-color: #e9b4b4; }
+#sec-pedidos-dia .table .badge-light { background: #fff; color: var(--ped-gray-text) !important; border-color: #d5dae0 !important; }   /* !important: la etiqueta trae text-muted */
+/* Estado del pedido (Historial) */
+#sec-pedidos-dia .table .badge-info { background: #f0f3f6; color: #3f5a78; border-color: #d2dce8; }
+#sec-pedidos-dia .table .badge-primary { background: #eaf1fc; color: #1c4f94; border-color: #c9dbf5; }
+#sec-pedidos-dia .table .badge-secondary { background: #f4f6f8; color: var(--ped-gray-text); border-color: #dee2e6; }
+/* Señales del grupo plegado ("2 nuevos", "1 de otro día") sobre la barra oscura */
+#sec-pedidos-dia .table .grupo-alertas .badge.badge-danger { background: var(--ped-amber-soft); color: var(--ped-amber-text); border-color: var(--ped-amber-line); }
+
+/* ---- Botones de la fila: la jerarquía queda igual, con menos peso visual ----------------------------- */
+#sec-pedidos-dia .btn.btn-accion { border-width: 1px; font-weight: 600; }
+#sec-pedidos-dia .btn.btn-accion-pagar { background: var(--ped-amber); border-color: var(--ped-amber); color: var(--ped-navy); }
+#sec-pedidos-dia .btn.btn-accion-pagar:hover { background: #e9aa22; border-color: #e9aa22; color: var(--ped-navy); }
+#sec-pedidos-dia .btn.btn-accion-cobrar { background: var(--ped-green); border-color: var(--ped-green); color: #fff; }
+#sec-pedidos-dia .btn.btn-accion-cobrar:hover { background: var(--ped-green-text); border-color: var(--ped-green-text); color: #fff; }
+#sec-pedidos-dia .btn.btn-accion-cobrar-sec { background: #fff; border-color: var(--ped-green); color: var(--ped-green-text); }
+#sec-pedidos-dia .btn.btn-accion-cobrar-sec:hover { background: #e8f3ec; border-color: var(--ped-green-text); color: var(--ped-green-text); }
+/* Devolver es plata que sale: contorno rojo, no el verde de cobrar */
+#sec-pedidos-dia .btn.btn-accion-cobrar[data-action="devolver-pedido"] { background: #fff; border-color: #e3a9af; color: var(--ped-red-text); }
+#sec-pedidos-dia .btn.btn-accion-cobrar[data-action="devolver-pedido"]:hover { background: #fdecec; border-color: #d9868f; color: var(--ped-red-text); }
+/* Acciones poco frecuentes (Entregar sin cobrar, Traspasar pago): neutras */
+#sec-pedidos-dia .btn.btn-accion-aviso { background: #fff; border-color: #cfd6df; color: var(--ped-gray-text); }
+#sec-pedidos-dia .btn.btn-accion-aviso:hover { background: #f1f4f8; border-color: #b8c2cf; color: var(--ped-navy); }
