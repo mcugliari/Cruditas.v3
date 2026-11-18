@@ -66,17 +66,63 @@
 
 /* ---- Vista Pendientes ------------------------------------------------------- */
 .pedidos-selector-modo .btn { font-weight: 700; }
-.fila-grupo-estado td {
-  background: #eef1f4;
-  font-weight: 700;
-  font-size: .9rem;
-  padding-top: .45rem;
-  padding-bottom: .45rem;
-}
 tr.fila-pedido-nuevo > td { background-color: #fff3cd; }
 .fecha-atrasada { color: #dc3545; font-weight: 700; }
 
+/* ---- Grupos de Pendientes (En preparación, Listos, Falta cobrar, A devolver) -------------------
+   Cada grupo tiene su color: una banda con título, cantidad y subtotal, y el mismo color como
+   borde a la izquierda de todas sus filas. Los colores repiten los de las etiquetas de la app
+   (cian = en preparación, azul = listo, ámbar = debe, rojo = devolver).
+   Entre grupos hay un espacio. El encabezado es un botón: plega y abre el grupo (pedidos.js). */
+tr.g-EN_PREPARACION { --g-acento: #2aa7bd; --g-fondo: #e3f4f8; --g-texto: #0d5c6b; }
+tr.g-LISTO          { --g-acento: #3b7fd4; --g-fondo: #e5eefc; --g-texto: #1c4f94; }
+tr.g-POR_COBRAR     { --g-acento: #e9b83f; --g-fondo: #fff3d1; --g-texto: #7a5200; }
+tr.g-A_DEVOLVER     { --g-acento: #d64545; --g-fondo: #fde8e8; --g-texto: #9b1c1c; }
+
+#sec-pedidos-dia .table tr.fila-grupo-estado > td {
+  padding: 0; border-top: 0; border-left: 6px solid var(--g-acento); background: var(--g-fondo);
+}
+#sec-pedidos-dia .table tr.fila-en-grupo > td:first-child { border-left: 6px solid var(--g-acento); }
+#sec-pedidos-dia .table tr.fila-grupo-espacio > td { height: 14px; padding: 0; border: 0; background: #f5f6f8; }
+/* Sin el tinte de "pasar el mouse" en las bandas ni en los espacios */
+#sec-pedidos-dia .table-hover tbody tr.fila-grupo-estado:hover,
+#sec-pedidos-dia .table-hover tbody tr.fila-grupo-espacio:hover { background-color: transparent !important; }
+
+.grupo-toggle {
+  display: flex; align-items: center; gap: .65rem; width: 100%; min-height: 48px; padding: .55rem 1rem;
+  border: 0; background: transparent; color: var(--g-texto);
+  font: inherit; font-size: 1.02rem; font-weight: 800; text-align: left; cursor: pointer;
+}
+.grupo-toggle:focus-visible { outline: 3px solid rgba(233, 184, 63, .6); outline-offset: -3px; }
+.grupo-chevron { font-size: .8rem; transition: transform .15s ease; }
+.plegado .grupo-chevron { transform: rotate(-90deg); }
+.grupo-cant {
+  min-width: 1.8rem; padding: .05rem .55rem; border-radius: 999px; background: #fff;
+  font-size: .85rem; text-align: center; box-shadow: inset 0 0 0 1px var(--g-acento);
+}
+/* Señales rojas: solo se ven con el grupo plegado (abierto, las filas ya las muestran) */
+.grupo-alertas { display: none; gap: .4rem; }
+.plegado .grupo-alertas { display: inline-flex; }
+.grupo-subtotal { margin-left: auto; font-size: .95rem; font-weight: 800; }
+
+/* ---- Tabla en modo Pendientes (menos columnas) --------------------------------------------------
+   pedidos.js pone la clase tabla-pendientes: se ocultan Fecha y Medio de pago (la hora va debajo del
+   número y el medio debajo de la etiqueta de pago) y los encabezados cambian de texto. */
+.lbl-pendientes { display: none; }
+.tabla-pendientes .lbl-pendientes { display: inline; }
+.tabla-pendientes .lbl-historial { display: none; }
+.tabla-pendientes .col-fecha, .tabla-pendientes .col-medio { display: none; }
+.pedido-hora { font-size: .85rem; font-weight: 600; color: #6b7280; }
+.pedido-hora.fecha-atrasada { color: #dc3545; font-weight: 700; }
+.cliente-tel { font-size: .85rem; color: #6b7280; }
+
+/* ---- Botones de la fila: uno solo con relleno por estado ---------------------------------------- */
+.btn.btn-accion-cobrar-sec { background: #fff; border-color: var(--cruditas-green); color: var(--cruditas-green); }
+.btn.btn-accion-cobrar-sec:hover { background: #e8f6ee; border-color: #11703b; color: #0f5f32; }
+.btn.btn-accion-icono { width: 38px; padding: 0; justify-content: center; }
+
 @media (prefers-reduced-motion: reduce) {
+  .grupo-chevron { transition: none; }
   .aviso-pedidos.hay-nuevos i { animation: none; }
   .cartel-pedido-nuevo { transition: none; }
 }

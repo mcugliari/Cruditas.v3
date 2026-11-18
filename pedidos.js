@@ -33,6 +33,13 @@ function nombreSinTelefono(texto) {
   return String(texto ?? '').replace(/\s*\(\s*tel[^)]*\)\s*$/i, '').trim();
 }
 
+// El teléfono que viene escrito dentro del nombre ("Juan Pérez (Tel: 1122334455)" -> "1122334455"). Sirve para pedidos
+// viejos que no tienen la columna telefono cargada. Devuelve '' si no hay.
+function telefonoDeNombre(texto) {
+  const m = String(texto ?? '').match(/\(\s*tel[^:)]*:?\s*([^)]*)\)\s*$/i);
+  return m ? m[1].trim() : '';
+}
+
 // Texto del mensaje de "pedido listo". Se puede cambiar libremente.
 // Si el pedido ya está pago NO se pide plata: se avisa que está pago. Si falta cobrar, se pide solo el saldo.
 function mensajePedidoListo(nombre, idPedido, saldo) {
@@ -112,6 +119,9 @@ export function cambiarModoPedidos(modo) {
 }
 
 export async function cargarTablaPedidos() {
+  // En Pendientes la tabla muestra menos columnas (sin fecha ni medio de pago): lo decide esta clase (aviso-pedidos.css).
+  document.getElementById('tabla-pedidos-body')?.closest('table')?.classList.toggle('tabla-pendientes', modoPedidos === 'PENDIENTES');
+
   if (modoPedidos === 'PENDIENTES') {
     await cargarPendientes();
     return;
@@ -205,8 +215,16 @@ export async function cargarTablaPedidos() {
 }
 
 // Una fila de la tabla de pedidos. La usan las dos vistas (Pendientes e Historial).
-function filaPedidoHtml(p, s) {
-  const clienteNombre = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
+//   opciones (solo Pendientes): { grupo: clave del grupo al que pertenece, oculta: el grupo está plegado }
+function filaPedidoHtml(p, s, opciones = {}) {
+  const { grupo = '', oculta = false } = opciones;
+  const clienteCrudo = p.nombre_referencia || p.TB_BCLIENTES?.nombre || 'Consumidor Final';
+  // Nombre arriba y teléfono debajo (los pedidos web guardan "Nombre (Tel: ...)" en el nombre).
+  const clienteNombre = nombreSinTelefono(clienteCrudo) || clienteCrudo;
+  const telefonoCliente = String(p.telefono || '').trim() || telefonoDeNombre(clienteCrudo);
+  const htmlTelefono = telefonoCliente
+    ? `<div class="cliente-tel"><i class="fas fa-phone-alt mr-1"></i>${esc(telefonoCliente)}</div>`
+    : '';
   // Medios y cuentas de lo cobrado (pueden ser varios si se pagó en partes). Sin pagos: un guion.
   const medioBase = s.medios;
   const cuentaPago = s.cuentas;   // el efectivo no tiene cuenta para mostrar
@@ -233,7 +251,11 @@ function filaPedidoHtml(p, s) {
   });
 
   // En Pendientes, un pedido de un día anterior se marca en rojo (se quedó sin cerrar)
-  const fechaAtrasada = modoPedidos === 'PENDIENTES' && p.fecha.split('T')[0] < obtenerFechaActualISO();
+  const esPend = modoPedidos === 'PENDIENTES';
+  const fechaAtrasada = esPend && p.fecha.split('T')[0] < obtenerFechaActualISO();
+  // En Pendientes alcanza con la hora (sin año); si el pedido es de otro día se agrega el día, en rojo.
+  const diaCorto = new Date(`${p.fecha.split('T')[0]}T00:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+  const textoHora = fechaAtrasada ? `${diaCorto} · ${hora}` : hora;
 
   // Estado físico (cocina) y, aparte, el estado de pago (calculado con los pagos del pedido).
   let badgeClass = 'badge-secondary';
@@ -248,14 +270,15 @@ function filaPedidoHtml(p, s) {
   const debe = p.estado !== 'ANULADO' && saldo > 0;
   const hayDevolucion = s.aDevolver > 0;   // hay plata para devolver (o traspasar si el pedido está anulado)
   const puedeDevolver = hayDevolucion && puedeAlMenos('ENCARGADO');
+  const bp = (clase, texto) => `<span class="badge ${clase}${esPend ? ' p-2' : ''}">${texto}</span>`;   // en Pendientes, más grande
   let etiquetaPago = '';
   if (hayDevolucion) {
-    etiquetaPago = `<span class="badge badge-danger">Devolver ${pesos(s.aDevolver)}</span>`;
+    etiquetaPago = bp('badge-danger', `Devolver ${pesos(s.aDevolver)}`);
   } else if (p.estado !== 'ANULADO') {
-    if (saldo === 0 && s.pagado > 0) etiquetaPago = '<span class="badge badge-success">Pagado ✓</span>';
-    else if (debe && s.pagado > 0) etiquetaPago = `<span class="badge badge-warning">Pago parcial · falta ${pesos(saldo)}</span>`;
-    else if (debe && p.estado === 'ENTREGADO') etiquetaPago = `<span class="badge badge-warning">Debe ${pesos(saldo)}</span>`;
-    else if (debe) etiquetaPago = '<span class="badge badge-light border text-muted">Sin pagar</span>';
+    if (saldo === 0 && s.pagado > 0) etiquetaPago = bp('badge-success', 'Pagado ✓');
+    else if (debe && s.pagado > 0) etiquetaPago = bp('badge-warning', `Pago parcial · falta ${pesos(saldo)}`);
+    else if (debe && p.estado === 'ENTREGADO') etiquetaPago = bp('badge-warning', `Debe ${pesos(saldo)}`);
+    else if (debe) etiquetaPago = bp('badge-light border text-muted', 'Sin pagar');
   }
 
   // BOTONES DE LA FILA
@@ -275,7 +298,7 @@ function filaPedidoHtml(p, s) {
   if (p.estado === 'EN_PREPARACION') {
     visibles.push(btnFila('btn-accion-pagar', 'fa-box-open', 'Marcar listo', cambiar('LISTO')));
     // Pago por adelantado: se puede cobrar mientras está en cocina, sin cambiar su estado.
-    if (debe) visibles.push(btnFila('btn-accion-cobrar', 'fa-dollar-sign', 'Cobrar', cobrar(false)));
+    if (debe) visibles.push(btnFila('btn-accion-cobrar-sec', 'fa-dollar-sign', 'Cobrar', cobrar(false)));   // contorno: la acción principal es "Marcar listo"
   } else if (p.estado === 'LISTO') {
     if (debe) {
       visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Cobrar y entregar', cobrar(true)));
@@ -305,7 +328,7 @@ function filaPedidoHtml(p, s) {
 
   // Pedido web nuevo: botón para marcarlo como visto sin tener que abrirlo
   if (nuevoSinVer) {
-    visibles.push(btnFila('btn-accion-ver', 'fa-eye', 'Visto', `data-action="marcar-visto" data-id="${idPed}"`));
+    visibles.push(btnFila('btn-accion-ver btn-accion-icono', 'fa-eye', '', `data-action="marcar-visto" data-id="${idPed}" title="Marcar como visto" aria-label="Marcar como visto"`));
   }
 
   // Menú "Más" (el orden es el que se ve en pantalla)
@@ -360,17 +383,31 @@ function filaPedidoHtml(p, s) {
     </div>
   `;
 
+  // Celda de estado. Historial: estado (cocina) + etiqueta de pago. Pendientes: solo el pago (el estado ya lo dice el grupo)
+  // y, si hubo cobros, con qué medio.
+  const medioEnPago = (s.cantidadPagos > 0 && medioBase) ? `<div class="small text-muted mt-1">${esc(medioBase)}</div>` : '';
+  const celdaEstadoPago = esPend && etiquetaPago
+    ? `${etiquetaPago}${medioEnPago}`
+    : `<span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span>${etiquetaPago ? `<div class="mt-1">${etiquetaPago}</div>` : ''}`;
+
+  const clasesFila = [
+    nuevoSinVer ? 'fila-pedido-nuevo' : '',
+    grupo ? `fila-en-grupo g-${grupo}` : '',
+    oculta ? 'd-none' : ''
+  ].filter(Boolean).join(' ');
+
   return `
-    <tr class="${nuevoSinVer ? 'fila-pedido-nuevo' : ''}">
-      <td class="font-weight-bold">#${p.id}</td>
-      <td class="${fechaAtrasada ? 'fecha-atrasada' : ''}">${fechaPedido} ${hora} hs</td>
+    <tr class="${clasesFila}"${grupo ? ` data-fila-grupo="${grupo}"` : ''}>
+      <td class="font-weight-bold">#${p.id}${esPend ? `<div class="pedido-hora ${fechaAtrasada ? 'fecha-atrasada' : ''}">${textoHora} hs</div>` : ''}</td>
+      <td class="col-fecha ${fechaAtrasada ? 'fecha-atrasada' : ''}">${fechaPedido} ${hora} hs</td>
       <td>
         <div class="font-weight-bold">${esc(clienteNombre)}${badgeCanal}${etiquetaNuevo}</div>
+        ${htmlTelefono}
         ${htmlObservaciones}
       </td>
-      <td>${medioPago}</td>
+      <td class="col-medio">${medioPago}</td>
       <td class="text-right font-weight-bold">$${(p.importe_total || 0).toLocaleString('es-AR')}</td>
-      <td class="text-center"><span class="badge ${badgeClass} p-2">${esc(estadoTexto)}</span>${etiquetaPago ? `<div class="mt-1">${etiquetaPago}</div>` : ''}</td>
+      <td class="text-center">${celdaEstadoPago}</td>
       <td class="text-center">${botonesAccion}</td>
     </tr>
   `;
@@ -380,12 +417,83 @@ function filaPedidoHtml(p, s) {
 // VISTA "PENDIENTES": en preparación, listos y entregados con saldo distinto de cero, sin filtros de
 // fecha ni de estado. Agrupado por estado y, dentro de cada grupo, el más antiguo primero.
 // =============================================================================
+// Cada grupo es una tarea distinta: preparar, entregar, cobrar o devolver. "Entregados, falta cobrar" y "A devolver" van
+// separados porque piden acciones opuestas. A devolver junta los anulados con plata y los entregados pagados de más.
 const GRUPOS_PENDIENTES = [
-  { estado: 'EN_PREPARACION', titulo: '⏳ En preparación' },
-  { estado: 'LISTO', titulo: '🔔 Listos para entregar' },
-  { estado: 'ENTREGADO', titulo: '📦 Entregados con saldo (sin cobrar o a devolver)' },
-  { estado: 'ANULADO', titulo: '🚫 Anulados con plata para devolver o traspasar' }
+  { clave: 'EN_PREPARACION', titulo: 'En preparación', icono: 'fa-hourglass-half' },
+  { clave: 'LISTO', titulo: 'Listos para entregar', icono: 'fa-bell' },
+  { clave: 'POR_COBRAR', titulo: 'Entregados, falta cobrar', icono: 'fa-dollar-sign' },
+  { clave: 'A_DEVOLVER', titulo: 'A devolver', icono: 'fa-undo' }
 ];
+
+// A qué grupo va un pedido pendiente (s = su saldo, de saldoDe).
+function claveGrupoPendiente(p, s) {
+  if (p.estado === 'ANULADO') return 'A_DEVOLVER';
+  if (p.estado === 'ENTREGADO') return s.aDevolver > 0 ? 'A_DEVOLVER' : 'POR_COBRAR';
+  return p.estado;   // EN_PREPARACION o LISTO
+}
+
+// Grupos plegados: se recuerdan en este equipo (como el "visto" de los pedidos web). Por defecto todo abierto.
+const CLAVE_GRUPOS_PLEGADOS = 'cruditas_pedidos_grupos_plegados';
+function leerGruposPlegados() {
+  try {
+    const guardado = JSON.parse(localStorage.getItem(CLAVE_GRUPOS_PLEGADOS) || '[]');
+    return new Set(Array.isArray(guardado) ? guardado : []);
+  } catch (e) {
+    return new Set();
+  }
+}
+let gruposPlegados = leerGruposPlegados();
+function guardarGruposPlegados() {
+  try {
+    localStorage.setItem(CLAVE_GRUPOS_PLEGADOS, JSON.stringify([...gruposPlegados]));
+  } catch (e) { /* sin almacenamiento: la elección vale solo hasta recargar */ }
+}
+
+// Pliega o abre un grupo sin volver a consultar la base: solo muestra u oculta sus filas.
+function alternarGrupoPendientes(clave) {
+  if (gruposPlegados.has(clave)) gruposPlegados.delete(clave); else gruposPlegados.add(clave);
+  guardarGruposPlegados();
+  const plegado = gruposPlegados.has(clave);
+  const tbody = document.getElementById('tabla-pedidos-body');
+  if (!tbody) return;
+  tbody.querySelectorAll(`tr[data-fila-grupo="${clave}"]`).forEach(tr => tr.classList.toggle('d-none', plegado));
+  const boton = tbody.querySelector(`.grupo-toggle[data-grupo="${clave}"]`);
+  boton?.setAttribute('aria-expanded', String(!plegado));
+  boton?.closest('tr')?.classList.toggle('plegado', plegado);
+}
+
+// Encabezado del grupo + sus filas (y un espacio antes, salvo el primero). Plegado, el encabezado sigue mostrando la
+// cantidad, el subtotal y, en rojo, si adentro hay pedidos nuevos sin ver o de un día anterior.
+function htmlGrupoPendientes(g, lista, saldos, hoy, esPrimero) {
+  const plegado = gruposPlegados.has(g.clave);
+  const suma = (f) => lista.reduce((acc, p) => acc + f(saldoDe(saldos, p)), 0);
+  let subtotal = '';
+  if (g.clave === 'POR_COBRAR') subtotal = `${pesos(suma(s => s.saldo))} por cobrar`;
+  if (g.clave === 'A_DEVOLVER') subtotal = `${pesos(suma(s => s.aDevolver))} a devolver`;
+
+  const nuevos = lista.filter(esPedidoNuevoSinVer).length;
+  const atrasados = lista.filter(p => p.fecha.split('T')[0] < hoy).length;
+  const alertas = (nuevos > 0 ? `<span class="badge badge-danger">${nuevos} nuevo${nuevos !== 1 ? 's' : ''}</span>` : '')
+    + (atrasados > 0 ? `<span class="badge badge-danger">${atrasados} de ${atrasados !== 1 ? 'otros días' : 'otro día'}</span>` : '');
+
+  const espacio = esPrimero ? '' : '<tr class="fila-grupo-espacio" aria-hidden="true"><td colspan="7"></td></tr>';
+  const cabecera = `
+    <tr class="fila-grupo-estado g-${g.clave}${plegado ? ' plegado' : ''}">
+      <td colspan="7">
+        <button type="button" class="grupo-toggle" data-grupo="${g.clave}" aria-expanded="${!plegado}">
+          <i class="fas fa-chevron-down grupo-chevron" aria-hidden="true"></i>
+          <i class="fas ${g.icono}" aria-hidden="true"></i>
+          <span class="grupo-titulo">${g.titulo}</span>
+          <span class="grupo-cant">${lista.length}</span>
+          <span class="grupo-alertas">${alertas}</span>
+          ${subtotal ? `<span class="grupo-subtotal">${subtotal}</span>` : ''}
+        </button>
+      </td>
+    </tr>`;
+  const filas = lista.map(p => filaPedidoHtml(p, saldoDe(saldos, p), { grupo: g.clave, oculta: plegado })).join('');
+  return espacio + cabecera + filas;
+}
 
 async function cargarPendientes() {
   const numero = ++numeroConsultaPendientes;
@@ -462,12 +570,17 @@ async function cargarPendientes() {
     return;
   }
 
-  tbody.innerHTML = GRUPOS_PENDIENTES.map(g => {
-    const delGrupo = porEstado(g.estado);
-    if (delGrupo.length === 0) return '';
-    return `<tr class="fila-grupo-estado"><td colspan="7">${g.titulo} (${delGrupo.length})</td></tr>`
-      + delGrupo.map(p => filaPedidoHtml(p, saldoDe(saldos, p))).join('');
-  }).join('');
+  const hoy = obtenerFechaActualISO();
+  const porGrupo = {};
+  pedidos.forEach(p => {
+    const clave = claveGrupoPendiente(p, saldoDe(saldos, p));
+    if (!porGrupo[clave]) porGrupo[clave] = [];
+    porGrupo[clave].push(p);   // se conserva el orden: el más antiguo primero
+  });
+  tbody.innerHTML = GRUPOS_PENDIENTES
+    .filter(g => (porGrupo[g.clave] || []).length > 0)
+    .map((g, i) => htmlGrupoPendientes(g, porGrupo[g.clave], saldos, hoy, i === 0))
+    .join('');
 }
 
 // Botón "Visto" de una fila y botón "Marcar pedidos web como vistos"
@@ -1063,6 +1176,13 @@ export async function verDetallePedido(idPedido) {
 // ESCUCHADOR DE EVENTOS DE IMPRESIÓN DIRECTA EN LA TABLA
 // =========================================================================
 document.getElementById('tabla-pedidos-body')?.addEventListener('click', async (e) => {
+  // Plegar / abrir un grupo de Pendientes.
+  const btnGrupo = e.target.closest('.grupo-toggle');
+  if (btnGrupo) {
+    alternarGrupoPendientes(btnGrupo.dataset.grupo);
+    return;
+  }
+
   // Avisar por WhatsApp: va primero y sin "await" antes, para que el navegador no bloquee la ventana nueva.
   const btnAvisar = e.target.closest('.btn-avisar-ws');
   if (btnAvisar) {

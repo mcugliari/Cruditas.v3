@@ -306,6 +306,17 @@
     .retiro-info > i { margin-top: 3px; color: #8a6d00; }
     .retiro-detalle { margin-top: 2px; font-size: 0.84rem; font-weight: 600; color: #7a5a00; }
     .retiro-detalle i { width: 1.1em; margin-right: 4px; text-align: center; }
+    /* ---------- Pantalla "Pedido recibido" ---------- */
+    .exito-detalle { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 4px 14px 8px; margin-bottom: 12px; text-align: left; }
+    .exito-items { list-style: none; margin: 0; padding: 0; }
+    .exito-items li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f0f1f3; font-size: 0.95rem; font-weight: 700; }
+    .exito-items .cant { flex-shrink: 0; font-weight: 800; color: #111; }
+    .exito-total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; font-size: 1.05rem; font-weight: 800; }
+    .exito-total strong { font-size: 1.25rem; color: #198754; }
+    .exito-contacto { margin-bottom: 12px; font-size: 0.86rem; color: #6b7280; }
+    #cliente-paso-exito .retiro-info { text-align: left; }
+    .exito-ws-ayuda { margin-bottom: 6px; font-size: 0.84rem; color: #6b7280; }
+    .exito-cerrar { margin: 4px 0 0; font-size: 0.9rem; font-weight: 700; color: #6b7280; }
     .tel-aviso { font-size: 0.82rem; color: #7a5200; background: #fff8e1; border-radius: 8px; padding: 6px 10px; margin-top: 6px; }
     #modalConfirmarCliente .modal-footer { flex-direction: column; align-items: stretch; padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); }
     #modalConfirmarCliente .modal-footer > * { margin: 0; }
@@ -384,7 +395,7 @@
             <div class="form-group">
               <label class="font-weight-bold small" for="cliente-telefono">Teléfono / WhatsApp *</label>
               <input type="tel" inputmode="tel" class="form-control" id="cliente-telefono" placeholder="Ej: 1122334455" autocomplete="tel-national" enterkeyhint="next" required>
-              <small class="form-text text-muted">Con característica, <strong>sin 0 ni 15</strong>. Te avisamos a este número cuando tu pedido esté listo.</small>
+              <small class="form-text text-muted">Con característica, <strong>sin 0 ni 15</strong>. Lo usamos para contactarte por este pedido.</small>
               <div class="tel-aviso d-none" id="cliente-tel-aviso" role="status" aria-live="polite"></div>
             </div>
             <!-- Informativo (no se completa): la única modalidad es retirar. Dirección, horario y forma de pago los
@@ -398,7 +409,7 @@
             </div>
             <div class="form-group">
               <label class="font-weight-bold small" for="cliente-observaciones">Observaciones / Aclaraciones</label>
-              <textarea class="form-control" id="cliente-observaciones" rows="2" placeholder="Ej: Retiro a las 18:00 hs, pago en efectivo"></textarea>
+              <textarea class="form-control" id="cliente-observaciones" rows="2" placeholder="Ej: paso a retirar a las 18:30 hs"></textarea>
             </div>
 
             <!-- Errores y avisos (reemplaza a los alert del navegador) -->

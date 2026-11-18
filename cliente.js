@@ -550,13 +550,21 @@ function mostrarPasoDatos() {
 function pintarInfoRetiro() {
   const el = document.getElementById('retiro-detalle');
   if (!el) return;
-  const filas = [
+  const html = htmlInfoLocal();
+  el.innerHTML = html;
+  el.classList.toggle('d-none', html === '');
+}
+
+// Filas de INFO_LOCAL como HTML ('' si no hay ninguna cargada). Solo se muestran las que tienen texto.
+function htmlInfoLocal() {
+  return [
     ['fa-location-dot', INFO_LOCAL.direccion],
     ['fa-clock', INFO_LOCAL.horario],
     ['fa-wallet', INFO_LOCAL.pago]
-  ].filter(([, texto]) => String(texto || '').trim());
-  el.innerHTML = filas.map(([icono, texto]) => `<div><i class="fas ${icono}" aria-hidden="true"></i>${esc(texto)}</div>`).join('');
-  el.classList.toggle('d-none', filas.length === 0);
+  ]
+    .filter(([, texto]) => String(texto || '').trim())
+    .map(([icono, texto]) => `<div><i class="fas ${icono}" aria-hidden="true"></i>${esc(texto)}</div>`)
+    .join('');
 }
 
 function prepararModalConfirmacion() {
@@ -642,8 +650,11 @@ function renderizarResumenEnModalCliente() {
   contenedor.innerHTML = html;
 }
 
-// Paso 2: "Pedido recibido". Deja claro que se está verificando, no que ya se prepara.
-function mostrarPasoExito(idPedido, total, nombre, telefono) {
+// Paso 2: "Pedido recibido". Resume lo pedido y cómo retirarlo. No promete ningún aviso: el local lo revisa antes
+// de prepararlo, y el WhatsApp es opcional (la persona decide si lo manda). Es de un solo pedido: no hay botón para
+// "hacer otro"; la persona cierra la página (el navegador no deja cerrarla desde el código).
+//   items: [{ id, nombre, cantidad }] del pedido enviado (se copian antes de vaciar el carrito).
+function mostrarPasoExito(idPedido, total, nombre, telefono, items = []) {
   const paso = document.getElementById('cliente-paso-exito');
   if (!paso) return;
 
@@ -655,30 +666,44 @@ function mostrarPasoExito(idPedido, total, nombre, telefono) {
     const mensajeWS = `Hola! Envié mi pedido *#${idPedido}* por *${formatoPesos(total)}* a nombre de *${nombre}*. Quedo atento a la confirmación!`;
     const urlWS = `https://wa.me/${numeroNegocio}?text=${encodeURIComponent(mensajeWS)}`;
     htmlWhatsApp = `
-      <a class="btn btn-success btn-block font-weight-bold py-2 mb-2" href="${urlWS}" target="_blank" rel="noopener">
+      <p class="exito-ws-ayuda">Si querés, avisanos por WhatsApp que enviaste el pedido.</p>
+      <a class="btn btn-success btn-block font-weight-bold py-2 mb-3" href="${urlWS}" target="_blank" rel="noopener">
         <i class="fa-brands fa-whatsapp mr-1" aria-hidden="true"></i> AVISARNOS POR WHATSAPP
       </a>`;
   }
+
+  // Detalle de lo pedido (sin precios por línea: el total es el que calculó el servidor).
+  const htmlItems = items.map(i => {
+    const categoria = nombreCategoriaDeProducto(i.id);
+    const htmlCategoria = categoria ? `<span class="prod-cat">${esc(categoria)}</span>` : '';
+    return `<li><span>${htmlCategoria}${esc(i.nombre)}</span><span class="cant">× ${esc(i.cantidad)}</span></li>`;
+  }).join('');
+  const htmlDetalle = items.length === 0 ? '' : `
+      <ul class="exito-items">${htmlItems}</ul>`;
+
+  const infoLocal = htmlInfoLocal();
 
   paso.innerHTML = `
     <div class="modal-body text-center py-4">
       <div class="mb-2" style="font-size: 3.2rem; color: #198754;"><i class="fas fa-circle-check" aria-hidden="true"></i></div>
       <h4 class="font-weight-bold text-dark mb-1">¡Pedido recibido!</h4>
-      <p class="text-muted mb-3">Pedido <strong>#${esc(idPedido)}</strong> · ¡Gracias por elegir CRUDITAS! Ya recibimos tu pedido. Te avisaremos cuando esté confirmado.</p>
-      <p class="lead mb-2">Total del pedido: <strong class="text-success">${formatoPesos(total)}</strong></p>
-      <div class="alert alert-light border my-3">
-        <small class="text-secondary d-block">Cliente: <strong>${esc(nombre)}</strong></small>
-        <small class="text-secondary d-block">Teléfono: <strong>${esc(telefono)}</strong></small>
+      <p class="text-muted mb-3">Pedido <strong>#${esc(idPedido)}</strong> · Gracias por elegir CRUDITAS. El local lo revisa antes de prepararlo.</p>
+      <div class="exito-detalle">
+        ${htmlDetalle}
+        <div class="exito-total"><span>Total del pedido</span><strong>${formatoPesos(total)}</strong></div>
       </div>
-      <p class="small text-muted mb-4">Podés cerrar esta ventana.</p>
+      <p class="exito-contacto">A nombre de <strong>${esc(nombre)}</strong> · Tel. <strong>${esc(telefono)}</strong></p>
+      <div class="retiro-info">
+        <i class="fas fa-store" aria-hidden="true"></i>
+        <div>
+          <strong>Retiro por el local</strong>
+          ${infoLocal ? `<div class="retiro-detalle">${infoLocal}</div>` : ''}
+        </div>
+      </div>
       ${htmlWhatsApp}
-      <button type="button" class="btn ${htmlWhatsApp ? 'btn-outline-secondary' : 'btn-success'} btn-block font-weight-bold py-2" id="btn-exito-aceptar">
-        ACEPTAR
-      </button>
+      <p class="exito-cerrar">Ya podés cerrar esta página.</p>
     </div>
   `;
-
-  document.getElementById('btn-exito-aceptar')?.addEventListener('click', () => location.reload());
 
   document.getElementById('cliente-paso-datos')?.classList.add('d-none');
   paso.classList.remove('d-none');
@@ -744,7 +769,7 @@ async function enviarPedidoASupabase() {
     if (inputObservaciones) inputObservaciones.value = '';
 
     // Pantalla "Pedido recibido" dentro del modal (con el botón opcional de WhatsApp)
-    mostrarPasoExito(pedidoCreado.id, totalServidor, nombre, telefono);
+    mostrarPasoExito(pedidoCreado.id, totalServidor, nombre, telefono, resumen.listaItems);
 
     // Se vuelve a pedir el menú por si cambiaron precios o productos.
     await cargarDatosMenu();
