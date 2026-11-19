@@ -215,6 +215,10 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
   --ped-amber-soft: #fff5d9;
   --ped-amber-line: #f1dc9b;
   --ped-amber-text: #7a5200;
+  /* Botón "Marcar listo": amarillo un poco más suave que el de la marca. Para probar otro tono, cambiar solo estos tres. */
+  --ped-amber-btn: #f6d888;
+  --ped-amber-btn-borde: #e6c15f;
+  --ped-amber-btn-hover: #f1cc73;
 }
 
 /* Cada grupo: color de la línea lateral (--g-acento) y de su ícono sobre claro (--g-icono) y sobre la barra oscura */
@@ -240,6 +244,12 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
 #sec-pedidos-dia .grupo-toggle .grupo-chevron { color: rgba(255, 255, 255, .7); }
 #sec-pedidos-dia .grupo-cant { background: rgba(255, 255, 255, .16); color: #fff; box-shadow: none; }
 #sec-pedidos-dia .grupo-subtotal { color: #ffe9b0; }
+/* Descripción del grupo: una línea corta y tenue (en pantallas angostas se oculta para no apretar la barra) */
+#sec-pedidos-dia .grupo-desc {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .82rem; font-weight: 400; color: rgba(255, 255, 255, .72);
+}
+@media (max-width: 991.98px) { #sec-pedidos-dia .grupo-desc { display: none; } }
 
 /* ---- Filas: lo importante primero (número, cliente, importe) y lo secundario en gris --------------- */
 #sec-pedidos-dia .table tbody td:first-child,
@@ -247,9 +257,26 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
 #sec-pedidos-dia .table tbody td:nth-child(3) .font-weight-bold { color: var(--ped-navy); }
 #sec-pedidos-dia .pedido-hora { color: var(--ped-muted); font-weight: 600; }
 #sec-pedidos-dia .cliente-tel { color: var(--ped-muted); }
-/* Pedido de otro día: ámbar oscuro (antes rojo); sigue avisando sin gritar */
+/* Pedido de otro día: la hora sigue en gris; lo que lo distingue es la etiqueta "Ayer" / "Hace X días" (sin colores de alerta) */
 #sec-pedidos-dia .fecha-atrasada,
-#sec-pedidos-dia .pedido-hora.fecha-atrasada { color: var(--ped-amber-text); font-weight: 700; }
+#sec-pedidos-dia .pedido-hora.fecha-atrasada { color: var(--ped-muted); font-weight: 600; }
+#sec-pedidos-dia .etiqueta-antiguedad {
+  display: inline-block; margin-left: .35rem; padding: 0 .45rem; vertical-align: 1px;
+  border: 1px solid #e1e5ea; border-radius: 999px; background: #eef1f4; color: var(--ped-gray-text);
+  font-size: .7rem; font-weight: 600; line-height: 1.5; white-space: nowrap;
+}
+/* Número de pedido tocable: abre el detalle (misma acción data-action="ver-detalle" que la opción del menú Más).
+   Raya punteada suave para que se note que se puede tocar; el área táctil es más grande que el texto, sin mover nada. */
+#sec-pedidos-dia .btn-numero-pedido {
+  display: inline-block; margin: -.35rem -.6rem; padding: .35rem .6rem;
+  border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  color: inherit; font: inherit; font-weight: inherit; line-height: inherit; text-align: left;
+  text-decoration: underline dotted #b3bdca; text-underline-offset: 4px;
+}
+#sec-pedidos-dia .btn-numero-pedido:hover { background: rgba(29, 48, 75, .06); text-decoration-color: var(--ped-navy); }
+#sec-pedidos-dia .btn-numero-pedido:active { background: rgba(29, 48, 75, .12); }
+#sec-pedidos-dia .btn-numero-pedido:focus-visible { outline: 3px solid rgba(244, 185, 54, .85); outline-offset: 0; }
+
 /* Pedido web nuevo: fondo amarillo muy tenue en lugar de toda la fila resaltada */
 #sec-pedidos-dia .table tr.fila-pedido-nuevo > td { background-color: #fffbec; }
 /* Al pasar el mouse: gris azulado muy suave (no el ámbar de antes) */
@@ -277,8 +304,8 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
 
 /* ---- Botones de la fila: la jerarquía queda igual, con menos peso visual ----------------------------- */
 #sec-pedidos-dia .btn.btn-accion { border-width: 1px; font-weight: 600; }
-#sec-pedidos-dia .btn.btn-accion-pagar { background: var(--ped-amber); border-color: var(--ped-amber); color: var(--ped-navy); }
-#sec-pedidos-dia .btn.btn-accion-pagar:hover { background: #e9aa22; border-color: #e9aa22; color: var(--ped-navy); }
+#sec-pedidos-dia .btn.btn-accion-pagar { background: var(--ped-amber-btn); border-color: var(--ped-amber-btn-borde); color: var(--ped-navy); }
+#sec-pedidos-dia .btn.btn-accion-pagar:hover { background: var(--ped-amber-btn-hover); border-color: var(--ped-amber-btn-borde); color: var(--ped-navy); }
 #sec-pedidos-dia .btn.btn-accion-cobrar { background: var(--ped-green); border-color: var(--ped-green); color: #fff; }
 #sec-pedidos-dia .btn.btn-accion-cobrar:hover { background: var(--ped-green-text); border-color: var(--ped-green-text); color: #fff; }
 #sec-pedidos-dia .btn.btn-accion-cobrar-sec { background: #fff; border-color: var(--ped-green); color: var(--ped-green-text); }

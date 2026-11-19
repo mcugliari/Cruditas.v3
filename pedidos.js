@@ -33,6 +33,12 @@ function nombreSinTelefono(texto) {
   return String(texto ?? '').replace(/\s*\(\s*tel[^)]*\)\s*$/i, '').trim();
 }
 
+// Días de diferencia entre el día del pedido y hoy (ambos 'AAAA-MM-DD'). Hoy = 0, ayer = 1.
+function diasDesde(fechaISO, hoyISO) {
+  const aUTC = (iso) => { const [a, m, d] = String(iso).split('-').map(Number); return Date.UTC(a, m - 1, d); };
+  return Math.round((aUTC(hoyISO) - aUTC(fechaISO)) / 86400000);
+}
+
 // El teléfono que viene escrito dentro del nombre ("Juan Pérez (Tel: 1122334455)" -> "1122334455"). Sirve para pedidos
 // viejos que no tienen la columna telefono cargada. Devuelve '' si no hay.
 function telefonoDeNombre(texto) {
@@ -268,6 +274,11 @@ function filaPedidoHtml(p, s, opciones = {}) {
   // En Pendientes, un pedido de un día anterior se marca en rojo (se quedó sin cerrar)
   const esPend = modoPedidos === 'PENDIENTES';
   const fechaAtrasada = esPend && p.fecha.split('T')[0] < obtenerFechaActualISO();
+  // Etiqueta discreta junto al número ("Ayer", "Hace 3 días"); los pedidos de hoy no llevan nada. La fecha y la hora siguen visibles.
+  const diasAtras = fechaAtrasada ? diasDesde(p.fecha.split('T')[0], obtenerFechaActualISO()) : 0;
+  const etiquetaAntiguedad = diasAtras > 0
+    ? ` <span class="etiqueta-antiguedad">${diasAtras === 1 ? 'Ayer' : `Hace ${diasAtras} días`}</span>`
+    : '';
   // En Pendientes alcanza con la hora (sin año); si el pedido es de otro día se agrega el día, en rojo.
   const diaCorto = new Date(`${p.fecha.split('T')[0]}T00:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
   const textoHora = fechaAtrasada ? `${diaCorto} · ${hora}` : hora;
@@ -317,7 +328,6 @@ function filaPedidoHtml(p, s, opciones = {}) {
   } else if (p.estado === 'LISTO') {
     if (debe) {
       visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Cobrar y entregar', cobrar(true)));
-      visibles.push(btnFila('btn-accion-aviso', 'fa-truck', 'Entregar sin cobrar', cambiar('ENTREGADO')));
     } else {
       visibles.push(btnFila('btn-accion-cobrar', 'fa-check', 'Entregar', cambiar('ENTREGADO')));   // ya está pago
     }
@@ -364,9 +374,15 @@ function filaPedidoHtml(p, s, opciones = {}) {
   if (puedeDevolver && p.estado === 'ANULADO') {
     enMenu.push(itemMenuMas('fa-plus-circle', 'Cargar pedido nuevo con este pago', `data-action="pedido-con-pago" data-id="${idPed}"`));
   }
-  // Cobrar sin entregar un pedido que ya está listo (el botón visible cobra y entrega).
+  // Un pedido listo que todavía debe plata: el botón visible cobra y entrega. Las otras dos salidas (menos frecuentes)
+  // van acá: cobrar sin entregar, o entregar sin cobrar (queda como "Entregado, falta cobrar"; pide confirmación).
   if (p.estado === 'LISTO' && debe) {
     enMenu.push(itemMenuMas('fa-dollar-sign', 'Cobrar (sin entregar)', cobrar(false)));
+    enMenu.push(itemMenuMas('fa-truck', 'Entregar sin cobrar', cambiar('ENTREGADO')));
+  }
+  // Volver atrás un "Marcar listo" hecho por error (script 63): el pedido vuelve a En preparación. Pide confirmación.
+  if (p.estado === 'LISTO') {
+    enMenu.push(itemMenuMas('fa-undo-alt', 'Volver a En preparación', cambiar('EN_PREPARACION')));
   }
   // Un pedido con pagos no se edita: para cambiarlo se anula y se carga uno nuevo, y se traspasa el pago (botón "Traspasar pago").
   if ((p.estado === 'EN_PREPARACION' || p.estado === 'LISTO') && s.pagado === 0) {
@@ -413,7 +429,7 @@ function filaPedidoHtml(p, s, opciones = {}) {
 
   return `
     <tr class="${clasesFila}"${grupo ? ` data-fila-grupo="${grupo}"` : ''}>
-      <td class="font-weight-bold">#${p.id}${esPend ? `<div class="pedido-hora ${fechaAtrasada ? 'fecha-atrasada' : ''}">${textoHora} hs</div>` : ''}</td>
+      <td class="font-weight-bold"><button type="button" class="btn-numero-pedido" data-action="ver-detalle" data-id="${p.id}" title="Ver detalle del pedido #${p.id}" aria-label="Ver detalle del pedido #${p.id}">#${p.id}</button>${etiquetaAntiguedad}${esPend ? `<div class="pedido-hora ${fechaAtrasada ? 'fecha-atrasada' : ''}">${textoHora} hs</div>` : ''}</td>
       <td class="col-fecha ${fechaAtrasada ? 'fecha-atrasada' : ''}">${fechaPedido} ${hora} hs</td>
       <td>
         <div class="font-weight-bold">${esc(clienteNombre)}${badgeCanal}${etiquetaNuevo}</div>
@@ -435,10 +451,10 @@ function filaPedidoHtml(p, s, opciones = {}) {
 // Cada grupo es una tarea distinta: preparar, entregar, cobrar o devolver. "Entregados, falta cobrar" y "A devolver" van
 // separados porque piden acciones opuestas. A devolver junta los anulados con plata y los entregados pagados de más.
 const GRUPOS_PENDIENTES = [
-  { clave: 'EN_PREPARACION', titulo: 'En preparación', chip: 'En preparación', icono: 'fa-hourglass-half' },
-  { clave: 'LISTO', titulo: 'Listos para entregar', chip: 'Listos', icono: 'fa-bell' },
-  { clave: 'POR_COBRAR', titulo: 'Entregados, falta cobrar', chip: 'Falta cobrar', icono: 'fa-dollar-sign' },
-  { clave: 'A_DEVOLVER', titulo: 'A devolver', chip: 'A devolver', icono: 'fa-undo' }
+  { clave: 'EN_PREPARACION', titulo: 'En preparación', chip: 'En preparación', icono: 'fa-hourglass-half', abierto: true, desc: 'Pedidos que se están armando en cocina' },
+  { clave: 'LISTO', titulo: 'Listos para entregar', chip: 'Listos', icono: 'fa-bell', abierto: true, desc: 'Terminados, esperando que el cliente los retire' },
+  { clave: 'POR_COBRAR', titulo: 'Entregados, falta cobrar', chip: 'Falta cobrar', icono: 'fa-dollar-sign', abierto: false, desc: 'Ya se los llevó y todavía no pagó' },
+  { clave: 'A_DEVOLVER', titulo: 'A devolver', chip: 'A devolver', icono: 'fa-undo', abierto: false, desc: 'Plata para devolver: anulados o pagados de más' }
 ];
 
 // A qué grupo va un pedido pendiente (s = su saldo, de saldoDe).
@@ -448,39 +464,63 @@ function claveGrupoPendiente(p, s) {
   return p.estado;   // EN_PREPARACION o LISTO
 }
 
-// Grupos plegados: se recuerdan en este equipo (como el "visto" de los pedidos web). Por defecto todo abierto.
-const CLAVE_GRUPOS_PLEGADOS = 'cruditas_pedidos_grupos_plegados';
-function leerGruposPlegados() {
+// Apertura de los grupos de Pendientes
+//  - Al entrar, cada grupo arranca como dice su campo `abierto` (En preparación y Listos abiertos; Falta cobrar y A devolver cerrados).
+//  - Lo que la persona abre o cierra a mano (o con un chip) se recuerda mientras dure la sesión del navegador (sessionStorage): sobrevive
+//    a recargar la página, no a cerrar el navegador, así cada día arranca con los valores por defecto. Se guarda SOLO lo que se tocó: el
+//    resto sigue el valor por defecto. Las actualizaciones automáticas de la lista no lo pisan (solo redibujan con lo guardado).
+//  - Con una búsqueda escrita se muestran solo los grupos con resultados y esos se abren solos, SIN cambiar lo guardado. Si la persona
+//    cierra uno durante la búsqueda, vale hasta que cambie el texto. Al borrar la búsqueda vuelve lo que había antes.
+const CLAVE_GRUPOS_ESTADO = 'cruditas_pedidos_grupos_estado';
+try { localStorage.removeItem('cruditas_pedidos_grupos_plegados'); } catch (e) { /* versión anterior: se descarta */ }
+function leerEleccionesGrupos() {
   try {
-    const guardado = JSON.parse(localStorage.getItem(CLAVE_GRUPOS_PLEGADOS) || '[]');
-    return new Set(Array.isArray(guardado) ? guardado : []);
+    const guardado = JSON.parse(sessionStorage.getItem(CLAVE_GRUPOS_ESTADO) || '{}');
+    return guardado && typeof guardado === 'object' && !Array.isArray(guardado) ? guardado : {};
   } catch (e) {
-    return new Set();
+    return {};
   }
 }
-let gruposPlegados = leerGruposPlegados();
-function guardarGruposPlegados() {
+let eleccionesGrupos = leerEleccionesGrupos();   // { CLAVE: true (abierto) | false (cerrado) } solo de lo que se tocó
+let eleccionesBusqueda = {};                      // lo mismo, pero solo mientras hay una búsqueda escrita
+function guardarEleccionesGrupos() {
   try {
-    localStorage.setItem(CLAVE_GRUPOS_PLEGADOS, JSON.stringify([...gruposPlegados]));
+    sessionStorage.setItem(CLAVE_GRUPOS_ESTADO, JSON.stringify(eleccionesGrupos));
   } catch (e) { /* sin almacenamiento: la elección vale solo hasta recargar */ }
 }
+function hayBusquedaPendientes() {
+  return (document.getElementById('buscar-pendientes')?.value || '').trim() !== '';
+}
 
-// Pliega o abre un grupo sin volver a consultar la base: solo muestra u oculta sus filas.
-function alternarGrupoPendientes(clave) {
-  if (gruposPlegados.has(clave)) gruposPlegados.delete(clave); else gruposPlegados.add(clave);
-  guardarGruposPlegados();
-  const plegado = gruposPlegados.has(clave);
+// ¿Está abierto el grupo? (búsqueda > lo que tocó la persona > valor por defecto)
+function grupoAbierto(clave) {
+  if (hayBusquedaPendientes()) return eleccionesBusqueda[clave] ?? true;
+  if (typeof eleccionesGrupos[clave] === 'boolean') return eleccionesGrupos[clave];
+  return GRUPOS_PENDIENTES.find(g => g.clave === clave)?.abierto ?? true;
+}
+
+// Abre o cierra un grupo sin volver a consultar la base: solo muestra u oculta sus filas.
+function fijarGrupoAbierto(clave, abierto) {
+  if (hayBusquedaPendientes()) {
+    eleccionesBusqueda[clave] = abierto;
+  } else {
+    eleccionesGrupos[clave] = abierto;
+    guardarEleccionesGrupos();
+  }
   const tbody = document.getElementById('tabla-pedidos-body');
   if (!tbody) return;
-  tbody.querySelectorAll(`tr[data-fila-grupo="${clave}"]`).forEach(tr => tr.classList.toggle('d-none', plegado));
+  tbody.querySelectorAll(`tr[data-fila-grupo="${clave}"]`).forEach(tr => tr.classList.toggle('d-none', !abierto));
   const boton = tbody.querySelector(`.grupo-toggle[data-grupo="${clave}"]`);
-  boton?.setAttribute('aria-expanded', String(!plegado));
-  boton?.closest('tr')?.classList.toggle('plegado', plegado);
+  boton?.setAttribute('aria-expanded', String(abierto));
+  boton?.closest('tr')?.classList.toggle('plegado', !abierto);
+}
+function alternarGrupoPendientes(clave) {
+  fijarGrupoAbierto(clave, !grupoAbierto(clave));
 }
 
 // Atajo de los chips: abre el grupo (si estaba plegado) y baja hasta su encabezado.
 function irAGrupoPendientes(clave) {
-  if (gruposPlegados.has(clave)) alternarGrupoPendientes(clave);
+  if (!grupoAbierto(clave)) fijarGrupoAbierto(clave, true);
   document.querySelector(`.grupo-toggle[data-grupo="${clave}"]`)?.closest('tr')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -505,7 +545,7 @@ function htmlChipsPendientes(porGrupo, saldos) {
 // Encabezado del grupo + sus filas (y un espacio antes, salvo el primero). Plegado, el encabezado sigue mostrando la
 // cantidad, el subtotal y, en rojo, si adentro hay pedidos nuevos sin ver o de un día anterior.
 function htmlGrupoPendientes(g, lista, saldos, hoy, esPrimero) {
-  const plegado = gruposPlegados.has(g.clave);
+  const plegado = !grupoAbierto(g.clave);
   const suma = (f) => lista.reduce((acc, p) => acc + f(saldoDe(saldos, p)), 0);
   let subtotal = '';
   if (g.clave === 'POR_COBRAR') subtotal = `${pesos(suma(s => s.saldo))} por cobrar`;
@@ -514,7 +554,7 @@ function htmlGrupoPendientes(g, lista, saldos, hoy, esPrimero) {
   const nuevos = lista.filter(esPedidoNuevoSinVer).length;
   const atrasados = lista.filter(p => p.fecha.split('T')[0] < hoy).length;
   const alertas = (nuevos > 0 ? `<span class="badge badge-danger">${nuevos} nuevo${nuevos !== 1 ? 's' : ''}</span>` : '')
-    + (atrasados > 0 ? `<span class="badge badge-danger">${atrasados} de ${atrasados !== 1 ? 'otros días' : 'otro día'}</span>` : '');
+    + (atrasados > 0 ? `<span class="badge badge-danger">${atrasados === 1 ? '1 de un día anterior' : `${atrasados} de días anteriores`}</span>` : '');
 
   const espacio = esPrimero ? '' : '<tr class="fila-grupo-espacio" aria-hidden="true"><td colspan="7"></td></tr>';
   const cabecera = `
@@ -526,6 +566,7 @@ function htmlGrupoPendientes(g, lista, saldos, hoy, esPrimero) {
           <span class="grupo-titulo">${g.titulo}</span>
           <span class="grupo-cant">${lista.length}</span>
           <span class="grupo-alertas">${alertas}</span>
+          <span class="grupo-desc">${g.desc}</span>
           ${subtotal ? `<span class="grupo-subtotal">${subtotal}</span>` : ''}
         </button>
       </td>
@@ -662,6 +703,17 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
 
   // (Cobrar ya no es un cambio de estado: tiene su propia acción, cobrarPedido.)
 
+  // Volver de Listo a En preparación (por un "Marcar listo" equivocado): se confirma, porque la cocina lo vuelve a ver como
+  // pendiente de armar y, si ya se le avisó al cliente por WhatsApp que estaba listo, ese aviso no se anula.
+  if (nuevoEstado === 'EN_PREPARACION') {
+    const sigue = await confirmarAccion({
+      titulo: 'Volver a En preparación',
+      mensaje: `El pedido #${idPedido} vuelve a En preparación y se lo va a ver de nuevo como pendiente de armar.\nSi ya le avisaste al cliente por WhatsApp que estaba listo, ese aviso no se anula.`,
+      textoConfirmar: 'Volver a En preparación'
+    });
+    if (!sigue) return;
+  }
+
   // Entregar un pedido que todavía no está pagado por completo: se pide confirmación, porque queda como "Debe $X" en
   // Pendientes. Un pedido ya pagado por el total pasa directo. Si no se pudo consultar el saldo, decide la base.
   if (nuevoEstado === 'ENTREGADO') {
@@ -709,6 +761,7 @@ export async function cambiarEstadoPedido(idPedido, nuevoEstado) {
     mostrarNotificacion(mensajeErrorFuncion(error, 'pedido'), 'danger');
   } else {
     cargarTablaPedidos();
+    if (nuevoEstado === 'EN_PREPARACION') mostrarNotificacion(`Pedido #${idPedido} volvió a En preparación.`, 'info');
     if (nuevoEstado === 'ANULADO' && Number(resultado?.a_devolver) > 0) {
       await resolverPagoDeAnulado(Number(idPedido), Number(resultado.a_devolver));
     }
@@ -1223,12 +1276,20 @@ document.getElementById('resumen-pendientes')?.addEventListener('click', (e) => 
 
 // Buscador de Pendientes: filtra lo que ya está cargado. Escape o la cruz lo borran.
 const inputBuscarPendientes = document.getElementById('buscar-pendientes');
-inputBuscarPendientes?.addEventListener('input', () => { if (modoPedidos === 'PENDIENTES') dibujarPendientes(); });
+inputBuscarPendientes?.addEventListener('input', () => {
+  eleccionesBusqueda = {};   // texto nuevo = resultados nuevos: los grupos con resultados vuelven a abrirse
+  if (modoPedidos === 'PENDIENTES') dibujarPendientes();
+});
 inputBuscarPendientes?.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && inputBuscarPendientes.value !== '') { inputBuscarPendientes.value = ''; dibujarPendientes(); }
+  if (e.key === 'Escape' && inputBuscarPendientes.value !== '') {
+    inputBuscarPendientes.value = '';
+    eleccionesBusqueda = {};
+    dibujarPendientes();
+  }
 });
 document.getElementById('btn-limpiar-busqueda')?.addEventListener('click', () => {
   if (inputBuscarPendientes) { inputBuscarPendientes.value = ''; inputBuscarPendientes.focus(); }
+  eleccionesBusqueda = {};
   dibujarPendientes();
 });
 
