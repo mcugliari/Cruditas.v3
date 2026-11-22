@@ -316,3 +316,66 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
 /* Acciones poco frecuentes (Entregar sin cobrar, Traspasar pago): neutras */
 #sec-pedidos-dia .btn.btn-accion-aviso { background: #fff; border-color: #cfd6df; color: var(--ped-gray-text); }
 #sec-pedidos-dia .btn.btn-accion-aviso:hover { background: #f1f4f8; border-color: #b8c2cf; color: var(--ped-navy); }
+
+/* =============================================================================
+   SCROLL INTERNO EN PENDIENTES · Gestión de Pedidos
+   Solo la vista PENDIENTES: lo de arriba (título, pestañas, buscador y chips) queda fijo y solo scrollea la
+   lista. El Historial NO cambia (sigue con el scroll normal de la página).
+   - La vista Pendientes se detecta con :has(table.tabla-pendientes) (pedidos.js pone esa clase). Si el navegador
+     no soporta :has (anterior a Chrome 105), este bloque no se aplica y todo queda como antes.
+   - Todo el bloque vive dentro de la @media: en pantallas bajas (<= 600 px de alto) o angostas (celular vertical)
+     se vuelve al scroll normal de la página, para no tener scroll dentro de scroll.
+   - AJUSTES RÁPIDOS: si sobra un hueco abajo o aparece scroll de página, tocar SOLO el 108px de --ped-alto
+     (barra azul 64px + márgenes del contenido). Si el encabezado de columnas se ve cortado o con un hueco
+     respecto del grupo pegado, tocar --ped-thead-alto.
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   ============================================================================= */
+#sec-pedidos-dia {
+  --ped-alto: calc(100vh - 108px);
+  --ped-thead-alto: 44px;   /* alto fijo del encabezado de columnas; el grupo pegado se apoya justo debajo */
+}
+@supports (height: 100dvh) { #sec-pedidos-dia { --ped-alto: calc(100dvh - 108px); } }
+
+@media (min-width: 768px) and (min-height: 601px) {
+
+  /* 1) La sección ocupa el alto disponible y se ordena en columna. Se usa :not(.d-none) para no pisar
+        el display:none con el que main.js oculta las pantallas. */
+  #sec-pedidos-dia:not(.d-none):has(table.tabla-pendientes) {
+    display: flex; flex-direction: column; height: var(--ped-alto);
+  }
+  /* Lo de arriba no se achica ni crece */
+  #sec-pedidos-dia:has(table.tabla-pendientes) > * { flex: 0 0 auto; }
+
+  /* 2) La tarjeta de la lista toma el alto que sobra. Cada contenedor intermedio es flex columna con
+        min-height: 0; sin eso el scroll interno nunca aparece (la tabla estiraría todo hacia abajo). */
+  #sec-pedidos-dia:has(table.tabla-pendientes) > .card:last-child {
+    flex: 1 1 auto; min-height: 320px; display: flex; flex-direction: column; margin-bottom: 0;
+  }
+  #sec-pedidos-dia:has(table.tabla-pendientes) > .card:last-child > .card-body {
+    flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+  }
+  /* 3) Acá está el scroll propio de la lista (vertical y, si hiciera falta, horizontal) */
+  #sec-pedidos-dia:has(table.tabla-pendientes) .table-responsive {
+    flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }
+
+  /* 4) Con border-collapse: collapse los bordes no acompañan a las celdas pegadas. Se pasa a "separate" con
+        espaciado 0: se ve igual (las celdas solo tienen borde superior). */
+  #sec-pedidos-dia .table.tabla-pendientes { border-collapse: separate; border-spacing: 0; }
+
+  /* 5) Encabezado de columnas pegado arriba, con fondo sólido (antes era transparente y la lista se vería por detrás) */
+  #sec-pedidos-dia .table.tabla-pendientes thead th {
+    position: sticky; top: 0; z-index: 3; background: #fff;
+    height: var(--ped-thead-alto); padding-top: .5rem; padding-bottom: .5rem; line-height: 1.2; vertical-align: middle;
+    box-shadow: 0 1px 0 var(--ped-line);
+  }
+
+  /* 6) Encabezado del grupo pegado justo debajo del de columnas (1 px de solape para que no se cuele una raya de la lista).
+        Todos los grupos comparten el mismo "top": al llegar el siguiente grupo, tapa al anterior. */
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-grupo-estado > td {
+    position: sticky; top: calc(var(--ped-thead-alto) - 1px); z-index: 2;
+  }
+
+  /* 7) Los chips llevan al grupo con scrollIntoView: el margen evita que el encabezado de columnas tape al grupo */
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-grupo-estado { scroll-margin-top: var(--ped-thead-alto); }
+}
