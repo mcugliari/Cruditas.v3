@@ -379,4 +379,18 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
 
   /* 7) Los chips llevan al grupo con scrollIntoView: el margen evita que el encabezado de columnas tape al grupo */
   #sec-pedidos-dia .table.tabla-pendientes tr.fila-grupo-estado { scroll-margin-top: var(--ped-thead-alto); }
+
+  /* 8) Que la PÁGINA no scrollee en Pendientes. AdminLTE (body sin "layout-fixed") deja el menú lateral en
+        position:absolute con height:inherit: crece con la cantidad de opciones (aunque esté colapsado y fuera de
+        vista) y estira el documento, y eso le gana al "height:100vh" de styles.css. Acá se lo limita al alto de la
+        ventana, así el menú se desplaza por dentro (como ya busca styles.css) y no suma alto a la página.
+        Solo cuando está visible Pendientes: las demás pantallas quedan como estaban.
+        También se anula el min-height del contenido: el JavaScript de AdminLTE lo escribe en línea (style="min-height:
+        871.3px", igual al alto del menú menos la barra) y dejaba ~150 px de más; un estilo en línea solo se pisa con !important. */
+  body:has(#sec-pedidos-dia:not(.d-none):not([style*="none"]) table.tabla-pendientes) .main-sidebar {
+    height: 100vh; height: 100dvh; min-height: 0;
+  }
+  body:has(#sec-pedidos-dia:not(.d-none):not([style*="none"]) table.tabla-pendientes) .content-wrapper {
+    min-height: 0 !important;
+  }
 }
