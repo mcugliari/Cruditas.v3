@@ -396,8 +396,8 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
 }
 
 /* =============================================================================
-   PENDIENTES EN EL CELULAR · tarjetas en lugar de tabla (tanda 1)
-   Solo la vista PENDIENTES y solo en pantallas de menos de 768 px de ancho. PC, tablet e Historial no cambian.
+   PEDIDOS EN EL CELULAR · tarjetas en lugar de tabla (Pendientes: tanda 1; Historial: ver paso F al final)
+   Solo en pantallas de menos de 768 px de ancho. PC y tablet no cambian.
    - Cada pedido es una tarjeta: arriba número/hora y total; en el medio cliente y estado de pago; abajo los botones, a todo
      el ancho (antes la columna Acciones quedaba fuera de pantalla y había que deslizar la tabla de costado).
    - La cabecera se compacta: título más chico, buscador a todo el ancho y chips en una sola línea que se desliza.
@@ -466,9 +466,49 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
   #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td:nth-child(6) .badge { white-space: normal; max-width: 10rem; line-height: 1.25; }
 
   /* D) Botones: en su propia fila, a todo el ancho y cómodos para el dedo (42 px) */
-  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila { flex-wrap: wrap; justify-content: flex-start; gap: .4rem; }
-  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila .btn.btn-accion { min-height: 42px; padding: 0 .75rem; justify-content: center; }
-  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila > .btn.btn-accion:not(.btn-accion-icono) { flex: 1 1 auto; }
-  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila .mas-wrap { flex: 0 0 auto; }
-  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila .btn.btn-accion-mas { padding: 0 .65rem; }
+  #sec-pedidos-dia .table .acciones-fila { flex-wrap: wrap; justify-content: flex-start; gap: .4rem; }
+  #sec-pedidos-dia .table .acciones-fila .btn.btn-accion { min-height: 42px; padding: 0 .75rem; justify-content: center; }
+  #sec-pedidos-dia .table .acciones-fila > .btn.btn-accion:not(.btn-accion-icono) { flex: 1 1 auto; }
+  #sec-pedidos-dia .table .acciones-fila .mas-wrap { flex: 0 0 auto; }
+  #sec-pedidos-dia .table .acciones-fila .btn.btn-accion-mas { padding: 0 .65rem; }
+
+  /* E) Barra de grupo: si el subtotal ("$22.500 por cobrar") no entra al lado del título, baja a una segunda línea
+        alineada a la derecha. Antes se salía de la barra y quedaba cortado, justo el monto que importa. */
+  #sec-pedidos-dia .table.tabla-pendientes .grupo-toggle { flex-wrap: wrap; row-gap: .1rem; }
+
+  /* F) HISTORIAL en tarjetas (la tabla sin la clase tabla-pendientes). Misma idea que Pendientes, con estos datos:
+        arriba número, fecha y total · en el medio cliente y estado (con la etiqueta de pago debajo) · medio de pago ·
+        botones. Las celdas se ubican por POSICIÓN (td 1 = número, 2 = fecha, 3 = cliente, 4 = medio de pago, 5 = total,
+        6 = estado, 7 = acciones): si cambia el orden de columnas en filaPedidoHtml (pedidos.js), actualizar acá.
+        Una fila de Historial es la que tiene 7 celdas; "Cargando…" o "No hay pedidos" (una sola celda) quedan como bloque. */
+  #sec-pedidos-dia .table:not(.tabla-pendientes),
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody { display: block; width: 100%; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) thead { display: none; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:not(:has(> td:nth-child(7))),
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:not(:has(> td:nth-child(7))) > td { display: block; }
+
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "num fecha total" "cli cli est" "medio medio medio" "acc acc acc";
+    column-gap: .6rem; row-gap: .45rem; align-items: start;
+    padding: .8rem .7rem .85rem .75rem; border-top: 1px solid #eef0f3;
+  }
+  /* Sin medio de pago (la celda trae solo un guion): se quita esa fila para no dejar un hueco */
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(4) > span.text-muted:only-child) {
+    grid-template-areas: "num fecha total" "cli cli est" "acc acc acc";
+  }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr.fila-pedido-nuevo { background: #fffbec; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td {
+    display: block; min-width: 0; padding: 0; border: 0; background: transparent; white-space: normal; text-align: left;
+  }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(1) { grid-area: num; align-self: baseline; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(2) { grid-area: fecha; align-self: baseline; white-space: nowrap; font-size: .92rem; color: #6b7686; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(3) { grid-area: cli; overflow-wrap: anywhere; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(4) { grid-area: medio; font-size: .92rem; color: #6b7686; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(4)::before { content: "Medio de pago: "; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(4):has(> span.text-muted:only-child) { display: none; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(5) { grid-area: total; align-self: baseline; text-align: right; font-size: 1.15rem; white-space: nowrap; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(6) { grid-area: est; justify-self: end; text-align: right; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(6) .badge { white-space: normal; max-width: 10rem; line-height: 1.25; }
+  #sec-pedidos-dia .table:not(.tabla-pendientes) tbody > tr:has(> td:nth-child(7)) > td:nth-child(7) { grid-area: acc; }
 }
