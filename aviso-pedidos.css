@@ -394,3 +394,81 @@ tr.fila-grupo-estado { scroll-margin-top: 76px; }
     min-height: 0 !important;
   }
 }
+
+/* =============================================================================
+   PENDIENTES EN EL CELULAR · tarjetas en lugar de tabla (tanda 1)
+   Solo la vista PENDIENTES y solo en pantallas de menos de 768 px de ancho. PC, tablet e Historial no cambian.
+   - Cada pedido es una tarjeta: arriba número/hora y total; en el medio cliente y estado de pago; abajo los botones, a todo
+     el ancho (antes la columna Acciones quedaba fuera de pantalla y había que deslizar la tabla de costado).
+   - La cabecera se compacta: título más chico, buscador a todo el ancho y chips en una sola línea que se desliza.
+   - DEPENDENCIA: las celdas se ubican por su POSICIÓN en la fila (td 1 = número y hora, 3 = cliente, 5 = total, 6 = pago,
+     7 = acciones; la 2 y la 4 están ocultas en Pendientes). Si en filaPedidoHtml (pedidos.js) se agrega, quita o reordena
+     una columna, hay que actualizar los nth-child de acá.
+   - Las filas de grupo ("En preparación"…) siguen siendo barras; los grupos plegables, los chips, el buscador, el
+     resaltado de pedidos web nuevos y el menú "Más" funcionan igual.
+   - Se detecta Pendientes con la clase tabla-pendientes (la pone pedidos.js) o con :has(table.tabla-pendientes).
+   PARA REVERTIR: borrar desde este comentario hasta el final del archivo.
+   ============================================================================= */
+@media (max-width: 767.98px) {
+
+  /* A) Cabecera compacta */
+  #sec-pedidos-dia:has(table.tabla-pendientes) .content-header { padding-top: .25rem; padding-bottom: .1rem; }
+  #sec-pedidos-dia:has(table.tabla-pendientes) .content-header h1 { font-size: 1.4rem; }
+  #sec-pedidos-dia:has(table.tabla-pendientes) > .d-flex.flex-wrap { margin-bottom: .35rem !important; }   /* .mb-3 de Bootstrap es !important */
+  #sec-pedidos-dia:has(table.tabla-pendientes) .pedidos-selector-modo { margin-right: .5rem !important; }
+  #sec-pedidos-dia:has(table.tabla-pendientes) #btn-actualizar-pendientes,
+  #sec-pedidos-dia:has(table.tabla-pendientes) #btn-marcar-vistos { min-height: 38px; font-size: .95rem; }
+  /* Buscador: a todo el ancho y en su propia línea (antes quedaba corrido a la derecha por su ancho mínimo) */
+  #sec-pedidos-dia:has(table.tabla-pendientes) .buscador-pendientes {
+    order: 9; flex: 1 0 100%; width: 100%; min-width: 0; margin-left: 0 !important;   /* .ml-auto es !important */
+  }
+  /* Chips: una sola línea que se desliza con el dedo (sin barra visible) */
+  #sec-pedidos-dia:has(table.tabla-pendientes) .resumen-pendientes {
+    flex-wrap: nowrap; overflow-x: auto; margin-bottom: .5rem !important; padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  #sec-pedidos-dia:has(table.tabla-pendientes) .resumen-pendientes::-webkit-scrollbar { display: none; }
+  #sec-pedidos-dia:has(table.tabla-pendientes) .resumen-pendientes > * { flex: 0 0 auto; }
+
+  /* B) La tabla deja de ser tabla: sin encabezado de columnas y con bloques apilados */
+  #sec-pedidos-dia .table.tabla-pendientes,
+  #sec-pedidos-dia .table.tabla-pendientes tbody { display: block; width: 100%; }
+  #sec-pedidos-dia .table.tabla-pendientes thead { display: none; }
+  /* Barras de grupo, espacios entre grupos, mensajes de lista vacía, etc.: bloques de ancho completo */
+  #sec-pedidos-dia .table.tabla-pendientes tbody > tr:not(.fila-en-grupo),
+  #sec-pedidos-dia .table.tabla-pendientes tbody > tr:not(.fila-en-grupo) > td { display: block; }
+
+  /* C) Cada pedido = una tarjeta (grilla de 2 columnas). La barra de color del grupo pasa de la celda a la tarjeta.
+        Un tr.d-none (grupo plegado, o fila filtrada por el buscador) sigue oculto: d-none es !important. */
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "num total" "cli pago" "acc acc";
+    column-gap: .6rem; row-gap: .5rem; align-items: start;
+    padding: .8rem .7rem .85rem .6rem; border-top: 1px solid #eef0f3; border-left: 4px solid var(--g-acento);
+  }
+  /* El fondo del pedido web nuevo va en la tarjeta entera (si fuera por celda se verían huecos entre ellas) */
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-pedido-nuevo { background: #fffbec; }
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td {
+    display: block; min-width: 0; padding: 0; border: 0; background: transparent; white-space: normal; text-align: left;
+  }
+  /* Las columnas Fecha/Hora y Medio de pago siguen ocultas en Pendientes (la regla de .tabla-pendientes .col-fecha pierde
+     contra la de arriba por especificidad, por eso se repite acá) */
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td.col-fecha,
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td.col-medio { display: none; }
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td:nth-child(1) { grid-area: num; }
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td:nth-child(3) { grid-area: cli; overflow-wrap: anywhere; }
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td:nth-child(5) { grid-area: total; text-align: right; font-size: 1.15rem; white-space: nowrap; }
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td:nth-child(6) { grid-area: pago; justify-self: end; text-align: right; }
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td:nth-child(7) { grid-area: acc; }
+  /* La hora va al lado del número (una línea menos por tarjeta); si no entra, pasa entera a la línea de abajo y "hs" no queda solo */
+  #sec-pedidos-dia .table.tabla-pendientes .pedido-hora { display: inline; margin-left: .35rem; white-space: nowrap; }
+  /* Etiqueta de pago: si es larga ("Pago parcial · falta $12.500") se parte en dos líneas en vez de empujar al cliente */
+  #sec-pedidos-dia .table.tabla-pendientes tr.fila-en-grupo > td:nth-child(6) .badge { white-space: normal; max-width: 10rem; line-height: 1.25; }
+
+  /* D) Botones: en su propia fila, a todo el ancho y cómodos para el dedo (42 px) */
+  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila { flex-wrap: wrap; justify-content: flex-start; gap: .4rem; }
+  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila .btn.btn-accion { min-height: 42px; padding: 0 .75rem; justify-content: center; }
+  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila > .btn.btn-accion:not(.btn-accion-icono) { flex: 1 1 auto; }
+  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila .mas-wrap { flex: 0 0 auto; }
+  #sec-pedidos-dia .table.tabla-pendientes .acciones-fila .btn.btn-accion-mas { padding: 0 .65rem; }
+}
