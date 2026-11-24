@@ -1225,6 +1225,21 @@
           </div>
           
           <div class="card-body p-3">
+            <!-- Solapas: "Cobrado" (plata y unidades por fecha de PAGO) y "Entregado" (unidades por fecha de
+                 ENTREGA). Las maneja reporteVentas.js (atributo data-vista); comparten fechas y cliente. -->
+            <ul class="nav nav-tabs mb-3" id="tabs-resumen-ventas" role="tablist">
+              <li class="nav-item" role="presentation">
+                <a href="#" class="nav-link active" id="tab-vista-cobrado" role="tab" aria-selected="true" data-vista="COBRADO">
+                  <i class="fas fa-cash-register mr-1"></i> Cobrado
+                </a>
+              </li>
+              <li class="nav-item" role="presentation">
+                <a href="#" class="nav-link" id="tab-vista-entregado" role="tab" aria-selected="false" data-vista="ENTREGADO">
+                  <i class="fas fa-truck mr-1"></i> Entregado
+                </a>
+              </li>
+            </ul>
+
             <div class="row align-items-end mb-3">
               <div class="col-md-3 col-sm-6 mb-2 mb-md-0">
                 <label for="filtro-prod-fecha-desde" class="small font-weight-bold mb-1">Fecha Desde:</label>
@@ -1247,6 +1262,8 @@
               </div>
             </div>
 
+            <!-- Panel "Cobrado": es el reporte de siempre, sin cambios -->
+            <div id="panel-vista-cobrado">
             <div class="table-responsive">
               <table class="table table-bordered table-hover table-striped table-sm text-sm mb-0">
                 <thead class="thead-dark">
@@ -1275,6 +1292,36 @@
             </div>
             <p class="small text-muted mt-2 mb-0 d-none" id="nota-resumen-descuento"></p>
             <p class="small text-warning-dark mt-1 mb-0 d-none" id="nota-resumen-impagos" style="color: #b45309;"></p>
+            </div>
+
+            <!-- Panel "Entregado": unidades por fecha de entrega, sin importes (función unidades_entregadas_por_producto) -->
+            <div id="panel-vista-entregado" class="d-none">
+              <div class="table-responsive">
+                <table class="table table-bordered table-hover table-striped table-sm text-sm mb-0">
+                  <thead class="thead-dark">
+                    <tr>
+                      <th>Categoría</th>
+                      <th>Producto</th>
+                      <th class="text-center">Unidades Entregadas</th>
+                      <th class="text-center">Docenas</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-entregado-productos">
+                    <tr>
+                      <td colspan="4" class="text-center text-muted py-3">Seleccioná un rango de fechas para consultar.</td>
+                    </tr>
+                  </tbody>
+                  <tfoot class="bg-light font-weight-bold" id="tfoot-entregado-productos" style="display: none;">
+                    <tr>
+                      <td colspan="2" class="text-right">TOTAL GENERAL:</td>
+                      <td class="text-center text-primary" id="total-entregado-unidades">0 u.</td>
+                      <td class="text-center text-info" id="total-entregado-docenas">0 doc.</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p class="small text-muted mt-2 mb-0">Cuenta cada pedido el día en que pasó a Entregado, aunque todavía no se haya cobrado. No incluye pedidos anulados. Son las unidades del pedido, sin proporciones de cobro.</p>
+            </div>
           </div>
         </div>
       </div>
