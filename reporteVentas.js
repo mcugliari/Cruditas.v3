@@ -17,6 +17,60 @@ const formatearDocenas = (unidades) =>
   (Number(unidades || 0) / 12).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 // -----------------------------------------------------------------------------
+// Tarjetas de arriba: una por GRUPO PARA EL RECUENTO (grupo_caja), igual que "Ventas por grupo" del cierre.
+//   * Total de la tarjeta = suma de todas las categorías que comparten ese grupo para el recuento
+//     (ej.: Empanada + Canastita, si las dos tienen recuento EMPANADAS).
+//   * Título = nombres de los grupos de las pestañas que hay adentro (ej.: "Empanadas + Canastitas").
+//   * Nada depende de nombres escritos en el código: un grupo nuevo tiene su tarjeta automáticamente.
+// La base manda la columna grupo_recuento (script 65). Si todavía no llega, se usa el grupo de las pestañas.
+// -----------------------------------------------------------------------------
+const normalizarGrupo = (g) => String(g ?? '').toUpperCase().trim();
+const grupoRecuentoDe = (item) => normalizarGrupo(item.grupo_recuento) || normalizarGrupo(item.grupo) || 'OTROS';
+const grupoPestanasDe = (item) => normalizarGrupo(item.grupo) || 'OTROS';
+
+// Suma una fila del resultado en la tarjeta de su grupo para el recuento.
+//   unidadesDocena = unidades de productos que permiten docena (para mostrar las docenas de la tarjeta).
+function sumarATarjeta(tarjetas, item, unidades, monto) {
+  const clave = grupoRecuentoDe(item);
+  const t = (tarjetas[clave] ??= { unidades: 0, unidadesDocena: 0, monto: 0, pestanas: new Set() });
+  t.unidades += unidades;
+  t.monto += monto;
+  if (item.permite_docena) t.unidadesDocena += unidades;
+  t.pestanas.add(grupoPestanasDe(item));
+}
+
+// El descuento por docena (producto 999, monto negativo) no es de un grupo: se reparte entre las tarjetas
+// que tienen productos con docena, en proporción a sus unidades. Con un solo grupo con docena, va entero ahí.
+function repartirDescuento(tarjetas, descuento) {
+  if (!descuento) return;
+  const lista = Object.values(tarjetas);
+  if (lista.length === 0) return;
+  const totalDocena = lista.reduce((suma, t) => suma + t.unidadesDocena, 0);
+  if (totalDocena > 0) {
+    lista.forEach(t => { t.monto += descuento * t.unidadesDocena / totalDocena; });
+  } else {
+    // Caso raro (sin productos con docena en el rango): va a la tarjeta con más unidades.
+    lista.sort((a, b) => b.unidades - a.unidades)[0].monto += descuento;
+  }
+}
+
+// Título: el grupo que se llama igual que el recuento va primero; los demás, alfabéticos. "Empanadas + Canastitas".
+const capitalizar = (s) => s.charAt(0) + s.slice(1).toLowerCase();
+function tituloTarjeta(clave, pestanas) {
+  if (clave === 'OTROS') return 'Otros / Varios';
+  const nombres = [...pestanas].filter(Boolean).sort((a, b) =>
+    a === clave ? -1 : b === clave ? 1 : a.localeCompare(b));
+  return (nombres.length ? nombres : [clave]).map(capitalizar).join(' + ');
+}
+
+// Ícono y color: SOLO decoración (ningún cálculo depende de esto).
+function decoracionTarjeta(clave) {
+  if (clave === 'EMPANADAS') return '<span class="info-box-icon bg-warning text-white" style="font-size: 1.8rem;">🥟</span>';
+  if (clave === 'PIZZAS') return '<span class="info-box-icon bg-danger text-white"><i class="fas fa-pizza-slice"></i></span>';
+  return '<span class="info-box-icon bg-info text-white"><i class="fas fa-box"></i></span>';
+}
+
+// -----------------------------------------------------------------------------
 // Solapas del reporte
 //   COBRADO   : ventas por fecha de PAGO (ventas_por_producto). Es el reporte de siempre.
 //   ENTREGADO : unidades por fecha de ENTREGA (unidades_entregadas_por_producto), sin importes.
@@ -25,12 +79,85 @@ const formatearDocenas = (unidades) =>
 let vistaActiva = 'COBRADO';
 let solapasEnlazadas = false;
 
+// Orden de la tabla de detalle (selector "Ordenar por"). Cambiarlo NO vuelve a consultar la base: se guardan
+// las últimas filas de cada solapa y solo se redibuja el cuerpo de la tabla. Las tarjetas y los totales
+// no dependen del orden.
+//   VENDIDO    : lo que más se vendió primero (Cobrado: mayor importe; Entregado: más unidades)
+//   CATEGORIA  : agrupado por grupo y categoría (el orden de antes)
+//   ALFABETICO : por nombre de producto
+let ordenResumen = 'VENDIDO';
+let filasCobrado = [];    // filas de la tabla de la solapa "Cobrado"
+let filasEntregado = [];  // filas de la tabla de la solapa "Entregado"
+
+// clavePrincipal: campo por el que se ordena en "VENDIDO" ('montoTotal' o 'unidades').
+// El nombre del producto desempata, así el orden no cambia entre consultas.
+function comparadorResumen(clavePrincipal) {
+  const porNombre = (a, b) => a.producto.localeCompare(b.producto);
+  if (ordenResumen === 'CATEGORIA') {
+    return (a, b) => a.grupo.localeCompare(b.grupo) || a.categoria.localeCompare(b.categoria) || porNombre(a, b);
+  }
+  if (ordenResumen === 'ALFABETICO') return porNombre;
+  return (a, b) => (b[clavePrincipal] - a[clavePrincipal]) || porNombre(a, b);
+}
+
+// La primera opción del selector dice qué significa "lo más vendido" en la solapa activa.
+function actualizarEtiquetaOrden() {
+  const op = document.querySelector('#filtro-prod-orden option[value="VENDIDO"]');
+  if (op) op.textContent = vistaActiva === 'COBRADO' ? 'Mayor importe' : 'Más unidades';
+}
+
+// Redibuja solo las filas de la tabla activa (sin tocar totales, tarjetas ni notas).
+function redibujarFilasSegunOrden() {
+  if (vistaActiva === 'COBRADO') dibujarFilasCobrado();
+  else dibujarFilasEntregado();
+}
+
+function dibujarFilasCobrado() {
+  const tbody = document.getElementById('tbody-resumen-productos');
+  if (!tbody || filasCobrado.length === 0) return;   // sin datos se conserva el aviso "No hay ventas…"
+  tbody.innerHTML = [...filasCobrado].sort(comparadorResumen('montoTotal')).map(row => {
+    const textoDocenas = row.permiteDocena
+      ? `${formatearDocenas(row.unidades)} doc.`
+      : '-';
+    return `
+      <tr>
+        <td>${esc(row.categoria)}</td>
+        <td class="font-weight-bold">${esc(row.producto)}</td>
+        <td class="text-center">${formatearUnidades(row.unidades)} u.</td>
+        <td class="text-center text-muted">${textoDocenas}</td>
+        <td class="text-right font-weight-bold">${formatearPesos(row.montoTotal)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function dibujarFilasEntregado() {
+  const tbody = document.getElementById('tbody-entregado-productos');
+  if (!tbody || filasEntregado.length === 0) return;
+  tbody.innerHTML = [...filasEntregado].sort(comparadorResumen('unidades')).map(row => {
+    const textoDocenas = row.permiteDocena ? `${formatearDocenas(row.unidades)} doc.` : '-';
+    return `
+      <tr>
+        <td>${esc(row.categoria)}</td>
+        <td class="font-weight-bold">${esc(row.producto)}</td>
+        <td class="text-center">${formatearUnidades(row.unidades)} u.</td>
+        <td class="text-center text-muted">${textoDocenas}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
 // El clic se engancha una sola vez (inicializarReporteVentas puede ejecutarse varias veces).
 function enlazarSolapas() {
   if (solapasEnlazadas) return;
   const cont = document.getElementById('tabs-resumen-ventas');
   if (!cont) return;
   solapasEnlazadas = true;
+  actualizarEtiquetaOrden();
+  document.getElementById('filtro-prod-orden')?.addEventListener('change', (e) => {
+    ordenResumen = e.target.value;
+    redibujarFilasSegunOrden();
+  });
   cont.addEventListener('click', (e) => {
     const tab = e.target.closest('[data-vista]');
     if (!tab) return;
@@ -49,6 +176,7 @@ function cambiarVista(vista) {
   });
   document.getElementById('panel-vista-cobrado')?.classList.toggle('d-none', vista !== 'COBRADO');
   document.getElementById('panel-vista-entregado')?.classList.toggle('d-none', vista !== 'ENTREGADO');
+  actualizarEtiquetaOrden();
   // Al cambiar de solapa se consulta de nuevo con los filtros que ya están cargados.
   generarResumenVentasProductos();
 }
@@ -122,6 +250,7 @@ export async function generarResumenVentasProductos() {
   }
 
   if (!filas || filas.length === 0) {
+    filasCobrado = [];
     tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas cobradas para los filtros seleccionados.</td></tr>`;
     if (tfoot) tfoot.style.display = 'none';
     renderizarTarjetasGrupos({});
@@ -129,8 +258,8 @@ export async function generarResumenVentasProductos() {
     return;
   }
 
-  // 2. Agrupar por Grupo y por Producto
-  const gruposAcumulados = {};
+  // 2. Agrupar por producto (tabla) y por grupo para el recuento (tarjetas)
+  const tarjetas = {};
   const productosAgrupados = {};
   // Suma (negativa) de los descuentos por docena: no se muestra como fila, pero se resta de los totales.
   let descuentoTotal = 0;
@@ -142,26 +271,18 @@ export async function generarResumenVentasProductos() {
     const cant = esDescuento ? 0 : Number(item.unidades || 0);
     const monto = Number(item.monto || 0);
 
-    let grupoNombre = String(item.grupo || 'OTROS').toUpperCase().trim();
+    const grupoNombre = grupoPestanasDe(item);
     const catNombre = item.categoria || 'Sin Categoría';
 
-    // 💡 SI ES UN DESCUENTO POR DOCENA, SE LO ASIGNAMOS AL GRUPO 'EMPANADAS'
-    if (grupoNombre === 'SISTEMA' || String(item.producto || '').toLowerCase().includes('docena')) {
-      grupoNombre = 'EMPANADAS';
-    }
-
-    // Acumulador de KPI por grupo
-    if (!gruposAcumulados[grupoNombre]) {
-      gruposAcumulados[grupoNombre] = { unidades: 0, monto: 0 };
-    }
-    gruposAcumulados[grupoNombre].unidades += cant;
-    gruposAcumulados[grupoNombre].monto += monto;
-
-    // La bonificación (producto 999) no se muestra como producto: solo se acumula su monto.
+    // La bonificación (producto 999) no se muestra como producto ni es de un grupo: solo se acumula su
+    // monto, que después se reparte entre las tarjetas con productos de docena (repartirDescuento).
     if (esDescuento) {
       descuentoTotal += monto;
       return;
     }
+
+    // Acumulador de las tarjetas, por grupo para el recuento
+    sumarATarjeta(tarjetas, item, cant, monto);
 
     productosAgrupados[item.id_producto] = {
       grupo: grupoNombre,
@@ -175,19 +296,19 @@ export async function generarResumenVentasProductos() {
 
   // Las unidades pueden quedar con decimales si hubo cobros parciales o devoluciones: se redondean a 2.
   const redondearUnidades = (n) => Math.round(n * 100) / 100;
-  Object.values(gruposAcumulados).forEach(g => { g.unidades = redondearUnidades(g.unidades); });
   Object.values(productosAgrupados).forEach(r => { r.unidades = redondearUnidades(r.unidades); });
 
-  // 3. Renderizar KPIs visuales superiores
-  renderizarTarjetasGrupos(gruposAcumulados);
+  // 3. Renderizar KPIs visuales superiores (el descuento por docena ya viene repartido entre las tarjetas)
+  repartirDescuento(tarjetas, descuentoTotal);
+  renderizarTarjetasGrupos(tarjetas);
 
   // 4. Renderizar Tabla de Detalle
-  const listaConsolidada = Object.values(productosAgrupados).sort((a, b) =>
-    a.grupo.localeCompare(b.grupo) || a.categoria.localeCompare(b.categoria) || a.producto.localeCompare(b.producto)
-  );
+  // El orden lo define el selector "Ordenar por" y se aplica al dibujar las filas (dibujarFilasCobrado).
+  const listaConsolidada = Object.values(productosAgrupados);
 
   // Sin filas que mostrar (por ejemplo, solo había un descuento): mismo aviso que sin ventas.
   if (listaConsolidada.length === 0) {
+    filasCobrado = [];
     tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay ventas cobradas para los filtros seleccionados.</td></tr>`;
     if (tfoot) tfoot.style.display = 'none';
     mostrarNotaDescuento(0);
@@ -199,32 +320,21 @@ export async function generarResumenVentasProductos() {
   // aunque la fila del descuento ya no se vea.
   let totalMontoGral = descuentoTotal;
 
-  tbody.innerHTML = listaConsolidada.map(row => {
+  listaConsolidada.forEach(row => {
     totalUnidadesGral += row.unidades;
     totalMontoGral += row.montoTotal;
+  });
 
-    const textoDocenas = row.permiteDocena
-      ? `${formatearDocenas(row.unidades)} doc.`
-      : '-';
-
-    return `
-      <tr>
-        <td>${esc(row.categoria)}</td>
-        <td class="font-weight-bold">${esc(row.producto)}</td>
-        <td class="text-center">${formatearUnidades(row.unidades)} u.</td>
-        <td class="text-center text-muted">${textoDocenas}</td>
-        <td class="text-right font-weight-bold">${formatearPesos(row.montoTotal)}</td>
-      </tr>
-    `;
-  }).join('');
+  filasCobrado = listaConsolidada;
+  dibujarFilasCobrado();
 
   if (tfoot) {
    tfoot.style.display = 'table-footer-group';
     document.getElementById('total-resumen-unidades').innerText = `${formatearUnidades(redondearUnidades(totalUnidadesGral))} u.`;
 
-    // Opcional: Para el Total General podés mostrar solo las docenas del grupo de Empanadas
-    const unidadesEmpanadas = gruposAcumulados['EMPANADAS']?.unidades || 0;
-    document.getElementById('total-resumen-docenas').innerText = `${formatearDocenas(unidadesEmpanadas)} doc.`;
+    // Docenas del total: unidades de los productos que permiten docena (de todos los grupos).
+    const unidadesDocena = Object.values(tarjetas).reduce((suma, g) => suma + g.unidadesDocena, 0);
+    document.getElementById('total-resumen-docenas').innerText = `${formatearDocenas(unidadesDocena)} doc.`;
 
     document.getElementById('total-resumen-monto').innerText = formatearPesos(totalMontoGral);
   }
@@ -259,52 +369,40 @@ async function generarResumenEntregado(fDesde, fHasta, idCliente) {
   }
 
   if (!filas || filas.length === 0) {
+    filasEntregado = [];
     tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">No hay pedidos entregados para los filtros seleccionados.</td></tr>`;
     if (tfoot) tfoot.style.display = 'none';
     renderizarTarjetasGrupos({}, false);
     return;
   }
 
-  // Mismo agrupamiento por grupo que la solapa "Cobrado", para que las tarjetas se lean igual.
-  const grupos = {};
+  // Mismas tarjetas que la solapa "Cobrado" (por grupo para el recuento), pero sin importes.
+  const tarjetas = {};
   const lista = filas.map(item => {
     const unidades = Number(item.unidades || 0);
-    const grupo = String(item.grupo || 'OTROS').toUpperCase().trim();
-    if (!grupos[grupo]) grupos[grupo] = { unidades: 0, monto: 0 };
-    grupos[grupo].unidades += unidades;
+    sumarATarjeta(tarjetas, item, unidades, 0);
     return {
-      grupo,
+      grupo: grupoPestanasDe(item),
       categoria: item.categoria || 'Sin Categoría',
       producto: item.producto,
       permiteDocena: Boolean(item.permite_docena),
       unidades
     };
-  }).sort((a, b) =>
-    a.grupo.localeCompare(b.grupo) || a.categoria.localeCompare(b.categoria) || a.producto.localeCompare(b.producto)
-  );
+  });
 
-  renderizarTarjetasGrupos(grupos, false);
+  renderizarTarjetasGrupos(tarjetas, false);
 
-  let totalUnidades = 0;
-  tbody.innerHTML = lista.map(row => {
-    totalUnidades += row.unidades;
-    const textoDocenas = row.permiteDocena ? `${formatearDocenas(row.unidades)} doc.` : '-';
-    return `
-      <tr>
-        <td>${esc(row.categoria)}</td>
-        <td class="font-weight-bold">${esc(row.producto)}</td>
-        <td class="text-center">${formatearUnidades(row.unidades)} u.</td>
-        <td class="text-center text-muted">${textoDocenas}</td>
-      </tr>
-    `;
-  }).join('');
+  // El orden lo define el selector "Ordenar por" y se aplica al dibujar las filas (dibujarFilasEntregado).
+  const totalUnidades = lista.reduce((suma, row) => suma + row.unidades, 0);
+  filasEntregado = lista;
+  dibujarFilasEntregado();
 
   if (tfoot) {
     tfoot.style.display = 'table-footer-group';
     document.getElementById('total-entregado-unidades').innerText = `${formatearUnidades(totalUnidades)} u.`;
-    // Igual que en "Cobrado": las docenas del total son las del grupo Empanadas.
-    const unidadesEmpanadas = grupos['EMPANADAS']?.unidades || 0;
-    document.getElementById('total-entregado-docenas').innerText = `${formatearDocenas(unidadesEmpanadas)} doc.`;
+    // Igual que en "Cobrado": docenas = unidades de los productos que permiten docena.
+    const unidadesDocena = Object.values(tarjetas).reduce((suma, g) => suma + g.unidadesDocena, 0);
+    document.getElementById('total-entregado-docenas').innerText = `${formatearDocenas(unidadesDocena)} doc.`;
   }
 }
 
@@ -359,55 +457,43 @@ function mostrarNotaDescuento(descuento) {
   }
 }
 
+// Dibuja una tarjeta por grupo para el recuento, con ventas en el rango. Orden alfabético y "Otros" al final.
 // conMonto = false (solapa "Entregado"): las tarjetas muestran solo unidades, sin importes.
-function renderizarTarjetasGrupos(grupos, conMonto = true) {
+function renderizarTarjetasGrupos(tarjetas, conMonto = true) {
   const cont = document.getElementById('contenedor-kpis-grupos');
   if (!cont) return;
 
-  const lineaMonto = (g) => conMonto
-    ? `<span class="progress-description text-success font-weight-bold">${formatearPesos(g.monto)}</span>`
-    : '';
+  const claves = Object.keys(tarjetas).sort((a, b) =>
+    (a === 'OTROS') - (b === 'OTROS') || a.localeCompare(b));
 
-  const emp = grupos['EMPANADAS'] || { unidades: 0, monto: 0 };
-  const piz = grupos['PIZZAS'] || { unidades: 0, monto: 0 };
-  const otros = grupos['OTROS'] || { unidades: 0, monto: 0 };
+  // Sin ventas en el rango no hay tarjetas (la tabla de abajo ya avisa que no hay datos).
+  if (claves.length === 0) {
+    cont.innerHTML = '';
+    return;
+  }
 
-  const docenasEmp = formatearDocenas(emp.unidades);
-
-  cont.innerHTML = `
-    <div class="row mb-3">
+  const html = claves.map(clave => {
+    const g = tarjetas[clave];
+    // Las docenas se muestran solo si el grupo tiene productos que permiten docena.
+    const docenas = g.unidadesDocena > 0
+      ? ` <small class="text-muted">(${formatearDocenas(g.unidadesDocena)} doc.)</small>`
+      : '';
+    const lineaMonto = conMonto
+      ? `<span class="progress-description text-success font-weight-bold">${formatearPesos(g.monto)}</span>`
+      : '';
+    return `
       <div class="col-md-4 col-sm-6 mb-2">
         <div class="info-box bg-light border">
-          <span class="info-box-icon bg-warning text-white" style="font-size: 1.8rem;">🥟</span>
+          ${decoracionTarjeta(clave)}
           <div class="info-box-content">
-            <span class="info-box-text font-weight-bold">Empanadas y Canastitas</span>
-            <span class="info-box-number text-dark">${formatearUnidades(emp.unidades)} u. <small class="text-muted">(${docenasEmp} doc.)</small></span>
-            ${lineaMonto(emp)}
+            <span class="info-box-text font-weight-bold">${esc(tituloTarjeta(clave, g.pestanas))}</span>
+            <span class="info-box-number text-dark">${formatearUnidades(g.unidades)} u.${docenas}</span>
+            ${lineaMonto}
           </div>
         </div>
-      </div>
+      </div>`;
+  }).join('');
 
-      <div class="col-md-4 col-sm-6 mb-2">
-        <div class="info-box bg-light border">
-          <span class="info-box-icon bg-danger text-white"><i class="fas fa-pizza-slice"></i></span>
-          <div class="info-box-content">
-            <span class="info-box-text font-weight-bold">Pizzas</span>
-            <span class="info-box-number text-dark">${formatearUnidades(piz.unidades)} u.</span>
-            ${lineaMonto(piz)}
-          </div>
-        </div>
-      </div>
-
-      <div class="col-md-4 col-sm-12 mb-2">
-        <div class="info-box bg-light border">
-          <span class="info-box-icon bg-info text-white"><i class="fas fa-box"></i></span>
-          <div class="info-box-content">
-            <span class="info-box-text font-weight-bold">Otros / Varios</span>
-            <span class="info-box-number text-dark">${formatearUnidades(otros.unidades)} u.</span>
-            ${lineaMonto(otros)}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+  // Con más de 3 grupos, las tarjetas pasan a una segunda fila.
+  cont.innerHTML = `<div class="row mb-3">${html}</div>`;
 }

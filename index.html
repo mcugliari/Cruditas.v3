@@ -1262,6 +1262,17 @@
               </div>
             </div>
 
+            <!-- Orden de la tabla de detalle. No consulta la base: solo reordena lo que ya se muestra
+                 (reporteVentas.js). El texto de la primera opción cambia según la solapa activa. -->
+            <div class="d-flex justify-content-end align-items-center mb-2">
+              <label for="filtro-prod-orden" class="font-weight-bold mb-0 mr-2">Ordenar por:</label>
+              <select id="filtro-prod-orden" class="form-control w-auto">
+                <option value="VENDIDO">Mayor importe</option>
+                <option value="CATEGORIA">Por categoría</option>
+                <option value="ALFABETICO">Alfabético (A a Z)</option>
+              </select>
+            </div>
+
             <!-- Panel "Cobrado": es el reporte de siempre, sin cambios -->
             <div id="panel-vista-cobrado">
             <div class="table-responsive">
@@ -2073,9 +2084,10 @@
             </div>
           </form>
           <small class="form-text text-muted mb-3">
-            El <strong>grupo</strong> arma las pestañas de la toma de pedidos. El <strong>grupo para el recuento</strong> solo se usa en
-            "Ventas por grupo" del cierre de caja: si lo dejás vacío se usa el grupo de las pestañas, y las categorías con el mismo
-            grupo de recuento se suman en una sola fila.
+            El <strong>grupo</strong> arma las pestañas de la toma de pedidos. El <strong>grupo para el recuento</strong> junta categorías
+            en una sola fila de totales: se usa en "Ventas por grupo" del cierre de caja y en las tarjetas del Resumen de Ventas por
+            Producto. Si lo dejás vacío se usa el grupo de las pestañas. Escribilo siempre igual (por ejemplo, EMPANADAS en plural):
+            si lo escribís distinto, se separa en dos grupos.
           </small>
           <div class="table-responsive">
             <table class="table table-sm table-hover mb-0">

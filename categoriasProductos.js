@@ -9,8 +9,9 @@
 //     - crear una categoría nueva,
 //     - cambiar su nombre,
 //     - cambiar su GRUPO (el que arma las pestañas de la toma de pedidos), y
-//     - cambiar su GRUPO PARA EL RECUENTO DE CAJA (script 46): si se deja vacío se usa el grupo de
-//       las pestañas; las categorías con el mismo grupo de recuento se suman en el cierre de caja.
+//     - cambiar su GRUPO PARA EL RECUENTO (script 46): si se deja vacío se usa el grupo de
+//       las pestañas; las categorías con el mismo grupo de recuento se suman en una sola fila, tanto en
+//       "Ventas por grupo" del cierre de caja como en las tarjetas del Resumen de Ventas por Producto.
 //   NO borra categorías: tienen productos y pedidos detrás (y no tienen "activo"). Las categorías
 //   internas del sistema (Bonificación, id 99 / grupo SISTEMA) no se muestran ni se tocan.
 //
