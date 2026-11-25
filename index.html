@@ -106,12 +106,6 @@
           <!-- SECCIÓN CAJA -->
           <li class="nav-header">CAJA</li>
           <li class="nav-item">
-            <a href="#" class="nav-link" data-section="resumen-ventas" data-rol-min="ENCARGADO">
-              <i class="nav-icon fas fa-chart-pie"></i>
-              <p>Resumen de Ventas</p>
-            </a>
-          </li>
-          <li class="nav-item">
             <a href="#" class="nav-link" data-toggle="modal" data-target="#modalCierreCaja" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-calculator"></i>
               <p>Cierre de Caja</p>
@@ -152,10 +146,25 @@
             </a>
           </li>
 
+
+          <!-- SECCIÓN REPORTES -->
+          <li class="nav-header">REPORTES</li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="resumen-ventas" data-rol-min="ENCARGADO">
+              <i class="nav-icon fas fa-chart-pie"></i>
+              <p>Ventas por Producto</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="#" class="nav-link" data-section="ventas-periodo" data-rol-min="ENCARGADO">
+              <i class="nav-icon fas fa-chart-column"></i>
+              <p>Ventas por Período</p>
+            </a>
+          </li>
           <li class="nav-item">
             <a href="#" class="nav-link" data-section="reportes-compras" data-rol-min="ENCARGADO">
               <i class="nav-icon fas fa-chart-line"></i>
-              <p>Reportes de Compras</p>
+              <p>Compras y Gastos</p>
             </a>
           </li>
 
@@ -1333,6 +1342,78 @@
               </div>
               <p class="small text-muted mt-2 mb-0">Cuenta cada pedido el día en que pasó a Entregado, aunque todavía no se haya cobrado. No incluye pedidos anulados. Son las unidades del pedido, sin proporciones de cobro.</p>
             </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VENTAS POR PERÍODO (script 66). Por ahora una sola solapa; las próximas se suman en el mismo <ul>. -->
+    <section id="sec-ventas-periodo" class="modulo-app d-none">
+      <div class="container-fluid pt-3">
+        <div id="contenedor-kpis-periodo"></div>
+
+        <div class="card card-outline card-primary">
+          <div class="card-header">
+            <h3 class="card-title font-weight-bold">
+              <i class="fas fa-chart-column mr-2"></i>Ventas por Período
+            </h3>
+          </div>
+
+          <div class="card-body p-3">
+            <ul class="nav nav-tabs mb-3" id="tabs-ventas-periodo" role="tablist">
+              <li class="nav-item" role="presentation">
+                <a href="#" class="nav-link active" role="tab" aria-selected="true" data-vista="MEDIO_PAGO">
+                  <i class="fas fa-credit-card mr-1"></i> Por medio de pago
+                </a>
+              </li>
+            </ul>
+
+            <div class="row align-items-end mb-3">
+              <div class="col-md-3 col-sm-6 mb-2 mb-md-0">
+                <label for="filtro-per-fecha-desde" class="small font-weight-bold mb-1">Fecha Desde:</label>
+                <input type="date" id="filtro-per-fecha-desde" class="form-control form-control-sm">
+              </div>
+              <div class="col-md-3 col-sm-6 mb-2 mb-md-0">
+                <label for="filtro-per-fecha-hasta" class="small font-weight-bold mb-1">Fecha Hasta:</label>
+                <input type="date" id="filtro-per-fecha-hasta" class="form-control form-control-sm">
+              </div>
+              <div class="col-md-2 col-sm-4">
+                <button type="button" class="btn btn-primary btn-sm btn-block" id="btn-filtrar-ventas-periodo">
+                  <i class="fas fa-filter mr-1"></i> Filtrar
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover table-sm text-sm mb-0">
+                <thead class="thead-dark">
+                  <tr>
+                    <th>Medio de pago / Cuenta</th>
+                    <th class="text-right">Cobros</th>
+                    <th class="text-right">Devoluciones</th>
+                    <th class="text-right">Neto</th>
+                    <th class="text-right">% del total</th>
+                    <th class="text-center">Pagos</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-ventas-medio">
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-3">Seleccioná un rango de fechas para consultar.</td>
+                  </tr>
+                </tbody>
+                <tfoot class="bg-light font-weight-bold" id="tfoot-ventas-medio" style="display: none;">
+                  <tr>
+                    <td class="text-right">TOTAL GENERAL:</td>
+                    <td class="text-right" id="total-per-cobros">$0,00</td>
+                    <td class="text-right" id="total-per-devoluciones">$0,00</td>
+                    <td class="text-right text-success" id="total-per-neto">$0,00</td>
+                    <td></td>
+                    <td class="text-center" id="total-per-pagos">0</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p class="small text-muted mt-2 mb-0">Cuenta cada cobro o devolución el día en que se registró el pago, no el de la entrega. Los traspasos de un pago entre pedidos no se incluyen: no cambian lo cobrado por medio de pago.</p>
           </div>
         </div>
       </div>

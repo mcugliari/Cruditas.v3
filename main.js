@@ -9,6 +9,7 @@ import { iniciarReloj } from './reloj.js';   // fecha y hora de la barra superio
 import { iniciarAvisoPedidos } from './avisoPedidos.js';   // aviso de pedidos web nuevos + contador de pendientes
 import { confirmarCobro, elegirMedioCobro, actualizarVueltoCobro } from './cobro.js';
 import { inicializarReporteVentas, generarResumenVentasProductos } from './reporteVentas.js';
+import { inicializarVentasPeriodo } from './reporteVentasPeriodo.js';   // Reportes > Ventas por Período (script 66)
 import { cargarCompras, verDetalleCompra, anularCompraAbierta, pagarCompraAbierta, pagarCompraDesdeLista, anularPagoDeCompra } from './compras.js';
 import { guardarPago } from './pagos.js';
 import { cargarEgresos, abrirModalEgreso, guardarEgreso, anularEgreso } from './egresos.js';
@@ -77,6 +78,8 @@ export async function navegarA(seccionId, elementoMenu) {
     abrirListadoPedidos();   // siempre abre en la vista Pendientes (con botón para pasar a Historial)
   } else if (seccionId === 'resumen-ventas') {
     inicializarReporteVentas();
+  } else if (seccionId === 'ventas-periodo') {
+    inicializarVentasPeriodo();
   } else if (seccionId === 'historial-caja') {
     inicializarHistorialCierres();
   } else if (seccionId === 'egresos') {
