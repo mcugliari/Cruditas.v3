@@ -17,18 +17,20 @@ const formatearDocenas = (unidades) =>
   (Number(unidades || 0) / 12).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 // -----------------------------------------------------------------------------
-// Tarjetas de arriba: una por GRUPO PARA EL RECUENTO (grupo_caja), igual que "Ventas por grupo" del cierre.
-//   * Total de la tarjeta = suma de todas las categorías que comparten ese grupo para el recuento
-//     (ej.: Empanada + Canastita, si las dos tienen recuento EMPANADAS).
-//   * Título = nombres de los grupos de las pestañas que hay adentro (ej.: "Empanadas + Canastitas").
+// Tarjetas de arriba: una por GRUPO (columna grupo_recuento; sale de grupo_caja), igual que "Ventas por grupo" del cierre.
+//   * Total de la tarjeta = suma de todas las categorías que comparten ese grupo
+//     (ej.: Empanada + Canastita, si las dos tienen el grupo EMPANADAS).
+//   * Título = nombres de las SECCIONES que hay adentro (ej.: "Empanadas + Canastitas").
 //   * Nada depende de nombres escritos en el código: un grupo nuevo tiene su tarjeta automáticamente.
-// La base manda la columna grupo_recuento (script 65). Si todavía no llega, se usa el grupo de las pestañas.
+// La base manda la columna grupo_recuento (script 65). Si todavía no llega, se usa la sección (columna grupo).
+// Vocabulario en pantalla (desde el 26/11/2026): "Sección" = dónde se muestra la categoría al tomar el pedido
+// (columna grupo); "Grupo" = cómo se suman las ventas (grupo_caja / grupo_recuento). Los nombres técnicos no cambian.
 // -----------------------------------------------------------------------------
 const normalizarGrupo = (g) => String(g ?? '').toUpperCase().trim();
 const grupoRecuentoDe = (item) => normalizarGrupo(item.grupo_recuento) || normalizarGrupo(item.grupo) || 'OTROS';
 const grupoPestanasDe = (item) => normalizarGrupo(item.grupo) || 'OTROS';
 
-// Suma una fila del resultado en la tarjeta de su grupo para el recuento.
+// Suma una fila del resultado en la tarjeta de su grupo.
 //   unidadesDocena = unidades de productos que permiten docena (para mostrar las docenas de la tarjeta).
 function sumarATarjeta(tarjetas, item, unidades, monto) {
   const clave = grupoRecuentoDe(item);
@@ -54,7 +56,7 @@ function repartirDescuento(tarjetas, descuento) {
   }
 }
 
-// Título: el grupo que se llama igual que el recuento va primero; los demás, alfabéticos. "Empanadas + Canastitas".
+// Título: la sección que se llama igual que el grupo va primero; las demás, alfabéticas. "Empanadas + Canastitas".
 const capitalizar = (s) => s.charAt(0) + s.slice(1).toLowerCase();
 function tituloTarjeta(clave, pestanas) {
   if (clave === 'OTROS') return 'Otros / Varios';
@@ -258,7 +260,7 @@ export async function generarResumenVentasProductos() {
     return;
   }
 
-  // 2. Agrupar por producto (tabla) y por grupo para el recuento (tarjetas)
+  // 2. Agrupar por producto (tabla) y por grupo (tarjetas)
   const tarjetas = {};
   const productosAgrupados = {};
   // Suma (negativa) de los descuentos por docena: no se muestra como fila, pero se resta de los totales.
@@ -281,7 +283,7 @@ export async function generarResumenVentasProductos() {
       return;
     }
 
-    // Acumulador de las tarjetas, por grupo para el recuento
+    // Acumulador de las tarjetas, por grupo
     sumarATarjeta(tarjetas, item, cant, monto);
 
     productosAgrupados[item.id_producto] = {
@@ -376,7 +378,7 @@ async function generarResumenEntregado(fDesde, fHasta, idCliente) {
     return;
   }
 
-  // Mismas tarjetas que la solapa "Cobrado" (por grupo para el recuento), pero sin importes.
+  // Mismas tarjetas que la solapa "Cobrado" (por grupo), pero sin importes.
   const tarjetas = {};
   const lista = filas.map(item => {
     const unidades = Number(item.unidades || 0);
@@ -457,7 +459,7 @@ function mostrarNotaDescuento(descuento) {
   }
 }
 
-// Dibuja una tarjeta por grupo para el recuento, con ventas en el rango. Orden alfabético y "Otros" al final.
+// Dibuja una tarjeta por grupo, con ventas en el rango. Orden alfabético y "Otros" al final.
 // conMonto = false (solapa "Entregado"): las tarjetas muestran solo unidades, sin importes.
 function renderizarTarjetasGrupos(tarjetas, conMonto = true) {
   const cont = document.getElementById('contenedor-kpis-grupos');

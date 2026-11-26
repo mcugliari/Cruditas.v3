@@ -1347,7 +1347,8 @@
       </div>
     </section>
 
-    <!-- VENTAS POR PERÍODO (script 66). Por ahora una sola solapa; las próximas se suman en el mismo <ul>. -->
+    <!-- VENTAS POR PERÍODO (scripts 66 y 67). Solapas: "Por medio de pago" y "Por día, semana y mes" (data-vista).
+         Las maneja reporteVentasPeriodo.js; las próximas se suman en el mismo <ul>. -->
     <section id="sec-ventas-periodo" class="modulo-app d-none">
       <div class="container-fluid pt-3">
         <div id="contenedor-kpis-periodo"></div>
@@ -1366,6 +1367,11 @@
                   <i class="fas fa-credit-card mr-1"></i> Por medio de pago
                 </a>
               </li>
+              <li class="nav-item" role="presentation">
+                <a href="#" class="nav-link" role="tab" aria-selected="false" data-vista="PERIODO">
+                  <i class="fas fa-calendar-days mr-1"></i> Por día, semana y mes
+                </a>
+              </li>
             </ul>
 
             <div class="row align-items-end mb-3">
@@ -1377,6 +1383,21 @@
                 <label for="filtro-per-fecha-hasta" class="small font-weight-bold mb-1">Fecha Hasta:</label>
                 <input type="date" id="filtro-per-fecha-hasta" class="form-control form-control-sm">
               </div>
+              <div class="col-md-2 col-sm-6 mb-2 mb-md-0 d-none" id="grupo-per-agrupar">
+                <label for="filtro-per-agrupar" class="small font-weight-bold mb-1">Agrupar por:</label>
+                <select id="filtro-per-agrupar" class="form-control form-control-sm">
+                  <option value="dia" selected>Día</option>
+                  <option value="semana">Semana</option>
+                  <option value="mes">Mes</option>
+                </select>
+              </div>
+              <!-- Grupo (script 69): la lista la llena reporteVentasPeriodo.js con grupos_recuento() -->
+              <div class="col-md-2 col-sm-6 mb-2 mb-md-0 d-none" id="grupo-per-grupo">
+                <label for="filtro-per-grupo" class="small font-weight-bold mb-1">Grupo:</label>
+                <select id="filtro-per-grupo" class="form-control form-control-sm">
+                  <option value="" selected>Todos los grupos</option>
+                </select>
+              </div>
               <div class="col-md-2 col-sm-4">
                 <button type="button" class="btn btn-primary btn-sm btn-block" id="btn-filtrar-ventas-periodo">
                   <i class="fas fa-filter mr-1"></i> Filtrar
@@ -1384,6 +1405,8 @@
               </div>
             </div>
 
+            <!-- Panel de la solapa "Por medio de pago" -->
+            <div id="panel-per-medio">
             <div class="table-responsive">
               <table class="table table-bordered table-hover table-sm text-sm mb-0">
                 <thead class="thead-dark">
@@ -1414,6 +1437,103 @@
               </table>
             </div>
             <p class="small text-muted mt-2 mb-0">Cuenta cada cobro o devolución el día en que se registró el pago, no el de la entrega. Los traspasos de un pago entre pedidos no se incluyen: no cambian lo cobrado por medio de pago.</p>
+            </div>
+
+            <!-- Panel de la solapa "Por día, semana y mes": dos vistas internas que NO se mezclan (D29/D30):
+                 Cobrado (plata, por fecha de pago, script 67) y Entregado (cantidades, por fecha de entrega, script 68).
+                 Las alterna reporteVentasPeriodo.js (atributo data-subvista); comparten fechas y "Agrupar por". -->
+            <div id="panel-per-periodo" class="d-none">
+              <ul class="nav nav-pills mb-3" id="subtabs-ventas-periodo">
+                <li class="nav-item">
+                  <a href="#" class="nav-link active" data-subvista="COBRADO" aria-selected="true">
+                    <i class="fas fa-cash-register mr-1"></i> Cobrado
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="#" class="nav-link" data-subvista="ENTREGADO" aria-selected="false">
+                    <i class="fas fa-truck mr-1"></i> Entregado
+                  </a>
+                </li>
+              </ul>
+
+              <!-- Vista Cobrado (script 67) -->
+              <div id="sub-per-cobrado">
+              <div class="table-responsive">
+                <table class="table table-bordered table-hover table-sm text-sm mb-0">
+                  <thead class="thead-dark">
+                    <tr>
+                      <th>Período</th>
+                      <th class="text-right">Cobros</th>
+                      <th class="text-right">Devoluciones</th>
+                      <th class="text-right d-none" id="th-pp-traspasos">Traspasos</th>
+                      <th class="text-right">Neto</th>
+                      <th class="text-center">Pedidos</th>
+                      <th class="text-right">Ticket promedio</th>
+                      <th class="text-center">Pagos</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-ventas-periodo">
+                    <tr>
+                      <td colspan="7" class="text-center text-muted py-3">Seleccioná un rango de fechas para consultar.</td>
+                    </tr>
+                  </tbody>
+                  <tfoot class="bg-light font-weight-bold" id="tfoot-ventas-periodo" style="display: none;">
+                    <tr>
+                      <td class="text-right">TOTAL DEL RANGO:</td>
+                      <td class="text-right" id="total-pp-cobros">$0,00</td>
+                      <td class="text-right" id="total-pp-devoluciones">$0,00</td>
+                      <td class="text-right d-none" id="td-pp-traspasos">$0,00</td>
+                      <td class="text-right text-success" id="total-pp-neto">$0,00</td>
+                      <td class="text-center" id="total-pp-pedidos">0</td>
+                      <td class="text-right" id="total-pp-ticket">-</td>
+                      <td class="text-center" id="total-pp-pagos">0</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p class="small text-muted mt-2 mb-0">Plata cobrada: cuenta cada cobro o devolución el día en que se registró el pago, no el de la entrega; los traspasos no se incluyen. «Pedidos» son los pedidos con al menos un cobro en ese período (sin los anulados) y el ticket promedio es el neto dividido por esos pedidos. Un pedido cobrado en dos períodos (seña y saldo) se cuenta en cada uno, pero una sola vez en el total del rango. Las semanas van de lunes a domingo y las que quedan cortadas por el rango muestran solo las fechas incluidas.</p>
+              <p class="small text-muted mt-2 mb-0 d-none" id="nota-pp-grupo">Con un grupo elegido solo cuenta la parte de cada pago que corresponde a los productos de ese grupo: cada pago se reparte entre las líneas del pedido en proporción a lo cobrado y el descuento por docena va al grupo de los productos con docena del pedido. «Pedidos» son los que tienen productos de ese grupo: un pedido con varios grupos cuenta en cada uno. El neto del grupo incluye los traspasos de pagos entre pedidos (columna «Traspasos» cuando los hay): si un cliente cambia un pedido de empanadas por uno de pizzas, la plata pasa de un grupo al otro.</p>
+              <!-- Resumen por grupo (con «Todos los grupos»): lo dibuja reporteVentasPeriodo.js -->
+              <!-- Comparativo por grupo y período (con «Todos los grupos»): una columna por grupo; lo dibuja reporteVentasPeriodo.js -->
+              <div id="comparativo-grupos-cobrado" class="mt-3"></div>
+              <div id="resumen-grupos-cobrado" class="mt-3"></div>
+              </div>
+
+              <!-- Vista Entregado (script 68): solo cantidades, sin importes -->
+              <div id="sub-per-entregado" class="d-none">
+                <div class="table-responsive">
+                  <table class="table table-bordered table-hover table-sm text-sm mb-0">
+                    <thead class="thead-dark">
+                      <tr>
+                        <th>Período</th>
+                        <th class="text-center">Pedidos entregados</th>
+                        <th class="text-center">Unidades</th>
+                        <th class="text-center">Docenas</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-entregas-periodo">
+                      <tr>
+                        <td colspan="4" class="text-center text-muted py-3">Seleccioná un rango de fechas para consultar.</td>
+                      </tr>
+                    </tbody>
+                    <tfoot class="bg-light font-weight-bold" id="tfoot-entregas-periodo" style="display: none;">
+                      <tr>
+                        <td class="text-right">TOTAL DEL RANGO:</td>
+                        <td class="text-center" id="total-ee-pedidos">0</td>
+                        <td class="text-center" id="total-ee-unidades">0</td>
+                        <td class="text-center" id="total-ee-docenas">0</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <p class="small text-muted mt-2 mb-0">Cantidades, sin importes: cuenta cada pedido el día en que pasó a «Entregado», aunque todavía no se haya cobrado. No incluye pedidos anulados ni el descuento por docena. Las unidades son las del pedido, enteras. Las docenas son las unidades de los productos que permiten docena divididas por 12. Un pedido sin registro de entrega en su historial no aparece. Las semanas van de lunes a domingo y las que quedan cortadas por el rango muestran solo las fechas incluidas.</p>
+                <p class="small text-muted mt-2 mb-0 d-none" id="nota-ee-grupo">Con un grupo elegido solo se cuentan las unidades de ese grupo, y «Pedidos entregados» son los que tienen productos de ese grupo: un pedido con varios grupos cuenta en cada uno.</p>
+                <!-- Resumen por grupo (con «Todos los grupos»): lo dibuja reporteVentasPeriodo.js -->
+                <!-- Comparativo por grupo y período (con «Todos los grupos»): una columna por grupo; lo dibuja reporteVentasPeriodo.js -->
+                <div id="comparativo-grupos-entregado" class="mt-3"></div>
+                <div id="resumen-grupos-entregado" class="mt-3"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2149,11 +2269,11 @@
               <input type="text" class="form-control form-control-sm" id="catprod-nombre" maxlength="80" required>
             </div>
             <div class="col-md-3 mb-2">
-              <label class="small font-weight-bold mb-1" for="catprod-grupo">Grupo (pestañas del pedido)</label>
+              <label class="small font-weight-bold mb-1" for="catprod-grupo">Sección</label>
               <input type="text" class="form-control form-control-sm" id="catprod-grupo" maxlength="50" list="catprod-sugerencias" autocomplete="off" required>
             </div>
             <div class="col-md-3 mb-2">
-              <label class="small font-weight-bold mb-1" for="catprod-grupo-caja">Grupo para el recuento <span class="text-muted font-weight-normal">(opcional)</span></label>
+              <label class="small font-weight-bold mb-1" for="catprod-grupo-caja">Grupo de ventas <span class="text-muted font-weight-normal">(opcional)</span></label>
               <input type="text" class="form-control form-control-sm" id="catprod-grupo-caja" maxlength="50" list="catprod-sugerencias" autocomplete="off">
             </div>
             <div class="col-md-2 mb-2">
@@ -2165,15 +2285,16 @@
             </div>
           </form>
           <small class="form-text text-muted mb-3">
-            El <strong>grupo</strong> arma las pestañas de la toma de pedidos. El <strong>grupo para el recuento</strong> junta categorías
-            en una sola fila de totales: se usa en "Ventas por grupo" del cierre de caja y en las tarjetas del Resumen de Ventas por
-            Producto. Si lo dejás vacío se usa el grupo de las pestañas. Escribilo siempre igual (por ejemplo, EMPANADAS en plural):
-            si lo escribís distinto, se separa en dos grupos.
+            La <strong>sección</strong> es dónde aparece la categoría al tomar el pedido (en el POS y en el formulario web). El
+            <strong>grupo de ventas</strong> es cómo se suman sus ventas: junta categorías en una sola fila de totales en
+            "Ventas por grupo" del cierre de caja, en Ventas por Período y en las tarjetas de Ventas por Producto. Por ejemplo, las
+            canastitas pueden tener su propia sección y sumar en el grupo EMPANADAS. Si lo dejás vacío, el grupo es igual a la sección.
+            Escribilo siempre igual (por ejemplo, EMPANADAS en plural): si lo escribís distinto, se separa en dos grupos.
           </small>
           <div class="table-responsive">
             <table class="table table-sm table-hover mb-0">
               <thead class="bg-light">
-                <tr><th>Categoría</th><th>Grupo (pestañas)</th><th>Grupo para el recuento</th><th class="text-center" style="width: 110px">Acciones</th></tr>
+                <tr><th>Categoría</th><th>Sección</th><th>Grupo de ventas</th><th class="text-center" style="width: 110px">Acciones</th></tr>
               </thead>
               <tbody id="tabla-catprod-body">
                 <tr><td colspan="4" class="text-center py-3">Cargando...</td></tr>

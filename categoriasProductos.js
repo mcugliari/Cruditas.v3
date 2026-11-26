@@ -8,10 +8,14 @@
 //   (Empanada, Canastita, Pizza simple...). Permite:
 //     - crear una categoría nueva,
 //     - cambiar su nombre,
-//     - cambiar su GRUPO (el que arma las pestañas de la toma de pedidos), y
-//     - cambiar su GRUPO PARA EL RECUENTO (script 46): si se deja vacío se usa el grupo de
-//       las pestañas; las categorías con el mismo grupo de recuento se suman en una sola fila, tanto en
-//       "Ventas por grupo" del cierre de caja como en las tarjetas del Resumen de Ventas por Producto.
+//     - cambiar su SECCIÓN (columna grupo): dónde se muestra la categoría al tomar el pedido
+//       (las solapas del POS y los bloques del formulario web), y
+//     - cambiar su GRUPO DE VENTAS (columna grupo_caja, script 46): cómo se suman sus ventas. Si se deja
+//       vacío, el grupo es igual a la sección; las categorías con el mismo grupo se suman en una sola fila,
+//       tanto en "Ventas por grupo" del cierre de caja como en Ventas por Período y en las tarjetas del
+//       Resumen de Ventas por Producto.
+//   Vocabulario en pantalla (desde el 26/11/2026): "Sección" y "Grupo (de ventas)". Los nombres técnicos
+//   de la base (grupo, grupo_caja, grupo_recuento) no cambian.
 //   NO borra categorías: tienen productos y pedidos detrás (y no tienen "activo"). Las categorías
 //   internas del sistema (Bonificación, id 99 / grupo SISTEMA) no se muestran ni se tocan.
 //
@@ -60,7 +64,7 @@ function normalizarGrupo(texto) {
 //   Recibe: datos -> { id, nombre, grupo, grupoCaja } (textos tal como se escribieron)
 //           existentes -> lista de categorías ya cargadas
 //   Devuelve { error } con un texto para mostrar, o { payload } listo para guardar:
-//           { nombre, grupo, grupo_caja }  (grupo_caja = null si se dejó vacío)
+//           { nombre, grupo, grupo_caja }  (grupo = sección; grupo_caja = grupo de ventas, null si se dejó vacío)
 // -----------------------------------------------------------------------------
 export function validarCategoria(datos, existentes) {
   const nombre = String(datos.nombre || '').trim().replace(/\s+/g, ' ');
@@ -69,8 +73,8 @@ export function validarCategoria(datos, existentes) {
 
   if (nombre.length < 2) return { error: 'El nombre es obligatorio (mínimo 2 letras).' };
   if (nombre.length > 80) return { error: 'El nombre es demasiado largo (máximo 80 letras).' };
-  if (grupo === '') return { error: 'Indicá el grupo de las pestañas del pedido (por ejemplo, el de una categoría parecida).' };
-  if (grupo.length > 50 || grupoCaja.length > 50) return { error: 'Los grupos pueden tener hasta 50 letras.' };
+  if (grupo === '') return { error: 'Indicá la sección donde se muestra la categoría al tomar el pedido (por ejemplo, la de una categoría parecida).' };
+  if (grupo.length > 50 || grupoCaja.length > 50) return { error: 'La sección y el grupo pueden tener hasta 50 letras.' };
   if (grupo === 'SISTEMA' || grupoCaja === 'SISTEMA') return { error: '"SISTEMA" es un grupo interno: elegí otro nombre.' };
 
   const repetida = (existentes || []).some(c =>
@@ -131,7 +135,7 @@ async function cargarCategoriasProducto() {
     const grupo = c.grupo ? esc(normalizarGrupo(c.grupo)) : '<span class="text-muted">—</span>';
     const grupoCaja = c.grupo_caja
       ? `<span class="badge badge-warning">${esc(normalizarGrupo(c.grupo_caja))}</span>`
-      : `<span class="text-muted small">igual que las pestañas</span>`;
+      : `<span class="text-muted small">igual que la sección</span>`;
     return `
       <tr>
         <td class="font-weight-bold">${esc(c.nombre)}</td>
